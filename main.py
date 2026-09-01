@@ -5,7 +5,7 @@ AstrBot 积分游戏合集插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.0.0
+作者：Zxin_Pro    版本：1.5.1
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏合集",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.0.0",
+    version="1.5.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -200,6 +200,10 @@ class PointGamesPlugin(Star):
     LOTTERY_LIMIT_PER_DAY = 10      # 每人每期限购
     LOTTERY_BASE_POOL = 100         # 奖池保底
     LOTTERY_PRIZE = {3: 0.10, 4: 0.30, 5: 0.60}   # 匹配数 -> 奖池比例
+    LOTTERY_DRAW_HOUR = 20           # 开奖小时（北京时间）
+    LOTTERY_DRAW_MINUTE = 0          # 开奖分钟
+    BOSS_RESET_HOUR = 0               # BOSS 重置小时（北京时间）
+    BOSS_RESET_MINUTE = 0             # BOSS 重置分钟
     # 闯关答题
     QUIZ_TIMEOUT = 60               # 每题限时（秒）
     QUIZ_STREAK_BONUS_EVERY = 5     # 每连对 N 题触发额外奖励
@@ -220,6 +224,31 @@ class PointGamesPlugin(Star):
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
     # WebUI 管理名单：AstrBot 面板登录用户名在这里才可执行加/扣积分
     WEB_ADMIN_USERS = {"admin"}
+    DEFAULT_GROUP_MODE = "whitelist"
+    FEATURES = {
+        "enable_spin": True,
+        "enable_quiz": True,
+        "enable_boss": True,
+        "enable_lottery": True,
+        "enable_undercover": True,
+        "enable_sign_in": True,
+        "enable_ranking": True,
+    }
+    FEATURE_COMMANDS = {
+        "转盘": ("enable_spin", "幸运转盘"),
+        "闯关": ("enable_quiz", "闯关答题"),
+        "攻击": ("enable_boss", "BOSS战"),
+        "BOSS状态": ("enable_boss", "BOSS战"),
+        "BOSS排行": ("enable_boss", "BOSS战"),
+        "买彩票": ("enable_lottery", "大乐透"),
+        "彩票奖池": ("enable_lottery", "大乐透"),
+        "卧底开始": ("enable_undercover", "谁是卧底"),
+        "加入卧底": ("enable_undercover", "谁是卧底"),
+        "投票": ("enable_undercover", "谁是卧底"),
+        "排行": ("enable_ranking", "积分排行"),
+        "签到": ("enable_sign_in", "签到"),
+        "积分": ("enable_ranking", "积分账户"),
+    }
 
     # ---------- 表结构定义 ----------
     TABLE_DDL = [
@@ -306,6 +335,10 @@ class PointGamesPlugin(Star):
 
     def __init__(self, context: Context, config: dict | None = None):
         super().__init__(context, config)
+        # AstrBot 会把 _conf_schema.json 中的配置作为 dict 注入这里。
+        # 运行时配置只在插件加载时读取，修改后重新加载插件即可生效。
+        self.config = config or {}
+        self._apply_runtime_config(self.config)
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._uc_jobs: dict[str, Any] = {}      # group_id -> apscheduler Job（卧底计时器）
         # 兼容不同版本的数据库获取方式
@@ -315,6 +348,85 @@ class PointGamesPlugin(Star):
             self._db = ctx.get_db()
         elif hasattr(ctx, "db"):
             self._db = ctx.db
+
+    def _apply_runtime_config(self, config: dict):
+        """把配置页中的值应用到玩法常量，异常值回退到安全默认值。"""
+        def boolean(key, default):
+            value = config.get(key, default)
+            if isinstance(value, str):
+                return value.strip().lower() in ("1", "true", "yes", "on", "开")
+            return bool(value)
+
+        def integer(key, default, minimum=0):
+            try:
+                value = int(config.get(key, default))
+                return value if value >= minimum else default
+            except (TypeError, ValueError):
+                return default
+
+        def number(key, default, minimum=0.0):
+            try:
+                value = float(config.get(key, default))
+                return value if value >= minimum else default
+            except (TypeError, ValueError):
+                return default
+
+        self.feature_flags = {
+            key: boolean(key, default) for key, default in self.FEATURES.items()
+        }
+        mode = str(config.get("group_mode", self.DEFAULT_GROUP_MODE)).strip().lower()
+        self.DEFAULT_GROUP_MODE = mode if mode in ("whitelist", "blacklist") else "whitelist"
+        self.SPIN_DEFAULT_COST = integer("spin_default_cost", self.SPIN_DEFAULT_COST, 1)
+        self.BOSS_MAX_HP = integer("boss_max_hp", self.BOSS_MAX_HP, 1)
+        self.BOSS_POOL = integer("boss_pool", self.BOSS_POOL, 0)
+        self.ATTACK_COST = integer("attack_cost", self.ATTACK_COST, 0)
+        self.ATTACK_COOLDOWN = integer("attack_cooldown", self.ATTACK_COOLDOWN, 0)
+        self.ATTACK_DAMAGE_MIN = integer("attack_damage_min", self.ATTACK_DAMAGE_MIN, 1)
+        self.ATTACK_DAMAGE_MAX = max(
+            integer("attack_damage_max", self.ATTACK_DAMAGE_MAX, 1), self.ATTACK_DAMAGE_MIN
+        )
+        self.LOTTERY_DEFAULT_COST = integer("lottery_default_cost", self.LOTTERY_DEFAULT_COST, 1)
+        self.LOTTERY_LIMIT_PER_DAY = integer("lottery_limit_per_day", self.LOTTERY_LIMIT_PER_DAY, 1)
+        self.LOTTERY_BASE_POOL = integer("lottery_base_pool", self.LOTTERY_BASE_POOL, 0)
+        self.LOTTERY_DRAW_HOUR = min(integer("lottery_draw_hour", self.LOTTERY_DRAW_HOUR, 0), 23)
+        self.LOTTERY_DRAW_MINUTE = min(integer("lottery_draw_minute", self.LOTTERY_DRAW_MINUTE, 0), 59)
+        self.BOSS_RESET_HOUR = min(integer("boss_reset_hour", self.BOSS_RESET_HOUR, 0), 23)
+        self.BOSS_RESET_MINUTE = min(integer("boss_reset_minute", self.BOSS_RESET_MINUTE, 0), 59)
+        self.LOTTERY_PRIZE = {
+            3: number("lottery_prize_3", self.LOTTERY_PRIZE[3], 0.0),
+            4: number("lottery_prize_4", self.LOTTERY_PRIZE[4], 0.0),
+            5: number("lottery_prize_5", self.LOTTERY_PRIZE[5], 0.0),
+        }
+        # 转盘六档概率权重与返还倍率均可在插件配置页调整。
+        spin_defaults = [40, 30, 15, 10, 4, 1]
+        spin_keys = ["spin_weight_0", "spin_weight_50", "spin_weight_80",
+                     "spin_weight_120", "spin_weight_200", "spin_weight_500"]
+        self.spin_weights = [integer(k, d, 0) for k, d in zip(spin_keys, spin_defaults)]
+        if sum(self.spin_weights) <= 0:
+            self.spin_weights = spin_defaults
+        rate_keys = ["spin_rate_0", "spin_rate_50", "spin_rate_80",
+                     "spin_rate_120", "spin_rate_200", "spin_rate_500"]
+        rate_defaults = [0.0, 0.5, 0.8, 1.2, 2.0, 5.0]
+        self.spin_rates = [number(k, d, 0.0) for k, d in zip(rate_keys, rate_defaults)]
+        self.QUIZ_TIMEOUT = integer("quiz_timeout", self.QUIZ_TIMEOUT, 1)
+        self.QUIZ_STREAK_BONUS_EVERY = integer("quiz_streak_bonus_every", self.QUIZ_STREAK_BONUS_EVERY, 1)
+        self.QUIZ_STREAK_BONUS = integer("quiz_streak_bonus", self.QUIZ_STREAK_BONUS, 0)
+        self.QUIZ_WRONG_PENALTY = integer("quiz_wrong_penalty", self.QUIZ_WRONG_PENALTY, 0)
+        self.SIGN_IN_MIN = integer("sign_in_min", self.SIGN_IN_MIN, 0)
+        self.SIGN_IN_MAX = max(integer("sign_in_max", self.SIGN_IN_MAX, 0), self.SIGN_IN_MIN)
+        self.SIGN_IN_WEEK_BONUS = integer("sign_in_week_bonus", self.SIGN_IN_WEEK_BONUS, 0)
+        self.COMMAND_COOLDOWN = integer("command_cooldown", self.COMMAND_COOLDOWN, 0)
+        self.UC_MIN_PLAYERS = integer("uc_min_players", self.UC_MIN_PLAYERS, 2)
+        self.UC_MAX_PLAYERS = max(integer("uc_max_players", self.UC_MAX_PLAYERS, 2), self.UC_MIN_PLAYERS)
+        self.UC_DEFAULT_PLAYERS = min(
+            max(integer("uc_default_players", self.UC_DEFAULT_PLAYERS, self.UC_MIN_PLAYERS), self.UC_MIN_PLAYERS),
+            self.UC_MAX_PLAYERS,
+        )
+        self.UC_SPEECH_SECONDS = integer("uc_speech_seconds", self.UC_SPEECH_SECONDS, 1)
+        self.UC_VOTE_SECONDS = integer("uc_vote_seconds", self.UC_VOTE_SECONDS, 1)
+        self.UC_LOBBY_SECONDS = integer("uc_lobby_seconds", self.UC_LOBBY_SECONDS, 1)
+        admins = config.get("web_admin_users", ["admin"])
+        self.WEB_ADMIN_USERS = {str(x).strip() for x in admins if str(x).strip()} or {"admin"}
 
     # ---------- 数据库工具 ----------
     def _get_db(self):
@@ -461,7 +573,7 @@ class PointGamesPlugin(Star):
         """
         if not group_id:  # 私聊默认允许
             return True, "", 1
-        mode = await self._get_config_value(session, "group_mode", "whitelist")
+        mode = await self._get_config_value(session, "group_mode", self.DEFAULT_GROUP_MODE)
         row = (
             await session.execute(
                 text("SELECT enabled FROM group_settings WHERE group_id=:g"),
@@ -500,11 +612,11 @@ class PointGamesPlugin(Star):
         # 2. 定时任务
         self._scheduler = AsyncIOScheduler(timezone=TZ)
         self._scheduler.add_job(
-            self._boss_daily_reset, CronTrigger(hour=0, minute=0, timezone=TZ),
+            self._boss_daily_reset, CronTrigger(hour=self.BOSS_RESET_HOUR, minute=self.BOSS_RESET_MINUTE, timezone=TZ),
             id="boss_daily_reset", replace_existing=True,
         )
         self._scheduler.add_job(
-            self._lottery_draw, CronTrigger(hour=20, minute=0, timezone=TZ),
+            self._lottery_draw, CronTrigger(hour=self.LOTTERY_DRAW_HOUR, minute=self.LOTTERY_DRAW_MINUTE, timezone=TZ),
             id="lottery_draw", replace_existing=True,
         )
         self._scheduler.add_job(
@@ -771,10 +883,14 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    async def _check_group_gate(self, event: AstrMessageEvent):
-        """游戏指令前的群门禁检查。返回 (True, None) 或 (False, 提示文本)"""
+    async def _check_group_gate(self, event: AstrMessageEvent, command: str = ""):
+        """检查群门禁和单个玩法开关，私聊不受群门禁限制。"""
+        if command:
+            feature = self.FEATURE_COMMANDS.get(command)
+            if feature and not self.feature_flags.get(feature[0], True):
+                return False, f"{feature[1]}玩法已被管理员在配置页关闭喵~"
         group_id = event.get_group_id()
-        if not group_id:  # 私聊放行
+        if not group_id:
             return True, None
         async with self._session() as session:
             allowed, mode, enabled = await self._group_allowed(session, group_id)
@@ -788,7 +904,7 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏合集 v1.0.0 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏合集 v1.5.1 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
@@ -806,7 +922,7 @@ class PointGamesPlugin(Star):
     @filter.command("转盘")
     async def spin(self, event: AstrMessageEvent):
         """/转盘 [积分数量]"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "转盘")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -829,13 +945,24 @@ class PointGamesPlugin(Star):
             bal = await self._balance(session, user_id)
             if bal < cost:
                 raise _BizError(f"积分不足喵~ 需要 {cost} 积分，你只有 {bal} 积分")
-            roll = random.randint(1, 100)
-            rate = 0.0
-            emoji = "💀"
-            for lo, hi, r, e in self.SPIN_TABLE:
-                if lo <= roll <= hi:
-                    rate, emoji = r, e
-                    break
+            # 默认配置严格按 1-100 区间抽取；自定义权重使用加权抽取。
+            emojis = ["💀", "😅", "😌", "🙂", "🎉", "🔥"]
+            if sum(self.spin_weights) == 100:
+                roll = random.randint(1, 100)
+                cumulative = 0
+                outcome_index = 0
+                for i, weight in enumerate(self.spin_weights):
+                    cumulative += weight
+                    if roll <= cumulative:
+                        outcome_index = i
+                        break
+                rate, emoji = self.spin_rates[outcome_index], emojis[outcome_index]
+            else:
+                outcome_index = random.choices(
+                    range(len(self.spin_weights)), weights=self.spin_weights, k=1
+                )[0]
+                rate, emoji = self.spin_rates[outcome_index], emojis[outcome_index]
+                roll = outcome_index + 1
             refund = int(cost * rate)
             net = refund - cost
             # 余额按净收益变化，但收入/支出分别统计，便于 WebUI 查看真实流水。
@@ -859,7 +986,7 @@ class PointGamesPlugin(Star):
     @filter.command("闯关")
     async def quiz_start(self, event: AstrMessageEvent):
         """/闯关 —— 开始答题闯关"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "闯关")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -914,11 +1041,16 @@ class PointGamesPlugin(Star):
     @filter.event_message_type(EventMessageType.ALL)
     async def quiz_answer(self, event: AstrMessageEvent):
         """监听 A/B/C（或 1/2/3）作答闯关题目"""
+        if not self.feature_flags.get("enable_quiz", True):
+            return
         raw = event.get_message_str().strip()
         letter = raw.upper()
         mapping = {"A": 0, "B": 1, "C": 2, "1": 0, "2": 1, "3": 2}
         if letter not in mapping:
             return  # 与闯关无关，直接放行
+        ok_gate, _ = await self._check_group_gate(event, "闯关")
+        if not ok_gate:
+            return
         user_id = event.get_sender_id()
 
         async def fn(session):
@@ -988,7 +1120,7 @@ class PointGamesPlugin(Star):
     @filter.command("攻击")
     async def boss_attack(self, event: AstrMessageEvent):
         """/攻击 —— 消耗5积分攻击BOSS"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "攻击")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1072,7 +1204,7 @@ class PointGamesPlugin(Star):
     @filter.command("BOSS状态")
     async def boss_status(self, event: AstrMessageEvent):
         """/BOSS状态"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "BOSS状态")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1107,7 +1239,7 @@ class PointGamesPlugin(Star):
     @filter.command("BOSS排行")
     async def boss_rank(self, event: AstrMessageEvent):
         """/BOSS排行 —— 今日伤害前10"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "BOSS排行")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1140,7 +1272,7 @@ class PointGamesPlugin(Star):
     @filter.command("买彩票")
     async def lottery_buy(self, event: AstrMessageEvent):
         """/买彩票 [积分数量] —— 购买1注随机号码，每人每期限购10注"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "买彩票")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1196,7 +1328,7 @@ class PointGamesPlugin(Star):
     @filter.command("彩票奖池")
     async def lottery_pool_status(self, event: AstrMessageEvent):
         """/彩票奖池"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "彩票奖池")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1238,7 +1370,7 @@ class PointGamesPlugin(Star):
         if event.is_private_chat():
             yield event.plain_result("卧底游戏需要在群里玩喵~")
             return
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "卧底开始")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1300,7 +1432,7 @@ class PointGamesPlugin(Star):
         if event.is_private_chat():
             yield event.plain_result("卧底游戏需要在群里玩喵~")
             return
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "加入卧底")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1454,8 +1586,13 @@ class PointGamesPlugin(Star):
         await self._tx(fn)
 
     async def _uc_vote_timer(self, group_id: str):
-        """投票倒计时结束：自动计票"""
-        await self._uc_process_votes(group_id)
+        """投票倒计时结束：在事务中自动计票"""
+        async def fn(session):
+            await self._uc_process_votes(session, group_id)
+            return True, "投票计时结束", None
+
+        await self._tx(fn)
+        self._uc_jobs.pop(f"vote_{group_id}", None)
 
     async def _uc_lobby_timeout(self, group_id: str):
         """报名超时自动取消"""
@@ -1485,6 +1622,13 @@ class PointGamesPlugin(Star):
         """/投票 @某人 —— 投票阶段投出卧底"""
         if event.is_private_chat():
             yield event.plain_result("卧底游戏需要在群里玩喵~")
+            return
+        if not self.feature_flags.get("enable_undercover", True):
+            yield event.plain_result("谁是卧底玩法已在配置页关闭喵~")
+            return
+        ok_gate, msg_gate = await self._check_group_gate(event, "投票")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
             return
         group_id = event.get_group_id()
         voter = event.get_sender_id()
@@ -1727,7 +1871,7 @@ class PointGamesPlugin(Star):
     @filter.command("排行")
     async def rank(self, event: AstrMessageEvent):
         """/排行 —— 全服积分排行榜 TOP10"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "排行")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -1757,7 +1901,7 @@ class PointGamesPlugin(Star):
     @filter.command("签到")
     async def sign_in(self, event: AstrMessageEvent):
         """/签到 —— 每日签到，连续7天额外+20"""
-        ok_gate, msg_gate = await self._check_group_gate(event)
+        ok_gate, msg_gate = await self._check_group_gate(event, "签到")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
@@ -2051,7 +2195,7 @@ class PointGamesPlugin(Star):
         from astrbot.api.web import json_response
 
         async def fn(session):
-            mode = await self._get_config_value(session, "group_mode", "whitelist")
+            mode = await self._get_config_value(session, "group_mode", self.DEFAULT_GROUP_MODE)
             rows = (
                 await session.execute(text("SELECT group_id, enabled, updated_at FROM group_settings ORDER BY updated_at DESC LIMIT 100"))
             ).all()
