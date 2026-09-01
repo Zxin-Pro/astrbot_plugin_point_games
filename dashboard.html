@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>积分游戏合集 · 管理面板</title>
+<style>
+  :root { --bg:#0f1220; --card:#1a1f33; --card2:#222842; --txt:#e6e9f5; --sub:#8a91b0;
+          --acc:#6c8cff; --ok:#3ddc84; --err:#ff5d6c; --warn:#ffc94d; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--txt); font-family:"PingFang SC","Microsoft YaHei",sans-serif; padding:16px; }
+  h1 { font-size:20px; margin-bottom:4px; }
+  .sub { color:var(--sub); font-size:13px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
+  .card { background:var(--card); border-radius:12px; padding:14px; }
+  .card h3 { font-size:13px; color:var(--sub); font-weight:500; margin-bottom:6px; }
+  .card .val { font-size:22px; font-weight:700; }
+  .panel { background:var(--card); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .panel h2 { font-size:15px; margin-bottom:10px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:7px 8px; border-bottom:1px solid #2a3050; }
+  th { color:var(--sub); font-weight:500; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:20px; font-size:12px; }
+  .tag.on { background:rgba(61,220,132,.15); color:var(--ok); }
+  .tag.off { background:rgba(255,93,108,.15); color:var(--err); }
+  button { background:var(--acc); color:#fff; border:none; border-radius:8px; padding:6px 14px; cursor:pointer; font-size:13px; }
+  button.small { padding:4px 10px; font-size:12px; }
+  button.danger { background:var(--err); }
+  button.ghost { background:var(--card2); color:var(--txt); }
+  input,select { background:var(--card2); color:var(--txt); border:1px solid #333b63; border-radius:8px; padding:6px 10px; font-size:13px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .hpbar { height:10px; background:#2a3050; border-radius:6px; overflow:hidden; margin-top:6px; }
+  .hpbar > div { height:100%; background:linear-gradient(90deg,#ff5d6c,#ffc94d); }
+  .pager { display:flex; gap:8px; align-items:center; margin-top:10px; }
+  .toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#222842; border:1px solid #333b63;
+           padding:10px 18px; border-radius:10px; font-size:13px; display:none; z-index:99; }
+  .medal1{color:#ffd700}.medal2{color:#c0c0c0}.medal3{color:#cd7f32}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<h1>🎮 积分游戏合集 <span style="font-size:13px;color:var(--sub)">v1.0.0 · 全群数据互通</span></h1>
+<div class="sub">当前面板用户：<span id="whoami">-</span> <span id="adminflag"></span></div>
+
+<div class="grid" id="statcards"></div>
+
+<div class="panel">
+  <h2>🏆 全服积分排行榜</h2>
+  <table><thead><tr><th>#</th><th>用户</th><th>余额</th><th>累计赚取</th><th>累计花费</th><th>连签</th></tr></thead>
+  <tbody id="lb-body"></tbody></table>
+</div>
+
+<div class="panel">
+  <h2>👹 BOSS 战况</h2>
+  <div id="boss-info"></div>
+  <div class="hpbar"><div id="boss-hpbar"></div></div>
+  <div style="margin-top:10px;font-size:13px;color:var(--sub)" id="boss-top"></div>
+</div>
+
+<div class="panel">
+  <h2>🎰 大乐透</h2>
+  <div id="lottery-info"></div>
+</div>
+
+<div class="panel">
+  <h2>📜 最近积分流水</h2>
+  <table><thead><tr><th>时间</th><th>用户</th><th>类型</th><th>变动</th></tr></thead>
+  <tbody id="tx-body"></tbody></table>
+</div>
+
+<div class="panel">
+  <h2>👥 用户列表</h2>
+  <div class="row">
+    <input id="search" placeholder="搜索 QQ/用户ID" style="width:220px">
+    <button class="small" onclick="loadUsers(1)">搜索</button>
+    <span id="user-count" style="color:var(--sub);font-size:12px"></span>
+  </div>
+  <table><thead><tr><th>用户</th><th>余额</th><th>累计赚取</th><th>累计花费</th><th>最近签到</th><th>连签</th></tr></thead>
+  <tbody id="user-body"></tbody></table>
+  <div class="pager">
+    <button class="ghost small" onclick="loadUsers(page-1)">上一页</button>
+    <span id="user-page" style="color:var(--sub);font-size:12px"></span>
+    <button class="ghost small" onclick="loadUsers(page+1)">下一页</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>🔐 群黑白名单</h2>
+  <div class="row">
+    <span style="font-size:13px;color:var(--sub)">全局模式：</span>
+    <select id="mode-sel">
+      <option value="whitelist">白名单（默认全关，仅开启的群可玩）</option>
+      <option value="blacklist">黑名单（默认全开，拉黑的群不可玩）</option>
+    </select>
+    <button class="small" onclick="setMode()">保存模式</button>
+    <span style="font-size:12px;color:var(--sub)">已记录的群：</span>
+  </div>
+  <table><thead><tr><th>群号</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
+  <tbody id="group-body"></tbody></table>
+</div>
+
+<div class="panel" id="admin-panel" style="display:none">
+  <h2>⚙️ 管理员操作</h2>
+  <div class="row">
+    <input id="g-user" placeholder="用户ID/QQ" style="width:180px">
+    <input id="g-amount" type="number" placeholder="积分数量" style="width:120px">
+    <button onclick="grant(1)">➕ 加积分</button>
+    <button class="danger" onclick="grant(-1)">➖ 扣积分</button>
+  </div>
+</div>
+
+<script>
+let page = 1, pageSize = 20;
+
+function $(id){ return document.getElementById(id); }
+function toast(msg, ok=true){
+  const t = $("toast"); t.textContent = msg;
+  t.style.display = "block"; t.style.background = ok ? "#1d3a2a" : "#3a1d22";
+  setTimeout(()=> t.style.display = "none", 2500);
+}
+async function api(path, opt={}){
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+async function loadWhoami(){
+  try{
+    const d = await api("api/whoami");
+    $("whoami").textContent = d.username || "未登录";
+    if(d.is_admin){ $("adminflag").innerHTML = '<span class="tag on">管理员</span>'; $("admin-panel").style.display="block"; }
+  }catch(e){ $("whoami").textContent = "未知"; }
+}
+
+async function loadStats(){
+  try{
+    const d = await api("api/stats");
+    const cards = [
+      ["👥 用户总数", d.users], ["💰 今日流水", d.today_transactions],
+      ["🎡 转盘总次数", d.spin_total], ["👹 BOSS 血量", d.boss_hp],
+      ["🎰 当前奖池", d.lottery_pool], ["🕵️ 进行中卧底", d.active_undercover],
+    ];
+    $("statcards").innerHTML = cards.map(([t,v]) =>
+      `<div class="card"><h3>${t}</h3><div class="val">${v}</div></div>`).join("");
+  }catch(e){ $("statcards").innerHTML = "<div class='card'><h3>加载失败</h3></div>"; }
+}
+
+async function loadLeaderboard(){
+  try{
+    const d = await api("api/leaderboard");
+    const medals = ["medal1","medal2","medal3"];
+    $("lb-body").innerHTML = d.map((u,i)=>{
+      const m = i<3 ? `<span class="${medals[i]}">${["🥇","🥈","🥉"][i]}</span>` : `${i+1}.`;
+      return `<tr><td>${m}</td><td>${u.user_id}</td><td><b>${u.balance}</b></td>
+        <td>${u.total_earned}</td><td>${u.total_spent}</td><td>${u.sign_in_streak}</td></tr>`;
+    }).join("") || `<tr><td colspan="6" style="color:var(--sub)">暂无数据</td></tr>`;
+  }catch(e){}
+}
+
+async function loadBoss(){
+  try{
+    const d = await api("api/boss");
+    const pct = Math.max(0, Math.min(100, d.hp/d.max_hp*100));
+    $("boss-hpbar").style.width = pct + "%";
+    $("boss-info").innerHTML =
+      `<div class="row"><span>血量：<b>${d.hp}</b> / ${d.max_hp}</span>
+       <span style="color:var(--sub)">今日伤害：${d.today_damage} · 参与：${d.participants} 人</span>
+       <span style="color:var(--warn)">🎁 死亡奖池：${d.pool} 积分</span></div>`;
+    $("boss-top").textContent = d.top.length ? "伤害榜：" + d.top.map((t,i)=>`${i+1}.${t.user_id}(${t.damage})`).join("  ") : "今天还没人出手喵~";
+  }catch(e){}
+}
+
+async function loadLottery(){
+  try{
+    const d = await api("api/lottery");
+    $("lottery-info").innerHTML =
+      `<div class="row"><span>当前奖池：<b>${d.pool}</b> 积分</span>
+       <span style="color:var(--sub)">今日购买：${d.bought} · 参与 ${d.participants} 人 · ${d.tickets} 注</span>
+       <span style="color:var(--sub)">保底 ${d.base_pool} · 上期结转 ${d.carry} · 每期限购 ${d.limit_per_day} 注</span></div>`;
+  }catch(e){}
+}
+
+async function loadTx(){
+  try{
+    const d = await api("api/transactions?limit=15");
+    $("tx-body").innerHTML = d.map(t=>{
+      const cls = t.amount >= 0 ? "tag on" : "tag off";
+      const sign = t.amount >= 0 ? "+" : "";
+      return `<tr><td>${t.time}</td><td>${t.user_id}</td><td>${t.operation}</td>
+        <td><span class="${cls}">${sign}${t.amount}</span></td></tr>`;
+    }).join("") || `<tr><td colspan="4" style="color:var(--sub)">暂无流水</td></tr>`;
+  }catch(e){}
+}
+
+async function loadUsers(p){
+  if(p < 1) return;
+  const kw = $("search").value.trim();
+  try{
+    const d = await api(`api/users?page=${p}&page_size=${pageSize}&search=${encodeURIComponent(kw)}`);
+    page = d.page; $("user-page").textContent = `第 ${d.page} 页 / 共 ${Math.max(1,Math.ceil(d.total/pageSize))} 页（${d.total} 人）`;
+    $("user-count").textContent = `共 ${d.total} 人`;
+    $("user-body").innerHTML = d.users.map(u=>`<tr>
+      <td>${u.user_id}</td><td><b>${u.balance}</b></td><td>${u.total_earned}</td>
+      <td>${u.total_spent}</td><td>${u.sign_in_date || "-"}</td><td>${u.sign_in_streak}</td></tr>`).join("")
+      || `<tr><td colspan="6" style="color:var(--sub)">没有匹配的用户</td></tr>`;
+  }catch(e){}
+}
+
+async function loadGroups(){
+  try{
+    const d = await api("api/groups");
+    $("mode-sel").value = d.mode;
+    $("group-body").innerHTML = d.groups.map(g=>{
+      const tag = g.enabled ? '<span class="tag on">已开启</span>' : '<span class="tag off">已关闭/拉黑</span>';
+      const btn = g.enabled
+        ? `<button class="small danger" onclick="toggleGroup('${g.group_id}',0)">关闭</button>`
+        : `<button class="small" onclick="toggleGroup('${g.group_id}',1)">开启</button>`;
+      return `<tr><td>${g.group_id}</td><td>${tag}</td><td>${g.updated_at || "-"}</td><td>${btn}</td></tr>`;
+    }).join("") || `<tr><td colspan="4" style="color:var(--sub)">还没有群被设置过（默认全部关闭）</td></tr>`;
+  }catch(e){}
+}
+
+async function toggleGroup(gid, enabled){
+  const r = await api("api/groups/toggle", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({group_id: gid, enabled})});
+  if(r.status === "error"){ toast(r.message, false); return; }
+  toast(enabled ? "已开启该群玩法" : "已关闭该群玩法");
+  loadGroups();
+}
+
+async function setMode(){
+  const mode = $("mode-sel").value;
+  const r = await api("api/config/mode", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({mode})});
+  if(r.status === "error"){ toast(r.message, false); return; }
+  toast("全局模式已保存");
+  loadGroups();
+}
+
+async function grant(sign){
+  const uid = $("g-user").value.trim();
+  const amt = parseInt($("g-amount").value);
+  if(!uid || !amt){ toast("请填写用户ID和积分数量", false); return; }
+  const r = await api("api/admin/grant", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({user_id: uid, amount: sign * amt})});
+  if(r.status === "error"){ toast(r.message, false); return; }
+  toast(`操作成功，${uid} 当前积分：${r.balance}`);
+  loadStats(); loadLeaderboard(); loadUsers(page); loadTx();
+}
+
+$("search").addEventListener("keydown", e => { if(e.key === "Enter") loadUsers(1); });
+
+loadWhoami(); loadStats(); loadLeaderboard(); loadBoss(); loadLottery(); loadTx(); loadUsers(1); loadGroups();
+setInterval(()=>{ loadStats(); loadBoss(); loadLottery(); }, 30000);
+</script>
+</body>
+</html>
