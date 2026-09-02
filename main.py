@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.5.6
+作者：Zxin_Pro    版本：2.5.7
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -127,7 +127,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -153,6 +153,8 @@ WORD_PAIRS: list[tuple[str, str]] = [
 COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分", "查看自己的积分、收入、支出与签到信息"),
     ("/积分 帮助", "玩法介绍与指令列表"),
+    ("/积分 掷骰 @群友", "与群友比大小，胜者+10，平局各+5"),
+    ("群活跃奖励", "每日结算群内发言前三名，奖励50/30/10积分"),
     ("/积分 转盘 [积分]", "幸运转盘，最高5倍返还"),
     ("/积分 闯关", "答题闯关，答对得分答错扣分"),
     ("/积分 攻击", "消耗5积分打BOSS，伤害100-500"),
@@ -198,7 +200,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.5.6",
+    version="2.5.7",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -242,6 +244,10 @@ class PointGamesPlugin(Star):
     SIGN_IN_WEEK_BONUS = 20         # 连续签到 7 天额外奖励
     # 通用
     COMMAND_COOLDOWN = 3            # 每条指令冷却（秒）
+    DICE_DAILY_LIMIT = 5            # 掷骰每日次数上限（可配置）
+    ACTIVITY_SETTLE_HOUR = 22       # 群活跃奖励结算小时（可配置）
+    ACTIVITY_SETTLE_MINUTE = 0      # 群活跃奖励结算分钟（可配置）
+    ACTIVITY_REWARDS = (50, 30, 10)
     # 谁是卧底
     UC_MIN_PLAYERS = 4
     UC_MAX_PLAYERS = 12
@@ -347,6 +353,14 @@ class PointGamesPlugin(Star):
             create_time TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_pt_user ON point_transactions(user_id)",
+        """CREATE TABLE IF NOT EXISTS dice_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            count INTEGER DEFAULT 0,
+            UNIQUE(user_id, date)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_dice_records_user_date ON dice_records(user_id, date)",
         """CREATE TABLE IF NOT EXISTS daily_cars (
             user_id TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -378,6 +392,9 @@ class PointGamesPlugin(Star):
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._uc_jobs: dict[str, Any] = {}      # group_id -> apscheduler Job（卧底计时器）
         self._daily_car_lock = asyncio.Lock()
+        self._dice_lock = asyncio.Lock()
+        self._activity_counts: dict[str, dict[str, dict[str, Any]]] = {}
+        self._activity_lock = asyncio.Lock()
         # 兼容不同版本的数据库获取方式
         self._db = None
         ctx = self.context
@@ -453,6 +470,9 @@ class PointGamesPlugin(Star):
         self.SIGN_IN_MAX = max(integer("sign_in_max", self.SIGN_IN_MAX, 0), self.SIGN_IN_MIN)
         self.SIGN_IN_WEEK_BONUS = integer("sign_in_week_bonus", self.SIGN_IN_WEEK_BONUS, 0)
         self.COMMAND_COOLDOWN = integer("command_cooldown", self.COMMAND_COOLDOWN, 0)
+        self.DICE_DAILY_LIMIT = integer("dice_daily_limit", self.DICE_DAILY_LIMIT, 1)
+        self.ACTIVITY_SETTLE_HOUR = min(integer("activity_settle_hour", self.ACTIVITY_SETTLE_HOUR, 0), 23)
+        self.ACTIVITY_SETTLE_MINUTE = min(integer("activity_settle_minute", self.ACTIVITY_SETTLE_MINUTE, 0), 59)
         self.UC_MIN_PLAYERS = integer("uc_min_players", self.UC_MIN_PLAYERS, 2)
         self.UC_MAX_PLAYERS = max(integer("uc_max_players", self.UC_MAX_PLAYERS, 2), self.UC_MIN_PLAYERS)
         self.UC_DEFAULT_PLAYERS = min(
@@ -837,6 +857,11 @@ class PointGamesPlugin(Star):
             self._maintenance, IntervalTrigger(seconds=60, timezone=TZ),
             id="point_games_maintenance", replace_existing=True,
         )
+        self._scheduler.add_job(
+            self._settle_activity_rewards,
+            CronTrigger(hour=self.ACTIVITY_SETTLE_HOUR, minute=self.ACTIVITY_SETTLE_MINUTE, timezone=TZ),
+            id="point_games_activity_rewards", replace_existing=True,
+        )
         self._scheduler.start()
         # 3. 注册 WebUI
         self._register_web_apis()
@@ -1128,7 +1153,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的 /积分 帮助说明。"""
         return "\n".join([
-            "🎮 积分游戏 v2.5.6",
+            "🎮 积分游戏 v2.5.7",
             "所有玩法均以 /积分 开头",
             "查询：/积分",
             "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
@@ -2015,6 +2040,19 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
+    async def _get_group_member(self, event: AstrMessageEvent, user_id: str):
+        """查询目标是否仍在当前群，返回成员信息或 None。"""
+        try:
+            group = await event.get_group(event.get_group_id())
+            if group and group.members:
+                target = str(user_id)
+                for member in group.members:
+                    if str(member.user_id) == target:
+                        return member
+        except Exception as exc:
+            self.logger.warning(f"查询群成员失败: {exc}")
+        return None
+
     def _extract_at(self, event: AstrMessageEvent) -> Optional[str]:
         """从消息中提取被 @ 的 QQ（兼容 At 组件与纯文本数字）"""
         try:
@@ -2065,7 +2103,126 @@ class PointGamesPlugin(Star):
         return " ".join(text.replace("　", " ").split())
 
     # ============================================================
-    #  功能六：管理指令 / 签到 / 排行
+    #  功能六：掷骰比大小
+    # ============================================================
+    async def _dice_count(self, session, user_id: str, today: str) -> int:
+        row = (await session.execute(text(
+            "SELECT count FROM dice_records WHERE user_id=:u AND date=:d"
+        ), {"u": user_id, "d": today})).first()
+        return int(row[0]) if row else 0
+
+    async def _increase_dice_count(self, session, user_id: str, today: str) -> None:
+        await session.execute(text(
+            "INSERT INTO dice_records(user_id, date, count) VALUES(:u, :d, 1) "
+            "ON CONFLICT(user_id, date) DO UPDATE SET count=dice_records.count+1"
+        ), {"u": user_id, "d": today})
+
+    @filter.command("积分 掷骰", alias={"掷骰"})
+    async def dice_roll(self, event: AstrMessageEvent):
+        """/积分 掷骰 @群友 —— 与群友比大小，每日次数可在配置页调整。"""
+        if event.is_private_chat():
+            yield event.plain_result("掷骰只能在群里玩喵~")
+            return
+        ok_gate, msg_gate = await self._check_group_gate(event, "掷骰")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        challenger = str(event.get_sender_id()).strip()
+        target = self._extract_at(event)
+        if not target:
+            yield event.plain_result("用法：/积分 掷骰 @群友 喵~")
+            return
+        if target == challenger:
+            yield event.plain_result("不能和自己掷骰喵~")
+            return
+        member = await self._get_group_member(event, target)
+        if member is None:
+            yield event.plain_result("这个玩家不在群里，无法掷骰喵~")
+            return
+        target_name = str(getattr(member, "nickname", "") or "群友").strip()
+        challenger_name = str(event.get_sender_name() or "你").strip()
+        today = date.today().isoformat()
+
+        async with self._dice_lock:
+            async def fn(session):
+                challenger_count = await self._dice_count(session, challenger, today)
+                target_count = await self._dice_count(session, target, today)
+                if challenger_count >= self.DICE_DAILY_LIMIT:
+                    raise _BizError(f"你今天已经掷骰 {self.DICE_DAILY_LIMIT} 次啦喵~")
+                if target_count >= self.DICE_DAILY_LIMIT:
+                    raise _BizError(f"{target_name} 今天已经达到掷骰次数上限喵~")
+                await self._ensure_user(session, challenger, challenger_name)
+                await self._ensure_user(session, target, target_name)
+                first = random.randint(1, 6)
+                second = random.randint(1, 6)
+                await self._increase_dice_count(session, challenger, today)
+                await self._increase_dice_count(session, target, today)
+                if first > second:
+                    await self._add_points(session, challenger, 10, "掷骰获胜")
+                    result = f"🎲 你掷出了 {first}，@{target_name} 掷出了 {second}\n🎉 你赢了！获得10积分！"
+                elif first < second:
+                    await self._add_points(session, target, 10, "掷骰获胜")
+                    result = f"🎲 你掷出了 {first}，@{target_name} 掷出了 {second}\n🎉 @{target_name} 赢了！获得10积分！"
+                else:
+                    await self._add_points(session, challenger, 5, "掷骰平局")
+                    await self._add_points(session, target, 5, "掷骰平局")
+                    result = f"🎲 你掷出了 {first}，@{target_name} 掷出了 {second}\n🤝 平局！各得5积分！"
+                return True, result, None
+
+            ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ============================================================
+    #  功能七：群活跃奖励
+    # ============================================================
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    async def count_group_activity(self, event: AstrMessageEvent):
+        """统计群聊发言，系统消息也按一条消息计数。"""
+        group_id = str(event.get_group_id() or "").strip()
+        user_id = str(event.get_sender_id() or "").strip()
+        if not group_id or not user_id or user_id == str(event.get_self_id() or ""):
+            return
+        today = datetime.now(TZ).date().isoformat()
+        key = f"{event.get_platform_id()}:{group_id}"
+        user_name = str(event.get_sender_name() or user_id).strip()
+        async with self._activity_lock:
+            bucket = self._activity_counts.setdefault(key, {"date": today, "users": {}})
+            if bucket["date"] != today:
+                bucket["date"] = today
+                bucket["users"] = {}
+            entry = bucket["users"].setdefault(user_id, {"name": user_name, "count": 0})
+            entry["name"] = user_name or entry["name"]
+            entry["count"] += 1
+
+    async def _settle_activity_rewards(self):
+        """每天22:00按群结算发言前三名并清空统计。"""
+        today = datetime.now(TZ).date().isoformat()
+        async with self._activity_lock:
+            snapshots = [(key, bucket) for key, bucket in self._activity_counts.items()
+                         if bucket.get("date") == today and bucket.get("users")]
+        for key, bucket in snapshots:
+            platform_id, group_id = key.split(":", 1)
+            ranking = sorted(bucket["users"].items(), key=lambda item: item[1]["count"], reverse=True)[:3]
+            rewards = (50, 30, 10)
+
+            async def fn(session):
+                lines = ["🔥 群活跃奖励结算"]
+                for rank, ((user_id, info), reward) in enumerate(zip(ranking, rewards), 1):
+                    await self._ensure_user(session, user_id, info["name"])
+                    await self._add_points(session, user_id, reward, "群活跃第%d名" % rank)
+                    lines.append(f"第{rank}名 @{info['name']}：{info['count']} 条，+{reward} 积分")
+                return True, "\n".join(lines), None
+
+            ok, message, _ = await self._tx(fn)
+            if ok:
+                await self._send_to_group(platform_id, group_id, message)
+                async with self._activity_lock:
+                    current = self._activity_counts.get(key)
+                    if current is bucket:
+                        current["users"] = {}
+
+    # ============================================================
+    #  功能八：管理指令 / 签到 / 排行
     # ============================================================
     async def _grant_points(self, event: AstrMessageEvent, negative: bool):
         """/积分 加积分|减积分 @用户 数量（仅配置页管理员QQ可用）"""
