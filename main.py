@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.5
+作者：Zxin_Pro    版本：1.5.6
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.5",
+    version="1.5.6",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -861,13 +861,15 @@ class PointGamesPlugin(Star):
         if event.is_private_chat():
             yield event.plain_result("本群玩法只能在群里设置喵~")
             return
-        args = event.message_str.replace("/本群玩法", "", 1).strip()
-        action = args.strip()
-        group_id = event.get_group_id()
-        if action not in ("开", "关", "on", "off", "1", "0"):
+        args = self._strip_command(event, "本群玩法")
+        # 从参数中提取动作词（兼容 at 尾巴、多余文本、全角空格），取最后一个
+        words = re.findall(r"开|关|开启|关闭|打开|on|off|1|0", args.lower())
+        if not words:
             yield event.plain_result("用法：/本群玩法 开 或 /本群玩法 关喵~")
             return
-        enable = action in ("开", "on", "1")
+        action = words[-1]
+        group_id = event.get_group_id()
+        enable = action in ("开", "开启", "打开", "on", "1")
 
         async def fn(session):
             await session.execute(
@@ -886,11 +888,14 @@ class PointGamesPlugin(Star):
     @filter.permission_type(PermissionType.ADMIN)
     async def mode_set(self, event: AstrMessageEvent):
         """/玩法模式 白名单|黑名单 —— 全局模式（管理员）"""
-        mode = event.message_str.replace("/玩法模式", "", 1).strip()
-        if mode not in ("白名单", "黑名单", "whitelist", "blacklist"):
+        mode = self._strip_command(event, "玩法模式").lower()
+        if mode in ("白名单", "whitelist"):
+            real = "whitelist"
+        elif mode in ("黑名单", "blacklist"):
+            real = "blacklist"
+        else:
             yield event.plain_result("用法：/玩法模式 白名单 或 /玩法模式 黑名单喵~")
             return
-        real = "whitelist" if mode in ("白名单", "whitelist") else "blacklist"
         desc = "白名单（默认全关，仅开启的群可玩）" if real == "whitelist" else "黑名单（默认全开，拉黑的群不可玩）"
 
         async def fn(session):
@@ -938,7 +943,7 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏 v1.5.5 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏 v1.5.6 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
@@ -961,7 +966,7 @@ class PointGamesPlugin(Star):
             return
         user_id = event.get_sender_id()
         cost = self.SPIN_DEFAULT_COST
-        args = event.message_str.replace("/转盘", "", 1).strip()
+        args = self._strip_command(event, "转盘")
         if args:
             try:
                 cost = int(args.split()[0])
@@ -1311,7 +1316,7 @@ class PointGamesPlugin(Star):
             return
         user_id = event.get_sender_id()
         cost = self.LOTTERY_DEFAULT_COST
-        args = event.message_str.replace("/买彩票", "", 1).strip()
+        args = self._strip_command(event, "买彩票")
         if args:
             try:
                 cost = int(args.split()[0])
@@ -1411,7 +1416,7 @@ class PointGamesPlugin(Star):
         invoker = event.get_sender_id()
         platform_id = event.get_platform_id()
         target = self.UC_DEFAULT_PLAYERS
-        args = event.message_str.replace("/卧底开始", "", 1).strip()
+        args = self._strip_command(event, "卧底开始")
         if args:
             try:
                 target = int(args.split()[0])
@@ -1832,6 +1837,39 @@ class PointGamesPlugin(Star):
         m = re.search(r"(\d{5,})", event.get_message_str())
         return m.group(1) if m else None
 
+    def _strip_command(self, event: AstrMessageEvent, command: str) -> str:
+        """从事件消息中提取指令参数。
+
+        兼容不同 AstrBot 版本的 message_str 差异：命令词可能带/不带斜杠、
+        消息可能带 @机器人 尾巴、可能含全角空格，统一清理后返回参数部分。
+        """
+        text = ""
+        try:
+            text = str(event.message_str or "")
+        except Exception:
+            text = ""
+        if not text:
+            try:
+                text = str(event.get_message_str() or "")
+            except Exception:
+                text = ""
+        if not text:
+            try:
+                parts = []
+                for comp in event.get_messages():
+                    t = getattr(comp, "get_text", None)
+                    parts.append(t() if t else str(comp))
+                text = " ".join(parts)
+            except Exception:
+                pass
+        cmd = command.lstrip("/")
+        for variant in (command, cmd, "/" + cmd):
+            if variant and variant in text:
+                text = text.split(variant, 1)[1]
+                break
+        # 全角空格转半角，去掉首尾与连续空白
+        return " ".join(text.replace("　", " ").split())
+
     # ============================================================
     #  功能六：管理指令 / 签到 / 排行
     # ============================================================
@@ -1843,7 +1881,7 @@ class PointGamesPlugin(Star):
             return
         user_id = self._extract_at(event)
         cmd = "扣积分" if negative else "加积分"
-        args = event.message_str.replace(f"/{cmd}", "", 1).strip()
+        args = self._strip_command(event, cmd)
         parts = args.split()
         amount = None
         for p in parts:
