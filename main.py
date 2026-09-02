@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.5.7
+作者：Zxin_Pro    版本：2.5.9
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -168,6 +168,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分 卧底结束", "管理员强制结束"),
     ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到"),
     ("/积分 查询", "查看自己的积分、收入、支出与签到信息"),
+    ("/积分 查积分 @玩家", "查询其他玩家的积分信息"),
     ("/积分 排行", "全服积分排行榜"),
     ("/积分 加积分 /减积分", "调整积分（仅配置页管理员QQ）"),
     ("/积分 清除数据 @玩家", "清除指定玩家账户和流水（仅管理员）"),
@@ -200,7 +201,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.5.7",
+    version="2.5.9",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1153,7 +1154,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的 /积分 帮助说明。"""
         return "\n".join([
-            "🎮 积分游戏 v2.5.7",
+            "🎮 积分游戏 v2.5.9",
             "所有玩法均以 /积分 开头",
             "查询：/积分",
             "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
@@ -1417,19 +1418,20 @@ class PointGamesPlugin(Star):
                 stats = (
                     await session.execute(
                         text(
-                            "SELECT user_id, SUM(damage) AS dmg FROM boss_damage "
-                            "GROUP BY user_id ORDER BY dmg DESC"
+                            "SELECT b.user_id, u.user_name, SUM(b.damage) AS dmg "
+                            "FROM boss_damage b LEFT JOIN users u ON u.user_id=b.user_id "
+                            "GROUP BY b.user_id, u.user_name ORDER BY dmg DESC"
                         )
                     )
                 ).all()
-                total_dmg = sum(int(s[1]) for s in stats)
+                total_dmg = sum(int(s[2]) for s in stats)
                 pool = int(row[1])
                 shares = []
-                for uid, dmg in stats:
+                for uid, user_name, dmg in stats:
                     share = int(pool * int(dmg) / total_dmg) if total_dmg else 0
                     if share > 0:
                         await self._add_points(session, uid, share, "BOSS击败分红")
-                        shares.append((uid, share))
+                        shares.append((user_name or "未知玩家", share))
                 # 重置 BOSS
                 today = date.today().isoformat()
                 await session.execute(
@@ -1500,8 +1502,10 @@ class PointGamesPlugin(Star):
             rows = (
                 await session.execute(
                     text(
-                        "SELECT user_id, SUM(damage) AS dmg FROM boss_damage "
-                        "WHERE attack_time >= :t GROUP BY user_id ORDER BY dmg DESC LIMIT 10"
+                        "SELECT b.user_id, u.user_name, SUM(b.damage) AS dmg "
+                        "FROM boss_damage b LEFT JOIN users u ON u.user_id=b.user_id "
+                        "WHERE b.attack_time >= :t GROUP BY b.user_id, u.user_name "
+                        "ORDER BY dmg DESC LIMIT 10"
                     ),
                     {"t": today_start},
                 )
@@ -1510,7 +1514,8 @@ class PointGamesPlugin(Star):
                 return True, "今天还没有人攻击 BOSS 喵~ 发送 /攻击 抢首刀！", None
             lines = ["👹 今日 BOSS 伤害排行 TOP10"]
             for i, r in enumerate(rows, 1):
-                lines.append(f"{i}. {r[0]} —— {int(r[1])} 伤害")
+                name = r[1] or "未知玩家"
+                lines.append(f"{i}. {name} —— {int(r[2])} 伤害")
             return True, "\n".join(lines), None
 
         ok, msg, _ = await self._tx(fn)
@@ -2352,6 +2357,37 @@ class PointGamesPlugin(Star):
     async def points(self, event: AstrMessageEvent):
         """/积分 查询 —— 查询自己的积分账户"""
         yield await self._show_points(event)
+
+    async def _query_user_points(self, event: AstrMessageEvent):
+        target_id = self._extract_at(event)
+        if not target_id:
+            yield event.plain_result("用法：/积分 查积分 @玩家 喵~")
+            return
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT user_name, balance, total_earned, total_spent, sign_in_streak "
+                "FROM users WHERE user_id=:u"
+            ), {"u": target_id})).first()
+            if not row:
+                raise _BizError("这个玩家还没有积分数据喵~")
+            name = row[0] or "未知玩家"
+            return True, (
+                f"💰 玩家：{name}\n"
+                f"当前积分：{int(row[1])}\n"
+                f"累计收入：{int(row[2])}\n"
+                f"累计支出：{int(row[3])}\n"
+                f"连续签到：{int(row[4])} 天"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("积分 查积分", alias={"积分 查"})
+    async def query_other_points(self, event: AstrMessageEvent):
+        """/积分 查积分 @玩家 —— 查询其他玩家积分"""
+        async for result in self._query_user_points(event):
+            yield result
 
     @filter.command("积分 排行")
     async def rank(self, event: AstrMessageEvent):
