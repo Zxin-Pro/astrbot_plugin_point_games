@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-AstrBot 积分游戏合集插件
+AstrBot 积分游戏插件
 =========================
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
@@ -168,14 +168,14 @@ class _BizError(Exception):
 
 
 @register(
-    name="积分游戏合集",
+    name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
     version="1.5.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
-    """积分游戏合集：发送 /积分游戏 查看全部玩法说明"""
+    """积分游戏：发送 /积分游戏 查看全部玩法说明"""
 
     # ---------- 数字常量（可自行调整） ----------
     # 幸运转盘概率表：[区间下限, 区间上限, 返还比例, 表情]
@@ -904,14 +904,13 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏合集 v1.5.1 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏 v1.5.1 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
             "━━━━━━━━━━━━━━",
             "🌐 全群积分互通，排行榜为全服排名",
-            "🖥️ WebUI 面板：AstrBot 面板登录后访问",
-            "   /api/v1/plugins/extensions/points_games/dashboard",
+            "🖥️ WebUI 面板：AstrBot 面板 → 插件 → 积分游戏 → 积分游戏面板",
             "✨ 更多玩法开发中，敬请期待喵~",
         ]
         yield event.plain_result("\n".join(lines))
@@ -1954,18 +1953,17 @@ class PointGamesPlugin(Star):
         if not hasattr(ctx, "register_web_api"):
             self.logger.warning("当前 AstrBot 版本不支持 register_web_api，WebUI 面板不可用")
             return
-        ctx.register_web_api("/points_games/dashboard", self._web_dashboard, ["GET"], "积分游戏合集 WebUI 面板")
-        ctx.register_web_api("/points_games/api/whoami", self._web_whoami, ["GET"], "当前面板用户")
-        ctx.register_web_api("/points_games/api/stats", self._web_stats, ["GET"], "积分游戏总览")
-        ctx.register_web_api("/points_games/api/leaderboard", self._web_leaderboard, ["GET"], "积分排行榜")
-        ctx.register_web_api("/points_games/api/users", self._web_users, ["GET"], "用户列表")
-        ctx.register_web_api("/points_games/api/boss", self._web_boss, ["GET"], "BOSS 状态")
-        ctx.register_web_api("/points_games/api/lottery", self._web_lottery, ["GET"], "彩票信息")
-        ctx.register_web_api("/points_games/api/transactions", self._web_transactions, ["GET"], "积分流水")
-        ctx.register_web_api("/points_games/api/groups", self._web_groups, ["GET"], "群设置列表")
-        ctx.register_web_api("/points_games/api/groups/toggle", self._web_group_toggle, ["POST"], "开关群玩法")
-        ctx.register_web_api("/points_games/api/config/mode", self._web_mode_set, ["POST"], "切换全局模式")
-        ctx.register_web_api("/points_games/api/admin/grant", self._web_grant, ["POST"], "WebUI 加/扣积分")
+        ctx.register_web_api("/point_games/api/whoami", self._web_whoami, ["GET"], "当前面板用户")
+        ctx.register_web_api("/point_games/api/stats", self._web_stats, ["GET"], "积分游戏总览")
+        ctx.register_web_api("/point_games/api/leaderboard", self._web_leaderboard, ["GET"], "积分排行榜")
+        ctx.register_web_api("/point_games/api/users", self._web_users, ["GET"], "用户列表")
+        ctx.register_web_api("/point_games/api/boss", self._web_boss, ["GET"], "BOSS 状态")
+        ctx.register_web_api("/point_games/api/lottery", self._web_lottery, ["GET"], "彩票信息")
+        ctx.register_web_api("/point_games/api/transactions", self._web_transactions, ["GET"], "积分流水")
+        ctx.register_web_api("/point_games/api/groups", self._web_groups, ["GET"], "群设置列表")
+        ctx.register_web_api("/point_games/api/groups/toggle", self._web_group_toggle, ["POST"], "开关群玩法")
+        ctx.register_web_api("/point_games/api/config/mode", self._web_mode_set, ["POST"], "切换全局模式")
+        ctx.register_web_api("/point_games/api/admin/grant", self._web_grant, ["POST"], "WebUI 加/扣积分")
 
     def _web_admin_ok(self) -> bool:
         """WebUI 管理员校验：面板登录用户名需在 WEB_ADMIN_USERS 中"""
@@ -1975,17 +1973,6 @@ class PointGamesPlugin(Star):
             return username in self.WEB_ADMIN_USERS
         except Exception:
             return False
-
-    async def _web_dashboard(self):
-        from fastapi.responses import HTMLResponse
-        import os
-        html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
-        try:
-            with open(html_path, "r", encoding="utf-8") as f:
-                html = f.read()
-        except Exception:
-            html = "<h1>dashboard.html 缺失</h1><p>请确认插件目录下存在 dashboard.html</p>"
-        return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
     async def _web_whoami(self):
         from astrbot.api.web import json_response, request as web_request

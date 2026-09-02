@@ -1,4 +1,4 @@
-# 🎮 AstrBot 积分游戏合集
+# 🎮 AstrBot 积分游戏
 
 一个功能丰富的 AstrBot 积分小游戏插件：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行。
 
@@ -10,7 +10,7 @@
 ## 安装
 
 1. 将插件目录（或 zip）放入 AstrBot 的 `plugins/` 目录
-2. 在 AstrBot 面板中启用插件「积分游戏合集」
+2. 在 AstrBot 面板中启用插件「积分游戏」
 3. 首次启用会自动创建数据表（使用 AstrBot 内置数据库）
 
 依赖：`apscheduler`（`__requirements__` 已声明，AstrBot 会自动安装）
@@ -66,14 +66,15 @@
 
 ## WebUI 面板
 
-AstrBot 面板登录后访问（插件 Web API 受面板登录保护）：
+插件自带 AstrBot 插件页面（`pages/panel/`）。打开方式：
 
-- 新版地址：`/api/v1/plugins/extensions/points_games/dashboard`
-- 兼容地址：`/api/plug/points_games/dashboard`
+1. 登录 AstrBot 面板
+2. 进入「插件」→ 找到「积分游戏」→ 点击插件卡片进入详情页
+3. 点击页面按钮「积分游戏面板」即可打开管理面板（插件 Web API 受面板登录保护）
 
 面板功能：总览统计、全服排行榜、BOSS 战况、大乐透奖池、积分流水、用户列表、群黑白名单管理、加/扣积分。
 
-> WebUI 中的加/扣积分等管理操作，需要面板登录用户名在 `main.py` 顶部的 `WEB_ADMIN_USERS` 名单中（默认 `admin`），可自行修改。
+> WebUI 中的加/扣积分等管理操作，需要面板登录用户名在插件配置页「WebUI 管理员用户名列表」中（默认 `admin`），可在配置页修改。
 
 ## 玩法规则
 

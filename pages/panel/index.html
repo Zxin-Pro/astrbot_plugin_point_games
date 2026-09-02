@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>积分游戏合集 · 管理面板</title>
+<title>积分游戏 · 管理面板</title>
 <style>
   :root { --bg:#0f1220; --card:#1a1f33; --card2:#222842; --txt:#e6e9f5; --sub:#8a91b0;
           --acc:#6c8cff; --ok:#3ddc84; --err:#ff5d6c; --warn:#ffc94d; }
@@ -39,7 +39,7 @@
 </head>
 <body>
 <div class="toast" id="toast"></div>
-<h1>🎮 积分游戏合集 <span style="font-size:13px;color:var(--sub)">v1.5.1 · 全群数据互通</span></h1>
+<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.1 · 全群数据互通</span></h1>
 <div class="sub">当前面板用户：<span id="whoami">-</span> <span id="adminflag"></span></div>
 
 <div class="grid" id="statcards"></div>
@@ -110,7 +110,7 @@
 </div>
 
 <script>
-let page = 1, pageSize = 20;
+let page = 1, pageSize = 20, bridge = null;
 
 function $(id){ return document.getElementById(id); }
 function toast(msg, ok=true){
@@ -118,14 +118,13 @@ function toast(msg, ok=true){
   t.style.display = "block"; t.style.background = ok ? "#1d3a2a" : "#3a1d22";
   setTimeout(()=> t.style.display = "none", 2500);
 }
-async function api(path, opt={}){
-  const r = await fetch(path, opt);
-  return r.json();
-}
+// 使用 AstrBot PluginPage bridge 调用后端 API
+async function apiGet(path){ return bridge.apiGet(path); }
+async function apiPost(path, body){ return bridge.apiPost(path, body); }
 
 async function loadWhoami(){
   try{
-    const d = await api("api/whoami");
+    const d = await apiGet("api/whoami");
     $("whoami").textContent = d.username || "未登录";
     if(d.is_admin){ $("adminflag").innerHTML = '<span class="tag on">管理员</span>'; $("admin-panel").style.display="block"; }
   }catch(e){ $("whoami").textContent = "未知"; }
@@ -133,7 +132,7 @@ async function loadWhoami(){
 
 async function loadStats(){
   try{
-    const d = await api("api/stats");
+    const d = await apiGet("api/stats");
     const cards = [
       ["👥 用户总数", d.users], ["💰 今日流水", d.today_transactions],
       ["🎡 转盘总次数", d.spin_total], ["👹 BOSS 血量", d.boss_hp],
@@ -146,7 +145,7 @@ async function loadStats(){
 
 async function loadLeaderboard(){
   try{
-    const d = await api("api/leaderboard");
+    const d = await apiGet("api/leaderboard");
     const medals = ["medal1","medal2","medal3"];
     $("lb-body").innerHTML = d.map((u,i)=>{
       const m = i<3 ? `<span class="${medals[i]}">${["🥇","🥈","🥉"][i]}</span>` : `${i+1}.`;
@@ -158,7 +157,7 @@ async function loadLeaderboard(){
 
 async function loadBoss(){
   try{
-    const d = await api("api/boss");
+    const d = await apiGet("api/boss");
     const pct = Math.max(0, Math.min(100, d.hp/d.max_hp*100));
     $("boss-hpbar").style.width = pct + "%";
     $("boss-info").innerHTML =
@@ -171,7 +170,7 @@ async function loadBoss(){
 
 async function loadLottery(){
   try{
-    const d = await api("api/lottery");
+    const d = await apiGet("api/lottery");
     $("lottery-info").innerHTML =
       `<div class="row"><span>当前奖池：<b>${d.pool}</b> 积分</span>
        <span style="color:var(--sub)">今日购买：${d.bought} · 参与 ${d.participants} 人 · ${d.tickets} 注</span>
@@ -181,7 +180,7 @@ async function loadLottery(){
 
 async function loadTx(){
   try{
-    const d = await api("api/transactions?limit=15");
+    const d = await apiGet("api/transactions?limit=15");
     $("tx-body").innerHTML = d.map(t=>{
       const cls = t.amount >= 0 ? "tag on" : "tag off";
       const sign = t.amount >= 0 ? "+" : "";
@@ -195,7 +194,7 @@ async function loadUsers(p){
   if(p < 1) return;
   const kw = $("search").value.trim();
   try{
-    const d = await api(`api/users?page=${p}&page_size=${pageSize}&search=${encodeURIComponent(kw)}`);
+    const d = await apiGet(`api/users?page=${p}&page_size=${pageSize}&search=${encodeURIComponent(kw)}`);
     page = d.page; $("user-page").textContent = `第 ${d.page} 页 / 共 ${Math.max(1,Math.ceil(d.total/pageSize))} 页（${d.total} 人）`;
     $("user-count").textContent = `共 ${d.total} 人`;
     $("user-body").innerHTML = d.users.map(u=>`<tr>
@@ -207,7 +206,7 @@ async function loadUsers(p){
 
 async function loadGroups(){
   try{
-    const d = await api("api/groups");
+    const d = await apiGet("api/groups");
     $("mode-sel").value = d.mode;
     $("group-body").innerHTML = d.groups.map(g=>{
       const tag = g.enabled ? '<span class="tag on">已开启</span>' : '<span class="tag off">已关闭/拉黑</span>';
@@ -220,37 +219,44 @@ async function loadGroups(){
 }
 
 async function toggleGroup(gid, enabled){
-  const r = await api("api/groups/toggle", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({group_id: gid, enabled})});
-  if(r.status === "error"){ toast(r.message, false); return; }
-  toast(enabled ? "已开启该群玩法" : "已关闭该群玩法");
-  loadGroups();
+  try{
+    await apiPost("api/groups/toggle", {group_id: gid, enabled});
+    toast(enabled ? "已开启该群玩法" : "已关闭该群玩法");
+    loadGroups();
+  }catch(e){ toast(e.message || "操作失败", false); }
 }
 
 async function setMode(){
   const mode = $("mode-sel").value;
-  const r = await api("api/config/mode", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({mode})});
-  if(r.status === "error"){ toast(r.message, false); return; }
-  toast("全局模式已保存");
-  loadGroups();
+  try{
+    await apiPost("api/config/mode", {mode});
+    toast("全局模式已保存");
+    loadGroups();
+  }catch(e){ toast(e.message || "保存失败", false); }
 }
 
 async function grant(sign){
   const uid = $("g-user").value.trim();
   const amt = parseInt($("g-amount").value);
   if(!uid || !amt){ toast("请填写用户ID和积分数量", false); return; }
-  const r = await api("api/admin/grant", {method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({user_id: uid, amount: sign * amt})});
-  if(r.status === "error"){ toast(r.message, false); return; }
-  toast(`操作成功，${uid} 当前积分：${r.balance}`);
-  loadStats(); loadLeaderboard(); loadUsers(page); loadTx();
+  try{
+    const r = await apiPost("api/admin/grant", {user_id: uid, amount: sign * amt});
+    toast(`操作成功，${uid} 当前积分：${r.balance}`);
+    loadStats(); loadLeaderboard(); loadUsers(page); loadTx();
+  }catch(e){ toast(e.message || "操作失败", false); }
 }
 
 $("search").addEventListener("keydown", e => { if(e.key === "Enter") loadUsers(1); });
 
-loadWhoami(); loadStats(); loadLeaderboard(); loadBoss(); loadLottery(); loadTx(); loadUsers(1); loadGroups();
-setInterval(()=>{ loadStats(); loadBoss(); loadLottery(); }, 30000);
+(async function init(){
+  bridge = window.AstrBotPluginPage;
+  try{
+    const ctx = await bridge.ready();
+    if(ctx && ctx.pageTitle) document.title = ctx.pageTitle;
+  }catch(e){}
+  loadWhoami(); loadStats(); loadLeaderboard(); loadBoss(); loadLottery(); loadTx(); loadUsers(1); loadGroups();
+  setInterval(()=>{ loadStats(); loadBoss(); loadLottery(); }, 30000);
+})();
 </script>
 </body>
 </html>
