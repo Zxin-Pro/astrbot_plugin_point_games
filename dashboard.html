@@ -39,7 +39,7 @@
 </head>
 <body>
 <div class="toast" id="toast"></div>
-<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.8 · 独立面板窗口</span></h1>
+<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.9 · 独立面板窗口</span></h1>
 <div class="sub">当前面板用户：<span id="whoami">-</span> <span id="adminflag"></span></div>
 
 <div class="grid" id="statcards"></div>
@@ -75,7 +75,7 @@
     <button class="small" onclick="loadUsers(1)">搜索</button>
     <span id="user-count" style="color:var(--sub);font-size:12px"></span>
   </div>
-  <table><thead><tr><th>用户</th><th>余额</th><th>累计赚取</th><th>累计花费</th><th>最近签到</th><th>连签</th><th>操作</th></tr></thead>
+  <table><thead><tr><th>用户</th><th>余额</th><th>累计赚取</th><th>累计花费</th><th>最近签到</th><th>连签</th></tr></thead>
   <tbody id="user-body"></tbody></table>
   <div class="pager">
     <button class="ghost small" onclick="loadUsers(page-1)">上一页</button>
@@ -229,9 +229,8 @@ async function loadUsers(p){
     $("user-count").textContent = `共 ${d.total} 人`;
     $("user-body").innerHTML = d.users.map(u=>`<tr>
       <td>${u.user_id}</td><td><b>${u.balance}</b></td><td>${u.total_earned}</td>
-      <td>${u.total_spent}</td><td>${u.sign_in_date || "-"}</td><td>${u.sign_in_streak}</td>
-      <td><button class="small danger" onclick='clearUser(${JSON.stringify(String(u.user_id))})'>清除数据</button></td></tr>`).join("")
-      || `<tr><td colspan="7" style="color:var(--sub)">没有匹配的用户</td></tr>`;
+      <td>${u.total_spent}</td><td>${u.sign_in_date || "-"}</td><td>${u.sign_in_streak}</td></tr>`).join("")
+      || `<tr><td colspan="6" style="color:var(--sub)">没有匹配的用户</td></tr>`;
   }catch(e){}
 }
 
@@ -264,15 +263,6 @@ async function setMode(){
     toast("全局模式已保存");
     loadGroups();
   }catch(e){ toast(e.message || "保存失败", false); }
-}
-
-async function clearUser(uid){
-  if(!confirm(`确定清除玩家 ${uid} 的余额、累计收入、累计支出、签到数据和积分流水吗？此操作不可恢复。`)) return;
-  try{
-    await apiPost("api/admin/clear_user", {user_id: uid});
-    toast(`玩家 ${uid} 数据已清除`);
-    loadStats(); loadLeaderboard(); loadUsers(page); loadTx();
-  }catch(e){ toast(e.message || "清除失败", false); }
 }
 
 async function grant(sign){
