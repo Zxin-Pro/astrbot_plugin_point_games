@@ -222,8 +222,6 @@ class PointGamesPlugin(Star):
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
-    # WebUI 管理名单：AstrBot 面板登录用户名在这里才可执行加/扣积分
-    WEB_ADMIN_USERS = {"admin"}
     DEFAULT_GROUP_MODE = "whitelist"
     FEATURES = {
         "enable_spin": True,
@@ -425,8 +423,6 @@ class PointGamesPlugin(Star):
         self.UC_SPEECH_SECONDS = integer("uc_speech_seconds", self.UC_SPEECH_SECONDS, 1)
         self.UC_VOTE_SECONDS = integer("uc_vote_seconds", self.UC_VOTE_SECONDS, 1)
         self.UC_LOBBY_SECONDS = integer("uc_lobby_seconds", self.UC_LOBBY_SECONDS, 1)
-        admins = config.get("web_admin_users", ["admin"])
-        self.WEB_ADMIN_USERS = {str(x).strip() for x in admins if str(x).strip()} or {"admin"}
 
     # ---------- 数据库工具 ----------
     def _get_db(self):
@@ -1966,13 +1962,8 @@ class PointGamesPlugin(Star):
         ctx.register_web_api("/point_games/api/admin/grant", self._web_grant, ["POST"], "WebUI 加/扣积分")
 
     def _web_admin_ok(self) -> bool:
-        """WebUI 管理员校验：面板登录用户名需在 WEB_ADMIN_USERS 中"""
-        try:
-            from astrbot.api.web import request as web_request
-            username = (getattr(web_request, "username", "") or "").strip()
-            return username in self.WEB_ADMIN_USERS
-        except Exception:
-            return False
+        """WebUI 管理操作已开放给所有已登录面板用户（AstrBot 面板登录即视为可信）"""
+        return True
 
     async def _web_whoami(self):
         from astrbot.api.web import json_response, request as web_request
@@ -1981,7 +1972,7 @@ class PointGamesPlugin(Star):
             username = getattr(req, "username", "") or ""
         except Exception:
             username = ""
-        return json_response({"username": username, "is_admin": username in self.WEB_ADMIN_USERS})
+        return json_response({"username": username, "is_admin": True})
 
     async def _web_stats(self):
         from astrbot.api.web import json_response
