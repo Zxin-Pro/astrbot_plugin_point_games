@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.5.4
+作者：Zxin_Pro    版本：2.5.6
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -127,6 +127,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -197,7 +198,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.5.4",
+    version="2.5.6",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -278,6 +279,7 @@ class PointGamesPlugin(Star):
     TABLE_DDL = [
         """CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
+            user_name TEXT DEFAULT '',
             balance INTEGER DEFAULT 0,
             total_earned INTEGER DEFAULT 0,
             total_spent INTEGER DEFAULT 0,
@@ -339,6 +341,9 @@ class PointGamesPlugin(Star):
             user_id TEXT,
             amount INTEGER,
             operation TEXT,
+            earned INTEGER DEFAULT 0,
+            spent INTEGER DEFAULT 0,
+            balance_after INTEGER DEFAULT 0,
             create_time TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_pt_user ON point_transactions(user_id)",
@@ -571,11 +576,39 @@ class PointGamesPlugin(Star):
             date=today,
         )
 
-    async def _ensure_user(self, session, user_id: str):
-        """确保用户存在，不存在则插入默认行"""
+    async def _ensure_user(self, session, user_id: str, user_name: str = ""):
+        """确保用户存在，并在有新昵称时更新昵称。"""
         await session.execute(
-            text("INSERT OR IGNORE INTO users(user_id) VALUES(:u)"), {"u": user_id}
+            text("INSERT OR IGNORE INTO users(user_id, user_name) VALUES(:u, :n)"),
+            {"u": user_id, "n": user_name or ""},
         )
+        if user_name:
+            await session.execute(
+                text("UPDATE users SET user_name=:n WHERE user_id=:u"),
+                {"u": user_id, "n": user_name},
+            )
+
+    @filter.event_message_type(EventMessageType.ALL)
+    async def refresh_user_name(self, event: AstrMessageEvent):
+        """玩家每次使用本插件时刷新 QQ 昵称。"""
+        raw = str(event.get_message_str() or "").strip()
+        if not USER_COMMAND_PATTERN.search(raw):
+            return
+        user_id = str(event.get_sender_id() or "").strip()
+        if not user_id:
+            return
+        try:
+            user_name = str(event.get_sender_name() or "").strip()
+        except Exception:
+            user_name = ""
+        if not user_name:
+            return
+
+        async def fn(session):
+            await self._ensure_user(session, user_id, user_name)
+            return True, "ok", None
+
+        await self._tx(fn)
 
     async def _balance(self, session, user_id: str) -> int:
         await self._ensure_user(session, user_id)
@@ -631,13 +664,16 @@ class PointGamesPlugin(Star):
                 ),
                 {"a": amount, "e": earned, "s": spent, "u": user_id},
             )
-        # amount=0 时也允许记录一笔纯统计流水，但正常玩法不会这样调用。
+        # 记录完整流水：收入、支出、净变动和变动后的余额。
+        current_balance = await self._balance(session, user_id)
         await session.execute(
             text(
-                "INSERT INTO point_transactions(user_id, amount, operation, create_time) "
-                "VALUES(:u, :a, :op, :t)"
+                "INSERT INTO point_transactions("
+                "user_id, amount, operation, earned, spent, balance_after, create_time) "
+                "VALUES(:u, :a, :op, :e, :s, :b, :t)"
             ),
-            {"u": user_id, "a": amount, "op": operation, "t": time.time()},
+            {"u": user_id, "a": amount, "op": operation,
+             "e": earned, "s": spent, "b": current_balance, "t": time.time()},
         )
 
     async def _enforce_cooldown(self, session, user_id: str, seconds: int = None) -> float:
@@ -703,11 +739,45 @@ class PointGamesPlugin(Star):
 
     # ---------- 生命周期 ----------
     async def _init_db_tables(self):
-        """创建所有数据表（幂等）"""
+        """创建所有数据表并迁移旧版流水字段（幂等）"""
         async with self._session() as session:
             async with session.begin():
                 for ddl in self.TABLE_DDL:
                     await session.execute(text(ddl))
+
+                # 旧版数据库没有昵称和流水明细字段，启动时补齐并回填可推导数据。
+                user_columns = {
+                    str(row[1]) for row in (await session.execute(text("PRAGMA table_info(users)"))).all()
+                }
+                if "user_name" not in user_columns:
+                    await session.execute(text("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''"))
+
+                transaction_columns = {
+                    str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
+                }
+                missing_transaction_columns = []
+                for column, definition in (
+                    ("earned", "INTEGER DEFAULT 0"),
+                    ("spent", "INTEGER DEFAULT 0"),
+                    ("balance_after", "INTEGER DEFAULT 0"),
+                ):
+                    if column not in transaction_columns:
+                        await session.execute(text(f"ALTER TABLE point_transactions ADD COLUMN {column} {definition}"))
+                        missing_transaction_columns.append(column)
+                if missing_transaction_columns:
+                    running = {}
+                    old_rows = (await session.execute(text(
+                        "SELECT id, user_id, amount FROM point_transactions ORDER BY user_id, id"
+                    ))).all()
+                    for row in old_rows:
+                        uid = str(row[1])
+                        amount = int(row[2] or 0)
+                        running[uid] = running.get(uid, 0) + amount
+                        await session.execute(text(
+                            "UPDATE point_transactions SET earned=:e, spent=:s, balance_after=:b WHERE id=:i"
+                        ), {"e": max(amount, 0), "s": max(-amount, 0),
+                            "b": running[uid], "i": row[0]})
+
                 # BOSS 初始行
                 row = (await session.execute(text("SELECT id FROM boss WHERE id=1"))).first()
                 if not row:
@@ -1058,7 +1128,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的 /积分 帮助说明。"""
         return "\n".join([
-            "🎮 积分游戏 v2.5.4",
+            "🎮 积分游戏 v2.5.6",
             "所有玩法均以 /积分 开头",
             "查询：/积分",
             "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
@@ -2100,15 +2170,16 @@ class PointGamesPlugin(Star):
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             await self._ensure_user(session, user_id)
             row = (await session.execute(text(
-                "SELECT balance, total_earned, total_spent, sign_in_streak "
+                "SELECT user_name, balance, total_earned, total_spent, sign_in_streak "
                 "FROM users WHERE user_id=:u"
             ), {"u": user_id})).first()
+            name = row[0] or "未知玩家"
             return True, (
-                f"💰 用户：{user_id}\n"
-                f"当前积分：{int(row[0])}\n"
-                f"累计收入：{int(row[1])}\n"
-                f"累计支出：{int(row[2])}\n"
-                f"连续签到：{int(row[3])} 天"
+                f"💰 玩家：{name}\n"
+                f"当前积分：{int(row[1])}\n"
+                f"累计收入：{int(row[2])}\n"
+                f"累计支出：{int(row[3])}\n"
+                f"连续签到：{int(row[4])} 天"
             ), None
 
         ok, msg, _ = await self._tx(fn)
@@ -2140,7 +2211,7 @@ class PointGamesPlugin(Star):
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             rows = (
                 await session.execute(
-                    text("SELECT user_id, balance FROM users ORDER BY balance DESC LIMIT 10")
+                    text("SELECT user_id, user_name, balance FROM users ORDER BY balance DESC LIMIT 10")
                 )
             ).all()
             if not rows:
@@ -2149,7 +2220,8 @@ class PointGamesPlugin(Star):
             medals = ["🥇", "🥈", "🥉"]
             for i, r in enumerate(rows, 1):
                 prefix = medals[i - 1] if i <= 3 else f"{i}."
-                lines.append(f"{prefix} {r[0]} —— {int(r[1])} 积分")
+                name = r[1] or "未知玩家"
+                lines.append(f"{prefix} {name} —— {int(r[2])} 积分")
             return True, "\n".join(lines), None
 
         ok, msg, _ = await self._tx(fn)
@@ -2279,7 +2351,7 @@ class PointGamesPlugin(Star):
         ctx.register_web_api("/point_games/api/user_detail", self._web_user_detail, ["GET"], "玩家积分明细")
         ctx.register_web_api("/point_games/api/boss", self._web_boss, ["GET"], "BOSS 状态")
         ctx.register_web_api("/point_games/api/lottery", self._web_lottery, ["GET"], "彩票信息")
-        ctx.register_web_api("/point_games/api/transactions", self._web_transactions, ["GET"], "积分流水")
+        ctx.register_web_api("/point_games/api/transactions", self._web_transactions, ["GET"], "积分流水明细")
         ctx.register_web_api("/point_games/api/groups", self._web_groups, ["GET"], "群设置列表")
         ctx.register_web_api("/point_games/api/groups/toggle", self._web_group_toggle, ["POST"], "开关群玩法")
         ctx.register_web_api("/point_games/api/config/mode", self._web_mode_set, ["POST"], "切换全局模式")
@@ -2359,12 +2431,12 @@ class PointGamesPlugin(Star):
         async def fn(session):
             rows = (
                 await session.execute(
-                    text("SELECT user_id, balance, total_earned, total_spent, sign_in_streak FROM users ORDER BY balance DESC LIMIT 50")
+                    text("SELECT user_id, user_name, balance, total_earned, total_spent, sign_in_streak FROM users ORDER BY balance DESC LIMIT 50")
                 )
             ).all()
             return True, "ok", [
-                {"user_id": r[0], "balance": int(r[1]), "total_earned": int(r[2]),
-                 "total_spent": int(r[3]), "sign_in_streak": int(r[4])}
+                {"user_id": r[0], "user_name": r[1] or "未知玩家", "balance": int(r[2]), "total_earned": int(r[3]),
+                 "total_spent": int(r[4]), "sign_in_streak": int(r[5])}
                 for r in rows
             ]
 
@@ -2375,7 +2447,7 @@ class PointGamesPlugin(Star):
         from astrbot.api.web import json_response, request as web_request
         try:
             req = web_request
-            params = req.query if hasattr(req, "query") else {}
+            params = getattr(req, "query", None) or getattr(req, "query_params", {})
         except Exception:
             params = {}
         page = max(1, int(params.get("page", 1)))
@@ -2385,11 +2457,11 @@ class PointGamesPlugin(Star):
         async def fn(session):
             if keyword:
                 total = (
-                    await session.execute(text("SELECT COUNT(*) FROM users WHERE user_id LIKE :k"), {"k": f"%{keyword}%"})
+                    await session.execute(text("SELECT COUNT(*) FROM users WHERE user_id LIKE :k OR user_name LIKE :k"), {"k": f"%{keyword}%"})
                 ).first()
                 rows = (
                     await session.execute(
-                        text("SELECT user_id, balance, total_earned, total_spent, sign_in_date, sign_in_streak FROM users WHERE user_id LIKE :k ORDER BY balance DESC LIMIT :n OFFSET :o"),
+                        text("SELECT user_id, user_name, balance, total_earned, total_spent, sign_in_date, sign_in_streak FROM users WHERE user_id LIKE :k OR user_name LIKE :k ORDER BY balance DESC LIMIT :n OFFSET :o"),
                         {"k": f"%{keyword}%", "n": page_size, "o": (page - 1) * page_size},
                     )
                 ).all()
@@ -2397,7 +2469,7 @@ class PointGamesPlugin(Star):
                 total = (await session.execute(text("SELECT COUNT(*) FROM users"))).first()
                 rows = (
                     await session.execute(
-                        text("SELECT user_id, balance, total_earned, total_spent, sign_in_date, sign_in_streak FROM users ORDER BY balance DESC LIMIT :n OFFSET :o"),
+                        text("SELECT user_id, user_name, balance, total_earned, total_spent, sign_in_date, sign_in_streak FROM users ORDER BY balance DESC LIMIT :n OFFSET :o"),
                         {"n": page_size, "o": (page - 1) * page_size},
                     )
                 ).all()
@@ -2406,8 +2478,8 @@ class PointGamesPlugin(Star):
                 "page": page,
                 "page_size": page_size,
                 "users": [
-                    {"user_id": r[0], "balance": int(r[1]), "total_earned": int(r[2]),
-                     "total_spent": int(r[3]), "sign_in_date": r[4], "sign_in_streak": int(r[5])}
+                    {"user_id": r[0], "user_name": r[1] or "未知玩家", "balance": int(r[2]), "total_earned": int(r[3]),
+                     "total_spent": int(r[4]), "sign_in_date": r[5], "sign_in_streak": int(r[6])}
                     for r in rows
                 ],
             }
@@ -2419,7 +2491,7 @@ class PointGamesPlugin(Star):
         from astrbot.api.web import json_response, error_response, request as web_request
         try:
             req = web_request
-            params = req.query if hasattr(req, "query") else {}
+            params = getattr(req, "query", None) or getattr(req, "query_params", {})
             user_id = str(params.get("user_id", "")).strip()
         except Exception:
             user_id = ""
@@ -2428,22 +2500,24 @@ class PointGamesPlugin(Star):
 
         async def fn(session):
             user = (await session.execute(text(
-                "SELECT user_id, balance, total_earned, total_spent, sign_in_streak "
+                "SELECT user_id, user_name, balance, total_earned, total_spent, sign_in_streak "
                 "FROM users WHERE user_id=:u"
             ), {"u": user_id})).first()
             if not user:
                 return False, "玩家不存在", None
             rows = (await session.execute(text(
-                "SELECT amount, operation, create_time FROM point_transactions "
-                "WHERE user_id=:u ORDER BY id DESC LIMIT 100"
+                "SELECT amount, earned, spent, balance_after, operation, create_time "
+                "FROM point_transactions WHERE user_id=:u ORDER BY id DESC LIMIT 100"
             ), {"u": user_id})).all()
             return True, "ok", {
-                "user_id": user[0], "balance": int(user[1]),
-                "total_earned": int(user[2]), "total_spent": int(user[3]),
-                "sign_in_streak": int(user[4]),
+                "user_id": user[0], "user_name": user[1] or "未知玩家", "balance": int(user[2]),
+                "total_earned": int(user[3]), "total_spent": int(user[4]),
+                "sign_in_streak": int(user[5]),
                 "transactions": [
-                    {"amount": int(r[0]), "operation": r[1],
-                     "time": datetime.fromtimestamp(float(r[2])).strftime("%Y-%m-%d %H:%M:%S") if r[2] else ""}
+                    {"amount": int(r[0]), "earned": int(r[1] or 0), "spent": int(r[2] or 0),
+                     "balance_after": int(r[3] or 0), "operation": r[4],
+                     "detail": f"收入 +{int(r[1] or 0)}，支出 -{int(r[2] or 0)}，净变化 {int(r[0])}，余额 {int(r[3] or 0)}",
+                     "time": datetime.fromtimestamp(float(r[5])).strftime("%Y-%m-%d %H:%M:%S") if r[5] else ""}
                     for r in rows
                 ],
             }
@@ -2462,7 +2536,7 @@ class PointGamesPlugin(Star):
             agg = (await session.execute(text("SELECT COALESCE(SUM(damage),0), COUNT(DISTINCT user_id) FROM boss_damage"))).first()
             top = (
                 await session.execute(
-                    text("SELECT user_id, SUM(damage) AS dmg FROM boss_damage GROUP BY user_id ORDER BY dmg DESC LIMIT 10")
+                    text("SELECT b.user_id, u.user_name, SUM(b.damage) AS dmg FROM boss_damage b LEFT JOIN users u ON u.user_id=b.user_id GROUP BY b.user_id, u.user_name ORDER BY dmg DESC LIMIT 10")
                 )
             ).all()
             return True, "ok", {
@@ -2472,7 +2546,7 @@ class PointGamesPlugin(Star):
                 "reset_date": row[2] if row else None,
                 "today_damage": int(agg[0]),
                 "participants": int(agg[1]),
-                "top": [{"user_id": r[0], "damage": int(r[1])} for r in top],
+                "top": [{"user_id": r[0], "user_name": r[1] or "未知玩家", "damage": int(r[2])} for r in top],
             }
 
         ok, _, data = await self._tx(fn)
@@ -2529,13 +2603,21 @@ class PointGamesPlugin(Star):
         async def fn(session):
             rows = (
                 await session.execute(
-                    text("SELECT user_id, amount, operation, create_time FROM point_transactions ORDER BY id DESC LIMIT :n"),
+                    text(
+                        "SELECT t.user_id, u.user_name, t.amount, t.earned, t.spent, "
+                        "t.balance_after, t.operation, t.create_time "
+                        "FROM point_transactions t LEFT JOIN users u ON u.user_id=t.user_id "
+                        "ORDER BY t.id DESC LIMIT :n"
+                    ),
                     {"n": limit},
                 )
             ).all()
             return True, "ok", [
-                {"user_id": r[0], "amount": int(r[1]), "operation": r[2],
-                 "time": datetime.fromtimestamp(float(r[3])).strftime("%Y-%m-%d %H:%M:%S") if r[3] else ""}
+                {"user_id": r[0], "user_name": r[1] or "未知玩家", "amount": int(r[2]),
+                 "earned": int(r[3] or 0), "spent": int(r[4] or 0), "balance_after": int(r[5] or 0),
+                 "operation": r[6],
+                 "detail": f"收入 +{int(r[3] or 0)}，支出 -{int(r[4] or 0)}，净变化 {int(r[2])}，余额 {int(r[5] or 0)}",
+                 "time": datetime.fromtimestamp(float(r[7])).strftime("%Y-%m-%d %H:%M:%S") if r[7] else ""}
                 for r in rows
             ]
 
