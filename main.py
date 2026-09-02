@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.3
+作者：Zxin_Pro    版本：1.5.4
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.3",
+    version="1.5.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -609,6 +609,36 @@ class PointGamesPlugin(Star):
                         {"hp": self.BOSS_MAX_HP, "d": date.today().isoformat(),
                          "p": self.BOSS_POOL},
                     )
+                # 配置页群号黑白名单合并进群设置（每次加载生效，可覆盖指令设置）
+                wl = self.config.get("group_whitelist", [])
+                bl = self.config.get("group_blacklist", [])
+                if isinstance(wl, str):
+                    wl = [x for x in wl.replace("，", ",").split(",") if x.strip()]
+                if isinstance(bl, str):
+                    bl = [x for x in bl.replace("，", ",").split(",") if x.strip()]
+                now = time.time()
+                for g in wl:
+                    gid = str(g).strip()
+                    if not gid:
+                        continue
+                    await session.execute(
+                        text(
+                            "INSERT INTO group_settings(group_id, enabled, updated_at) VALUES(:g, 1, :t) "
+                            "ON CONFLICT(group_id) DO UPDATE SET enabled=1, updated_at=:t"
+                        ),
+                        {"g": gid, "t": now},
+                    )
+                for g in bl:
+                    gid = str(g).strip()
+                    if not gid:
+                        continue
+                    await session.execute(
+                        text(
+                            "INSERT INTO group_settings(group_id, enabled, updated_at) VALUES(:g, 0, :t) "
+                            "ON CONFLICT(group_id) DO UPDATE SET enabled=0, updated_at=:t"
+                        ),
+                        {"g": gid, "t": now},
+                    )
 
     async def initialize(self):
         """插件激活时：建表、启动定时任务、注册 WebUI 接口"""
@@ -908,7 +938,7 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏 v1.5.3 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏 v1.5.4 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [

@@ -39,7 +39,7 @@
 </head>
 <body>
 <div class="toast" id="toast"></div>
-<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.3 · 全群数据互通</span></h1>
+<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.4 · 全群数据互通</span></h1>
 <div class="sub">当前面板用户：<span id="whoami">-</span> <span id="adminflag"></span></div>
 
 <div class="grid" id="statcards"></div>
@@ -118,51 +118,64 @@ function toast(msg, ok=true){
   t.style.display = "block"; t.style.background = ok ? "#1d3a2a" : "#3a1d22";
   setTimeout(()=> t.style.display = "none", 2500);
 }
-// 自实现 API 调用：兼容新版 /plugins/extensions 与旧版 /api/plug 路由，
-// 自动带上面板登录 token（localStorage），cookie 登录也可用
-function _authHeaders(){
-  const h = { "Content-Type": "application/json" };
-  try{
-    const token = localStorage.getItem("token");
-    if(token) h["Authorization"] = "Bearer " + token;
-  }catch(e){}
-  return h;
+// 双通道 API：优先 AstrBot bridge（父页面代发，带登录态），失败自动降级为原生 fetch
+let _bridge = null;
+async function _getBridge(){
+  if(_bridge) return _bridge;
+  const b = window.AstrBotPluginPage;
+  if(b && typeof b.ready === "function"){
+    try{ await Promise.race([b.ready(), new Promise(r=>setTimeout(r, 3000))]); }catch(e){}
+    _bridge = b;
+    return b;
+  }
+  return null;
 }
-async function _request(path, opts){
-  const candidates = [
-    "/api/v1/plugins/extensions/point_games/" + path,
-    "/api/plug/point_games/" + path,
-  ];
+async function _fetchFallback(path, opts){
+  const url = "/api/v1/plugins/extensions/point_games/" + path;
+  const legacy = "/api/plug/point_games/" + path;
+  const base = Object.assign({ credentials: "include" }, opts || {});
+  base.headers = Object.assign({}, base.headers || {});
+  try{
+    const t = localStorage.getItem("token");
+    if(t) base.headers["Authorization"] = "Bearer " + t;
+  }catch(e){}
   let lastErr = null;
-  for(const url of candidates){
+  for(const u of [url, legacy]){
     try{
-      const r = await fetch(url, opts);
-      let j = null;
-      try{ j = await r.json(); }catch(e){}
-      if(r.ok && j !== null){
-        if(j.status === "error") throw new Error(j.message || "操作失败");
-        return j.data !== undefined ? j.data : j;
-      }
-      if(j !== null && j.status === "error") throw new Error(j.message || "操作失败");
+      const r = await fetch(u, base);
+      const j = await r.json().catch(()=>null);
+      if(j && j.status === "error") throw new Error(j.message || "操作失败");
+      if(r.ok && j !== null) return j.data !== undefined ? j.data : j;
       lastErr = new Error("HTTP " + r.status);
     }catch(e){ lastErr = e; }
   }
   throw lastErr || new Error("请求失败");
 }
 async function apiGet(path, params){
+  const b = await _getBridge();
+  if(b && typeof b.apiGet === "function"){
+    try{ return await b.apiGet(path, params); }catch(e){ /* 降级 */ }
+  }
   const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-  return _request(path + qs, { method: "GET", headers: _authHeaders() });
+  return _fetchFallback(path + qs, { method: "GET" });
 }
 async function apiPost(path, body){
-  return _request(path, { method: "POST", headers: _authHeaders(), body: JSON.stringify(body || {}) });
+  const b = await _getBridge();
+  if(b && typeof b.apiPost === "function"){
+    try{ return await b.apiPost(path, body); }catch(e){ /* 降级 */ }
+  }
+  return _fetchFallback(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
 }
 
 async function loadWhoami(){
+  // 面板不再依赖用户校验，这里只展示登录用户名，失败也保持可用
+  $("admin-panel").style.display = "block";
   try{
     const d = await apiGet("api/whoami");
-    $("whoami").textContent = d.username || "未登录";
-    if(d.is_admin){ $("adminflag").innerHTML = '<span class="tag on">管理员</span>'; $("admin-panel").style.display="block"; }
-  }catch(e){ $("whoami").textContent = "未知"; }
+    $("whoami").textContent = d.username || "已登录";
+  }catch(e){
+    $("whoami").textContent = "已登录";
+  }
 }
 
 async function loadStats(){
@@ -175,7 +188,10 @@ async function loadStats(){
     ];
     $("statcards").innerHTML = cards.map(([t,v]) =>
       `<div class="card"><h3>${t}</h3><div class="val">${v}</div></div>`).join("");
-  }catch(e){ $("statcards").innerHTML = "<div class='card'><h3>加载失败</h3></div>"; }
+  }catch(e){
+    $("statcards").innerHTML = `<div class="card"><h3>加载失败</h3>
+      <div class="val" style="font-size:12px;color:var(--err)">${String(e.message||e).replace(/</g,"&lt;")}</div></div>`;
+  }
 }
 
 async function loadLeaderboard(){

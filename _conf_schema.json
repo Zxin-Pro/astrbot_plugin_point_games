@@ -59,5 +59,15 @@
     "description": "可使用加/扣积分指令的管理员QQ，多个用逗号分隔（如 10001,10002）",
     "type": "list",
     "default": []
+  },
+  "group_whitelist": {
+    "description": "白名单模式：允许玩法的群号，多个用逗号分隔（如 11111,22222）",
+    "type": "list",
+    "default": []
+  },
+  "group_blacklist": {
+    "description": "黑名单模式：拉黑的群号，多个用逗号分隔（如 33333,44444）",
+    "type": "list",
+    "default": []
   }
 }
