@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.5.2
+作者：Zxin_Pro    版本：2.5.4
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -197,7 +197,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.5.2",
+    version="2.5.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -348,11 +348,7 @@ class PointGamesPlugin(Star):
             car_name TEXT NOT NULL,
             PRIMARY KEY(user_id, date)
         )""",
-        """CREATE TABLE IF NOT EXISTS first_use_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL UNIQUE,
-            first_time TIMESTAMP NOT NULL
-        )""",
+        "DROP TABLE IF EXISTS first_use_users",
         """CREATE TABLE IF NOT EXISTS group_settings (
             group_id TEXT PRIMARY KEY,
             enabled INTEGER DEFAULT 0,
@@ -1062,7 +1058,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的 /积分 帮助说明。"""
         return "\n".join([
-            "🎮 积分游戏 v2.5.2",
+            "🎮 积分游戏 v2.5.4",
             "所有玩法均以 /积分 开头",
             "查询：/积分",
             "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
@@ -2161,8 +2157,7 @@ class PointGamesPlugin(Star):
 
     async def sign_in(self, event: AstrMessageEvent):
         """兼容旧代码调用；实际群消息由 daily_car_checkin 统一处理。"""
-        result, _ = await self._sign_in_text(event)
-        yield event.plain_result(result)
+        yield event.plain_result(await self._sign_in_text(event))
 
     async def _sign_in_text(self, event: AstrMessageEvent) -> str:
         """执行积分签到并返回结果，供座驾签到监听器合并输出。"""
@@ -2178,10 +2173,6 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             await self._ensure_user(session, user_id)
-            first_row = (await session.execute(
-                text("SELECT id FROM first_use_users WHERE user_id=:u"), {"u": user_id}
-            )).first()
-            first_rank = None
             row = (
                 await session.execute(
                     text("SELECT sign_in_date, sign_in_streak FROM users WHERE user_id=:u"),
@@ -2200,41 +2191,22 @@ class PointGamesPlugin(Star):
                 text("UPDATE users SET sign_in_date=:d, sign_in_streak=:s WHERE user_id=:u"),
                 {"d": today, "s": streak, "u": user_id},
             )
-            is_first_use = False
-            if not first_row:
-                result = await session.execute(
-                    text("INSERT OR IGNORE INTO first_use_users(user_id, first_time) VALUES(:u, :t)"),
-                    {"u": user_id, "t": time.time()},
-                )
-                is_first_use = result.rowcount == 1
-                first_row = (await session.execute(
-                    text("SELECT id FROM first_use_users WHERE user_id=:u"), {"u": user_id}
-                )).first()
-            first_rank = int(first_row[0]) if first_row and is_first_use else None
             msg = f"📝 签到成功！+{reward} 积分，已连续签到 {streak} 天"
             if bonus:
                 msg += f"\n🎉 连续签到 {streak} 天额外 +{bonus} 积分！"
             msg += f"\n当前积分：{await self._balance(session, user_id)} 喵~"
-            return True, msg, {"first_rank": first_rank}
+            return True, msg, None
 
-        ok, msg, data = await self._tx(fn)
-        return msg, (data or {}).get("first_rank") if ok and data else None
+        _, msg, _ = await self._tx(fn)
+        return msg
 
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     @filter.regex(re.compile(r"(?i)^(?:签到|jrzj|今日座驾)\s*$"))
     async def daily_car_checkin(self, event: AstrMessageEvent):
         """群内发送 签到、jrzj 或 今日座驾，合并输出签到和座驾。"""
-        sign_text, first_rank = await self._sign_in_text(event)
+        sign_text = await self._sign_in_text(event)
         car_text = await self._daily_car_text(event)
-        if first_rank and event.get_group_id():
-            yield event.chain_result(MessageChain([
-                Plain(sign_text + "\n\n"),
-                At(qq=str(event.get_sender_id())),
-                Plain(f"，您是第 {first_rank} 位使用本插件的人喵~\n\n"),
-                Plain(car_text),
-            ]))
-        else:
-            yield event.plain_result(f"{sign_text}\n\n{car_text}")
+        yield event.plain_result(f"{sign_text}\n\n{car_text}")
         event.stop_event()
 
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
