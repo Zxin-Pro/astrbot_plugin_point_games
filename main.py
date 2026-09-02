@@ -2776,7 +2776,7 @@ class PointGamesPlugin(Star):
             f"限时 {self.MATH_TIMEOUT} 秒，直接回复数字答案喵~"
         )
 
-    @filter.on_message()
+    @filter.event_message_type(EventMessageType.ALL)
     async def math_answer_listener(self, event: AstrMessageEvent):
         """监听速算答案"""
         user_id = event.get_sender_id()
