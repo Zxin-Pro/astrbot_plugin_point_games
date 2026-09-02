@@ -166,6 +166,12 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分 加入卧底", "报名卧底游戏"),
     ("/积分 投票 @某人", "投票阶段投出卧底"),
     ("/积分 卧底结束", "管理员强制结束"),
+    ("/积分 炸弹开始", "数字炸弹（1-100猜数字，猜中者-30，其他人+5）"),
+    ("/积分 猜 [数字]", "炸弹游戏中猜数字"),
+    ("/积分 炸弹结束", "强制结束炸弹游戏（仅管理员）"),
+    ("/积分 速算", "速算挑战（答对得5/15/30积分，每天10次）"),
+    ("/积分 抽卡", "消耗10积分抽卡（N/R/SR/SSR）"),
+    ("/积分 图鉴", "查看已收集的卡牌和进度"),
     ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到"),
     ("/积分 查询", "查看自己的积分、收入、支出与签到信息"),
     ("/积分 查积分 @玩家", "查询其他玩家的积分信息"),
@@ -201,7 +207,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.5.11",
+    version="2.11.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -258,6 +264,28 @@ class PointGamesPlugin(Star):
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
+    # 数字炸弹
+    BOMB_MIN = 1                    # 炸弹范围最小值
+    BOMB_MAX = 100                  # 炸弹范围最大值
+    BOMB_LOSER_PENALTY = 30         # 踩到炸弹扣分
+    BOMB_WINNER_REWARD = 5          # 其他参与者奖励
+    # 速算挑战
+    MATH_TIMEOUT = 15               # 速算限时（秒）
+    MATH_DAILY_LIMIT = 10           # 每天限玩次数
+    MATH_REWARDS = {                # 难度 -> 奖励积分
+        "简单": 5,
+        "中等": 15,
+        "困难": 30,
+    }
+    # 抽卡系统
+    CARD_COST = 10                  # 每次抽卡消耗
+    CARD_POOL = {                   # 卡池：稀有度 -> (概率, [卡牌名])
+        "N": (0.50, ["N-咸鱼", "N-小猫咪", "N-小乌龟", "N-小仓鼠", "N-小兔子"]),
+        "R": (0.30, ["R-小狐狸", "R-锦鲤", "R-小鹿", "R-小熊猫", "R-小海豚"]),
+        "SR": (0.15, ["SR-独角兽", "SR-凤凰", "SR-麒麟", "SR-白虎", "SR-玄武"]),
+        "SSR": (0.05, ["SSR-神龙", "SSR-金龙", "SSR-银龙", "SSR-冰龙", "SSR-火龙"]),
+    }
+    CARD_COMPLETE_REWARD = 100      # 集齐所有稀有度奖励
     DEFAULT_GROUP_MODE = "whitelist"
     FEATURES = {
         "enable_spin": True,
@@ -267,6 +295,9 @@ class PointGamesPlugin(Star):
         "enable_undercover": True,
         "enable_sign_in": True,
         "enable_ranking": True,
+        "enable_bomb": True,
+        "enable_math": True,
+        "enable_card": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -279,6 +310,12 @@ class PointGamesPlugin(Star):
         "卧底开始": ("enable_undercover", "谁是卧底"),
         "加入卧底": ("enable_undercover", "谁是卧底"),
         "投票": ("enable_undercover", "谁是卧底"),
+        "炸弹开始": ("enable_bomb", "数字炸弹"),
+        "猜": ("enable_bomb", "数字炸弹"),
+        "炸弹结束": ("enable_bomb", "数字炸弹"),
+        "速算": ("enable_math", "速算挑战"),
+        "抽卡": ("enable_card", "抽卡系统"),
+        "图鉴": ("enable_card", "抽卡系统"),
         "排行": ("enable_ranking", "积分排行"),
         "签到": ("enable_sign_in", "签到"),
         "积分": ("enable_ranking", "积分账户"),
@@ -385,6 +422,36 @@ class PointGamesPlugin(Star):
             period TEXT PRIMARY KEY,
             pool INTEGER DEFAULT 0
         )""",
+        """CREATE TABLE IF NOT EXISTS bomb_games (
+            group_id TEXT PRIMARY KEY,
+            target_number INTEGER,
+            min_range INTEGER,
+            max_range INTEGER,
+            participants TEXT,
+            platform_id TEXT DEFAULT '',
+            created_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS math_challenges (
+            user_id TEXT PRIMARY KEY,
+            question TEXT,
+            answer TEXT,
+            difficulty TEXT,
+            expire_time TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS math_daily_count (
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            count INTEGER DEFAULT 0,
+            PRIMARY KEY(user_id, date)
+        )""",
+        """CREATE TABLE IF NOT EXISTS cards (
+            user_id TEXT NOT NULL,
+            card_name TEXT NOT NULL,
+            rarity TEXT NOT NULL,
+            count INTEGER DEFAULT 1,
+            PRIMARY KEY(user_id, card_name)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id)",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -399,6 +466,8 @@ class PointGamesPlugin(Star):
         self._dice_lock = asyncio.Lock()
         self._activity_counts: dict[str, dict[str, dict[str, Any]]] = {}
         self._activity_lock = asyncio.Lock()
+        self._bomb_games: dict[str, dict] = {}  # group_id -> {target, min, max, participants[]}
+        self._math_sessions: dict[str, dict] = {}  # user_id -> {question, answer, difficulty, expire}
         # 兼容不同版本的数据库获取方式
         self._db = None
         ctx = self.context
@@ -1063,7 +1132,7 @@ class PointGamesPlugin(Star):
                 await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
 
     async def _maintenance(self):
-        """每分钟维护：清理超时闯关会话、超时卧底游戏"""
+        """每分钟维护：清理超时闯关会话、超时卧底游戏、超时速算会话"""
         now = time.time()
 
         async def fn(session):
@@ -1084,7 +1153,16 @@ class PointGamesPlugin(Star):
                     text("DELETE FROM undercover_games WHERE group_id=:g"), {"g": gid}
                 )
                 self._cancel_uc_jobs(gid)
+            # 速算挑战超时
+            await session.execute(
+                text("DELETE FROM math_challenges WHERE expire_time < :t"), {"t": now}
+            )
             return True, "维护完成", None
+
+        # 清理内存中的超时速算会话
+        expired_users = [uid for uid, sess in self._math_sessions.items() if sess.get("expire", 0) < now]
+        for uid in expired_users:
+            self._math_sessions.pop(uid, None)
 
         await self._tx(fn)
 
@@ -2502,6 +2580,481 @@ class PointGamesPlugin(Star):
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
+
+    # ============================================================
+    #  功能9：数字炸弹
+    # ============================================================
+    @filter.command("积分 炸弹开始")
+    async def bomb_start(self, event: AstrMessageEvent):
+        """数字炸弹：群内开始游戏"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "炸弹开始")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        
+        group_id = event.get_group_id()
+        if not group_id:
+            yield event.plain_result("数字炸弹只能在群聊中玩喵~")
+            return
+        
+        if group_id in self._bomb_games:
+            yield event.plain_result("本群炸弹游戏进行中，请先结束当前游戏喵~")
+            return
+        
+        target = random.randint(self.BOMB_MIN, self.BOMB_MAX)
+        self._bomb_games[group_id] = {
+            "target": target,
+            "min": self.BOMB_MIN,
+            "max": self.BOMB_MAX,
+            "participants": set(),
+            "platform_id": event.get_platform_id(),
+        }
+        
+        yield event.plain_result(
+            f"💣 数字炸弹游戏开始！\n"
+            f"范围：{self.BOMB_MIN}-{self.BOMB_MAX}\n"
+            f"请发送 /积分 猜 [数字] 进行猜测喵~"
+        )
+
+    @filter.command("积分 猜")
+    async def bomb_guess(self, event: AstrMessageEvent):
+        """数字炸弹：猜数字"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "猜")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        
+        group_id = event.get_group_id()
+        if not group_id or group_id not in self._bomb_games:
+            yield event.plain_result("本群还没有进行中的炸弹游戏喵~")
+            return
+        
+        msg = event.get_message_str().strip()
+        parts = msg.split()
+        if len(parts) < 3:
+            yield event.plain_result("用法：/积分 猜 [数字]")
+            return
+        
+        try:
+            guess = int(parts[2])
+        except ValueError:
+            yield event.plain_result("请输入有效的数字喵~")
+            return
+        
+        game = self._bomb_games[group_id]
+        user_id = event.get_sender_id()
+        
+        # 记录参与者
+        game["participants"].add(user_id)
+        
+        if guess < game["min"] or guess > game["max"]:
+            yield event.plain_result(f"请在范围 {game['min']}-{game['max']} 内猜测喵~")
+            return
+        
+        # 猜中炸弹
+        if guess == game["target"]:
+            participants = list(game["participants"])
+            participants.remove(user_id)  # 移除踩雷者
+            
+            async def fn(session):
+                # 扣除踩雷者积分
+                await self._ensure_user(session, user_id)
+                await self._add_points(session, user_id, -self.BOMB_LOSER_PENALTY, f"数字炸弹踩雷")
+                loser_balance = await self._balance(session, user_id)
+                
+                # 给其他参与者加分
+                for pid in participants:
+                    await self._ensure_user(session, pid)
+                    await self._add_points(session, pid, self.BOMB_WINNER_REWARD, f"数字炸弹获胜")
+                
+                return True, (loser_balance, participants), None
+            
+            ok, data, _ = await self._tx(fn)
+            loser_balance, participants = data
+            
+            result = MessageChain([
+                Plain(f"💥 BOOM！"),
+                At(user_id),
+                Plain(f" 踩到炸弹了！\n"),
+                Plain(f"扣除 {self.BOMB_LOSER_PENALTY} 积分，当前余额：{loser_balance}\n"),
+            ])
+            
+            if participants:
+                result.extend([Plain(f"其他参与者各获得 {self.BOMB_WINNER_REWARD} 积分：\n")])
+                for i, pid in enumerate(participants):
+                    if i > 0:
+                        result.append(Plain("、"))
+                    result.append(At(pid))
+            
+            yield event.message_result(result)
+            
+            # 清理游戏
+            del self._bomb_games[group_id]
+            return
+        
+        # 缩小范围
+        if guess < game["target"]:
+            game["min"] = guess + 1
+            yield event.plain_result(f"⬆️ 小了！范围：{game['min']}-{game['max']}")
+        else:
+            game["max"] = guess - 1
+            yield event.plain_result(f"⬇️ 大了！范围：{game['min']}-{game['max']}")
+
+    @filter.command("积分 炸弹结束")
+    async def bomb_end(self, event: AstrMessageEvent):
+        """数字炸弹：管理员强制结束"""
+        if not await self._is_admin(event):
+            yield event.plain_result("只有管理员可以强制结束游戏喵~")
+            return
+        
+        group_id = event.get_group_id()
+        if not group_id or group_id not in self._bomb_games:
+            yield event.plain_result("本群没有进行中的炸弹游戏喵~")
+            return
+        
+        del self._bomb_games[group_id]
+        yield event.plain_result("数字炸弹游戏已结束喵~")
+
+    # ============================================================
+    #  功能10：速算挑战
+    # ============================================================
+    @filter.command("积分 速算")
+    async def math_challenge(self, event: AstrMessageEvent):
+        """速算挑战：出题"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "速算")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        
+        user_id = event.get_sender_id()
+        today = date.today().isoformat()
+        
+        async def fn(session):
+            # 检查每日次数
+            row = (await session.execute(
+                text("SELECT count FROM math_daily_count WHERE user_id=:u AND date=:d"),
+                {"u": user_id, "d": today}
+            )).first()
+            
+            count = row[0] if row else 0
+            if count >= self.MATH_DAILY_LIMIT:
+                raise _BizError(f"今天已经玩了 {self.MATH_DAILY_LIMIT} 次，明天再来喵~")
+            
+            # 生成题目
+            difficulty, question_str, answer = self._generate_math_question()
+            reward = self.MATH_REWARDS[difficulty]
+            
+            # 保存会话
+            expire_time = time.time() + self.MATH_TIMEOUT
+            await session.execute(
+                text(
+                    "INSERT OR REPLACE INTO math_challenges(user_id, question, answer, difficulty, expire_time) "
+                    "VALUES(:u, :q, :a, :d, :e)"
+                ),
+                {"u": user_id, "q": question_str, "a": str(answer), "d": difficulty, "e": expire_time}
+            )
+            
+            self._math_sessions[user_id] = {
+                "question": question_str,
+                "answer": answer,
+                "difficulty": difficulty,
+                "reward": reward,
+                "expire": expire_time,
+            }
+            
+            return True, (question_str, difficulty, reward), None
+        
+        ok, data, _ = await self._tx(fn)
+        if not ok:
+            yield event.plain_result(data)
+            return
+        
+        question_str, difficulty, reward = data
+        yield event.plain_result(
+            f"🧮 {question_str} = ？\n"
+            f"难度：{difficulty}（答对得 {reward} 积分）\n"
+            f"限时 {self.MATH_TIMEOUT} 秒，直接回复数字答案喵~"
+        )
+
+    @filter.on_message()
+    async def math_answer_listener(self, event: AstrMessageEvent):
+        """监听速算答案"""
+        user_id = event.get_sender_id()
+        if user_id not in self._math_sessions:
+            return
+        
+        msg = event.get_message_str().strip()
+        if not msg.lstrip('-').isdigit():
+            return
+        
+        session_data = self._math_sessions.pop(user_id)
+        if time.time() > session_data["expire"]:
+            yield event.plain_result(f"⏰ 超时了！正确答案是 {session_data['answer']} 喵~")
+            return
+        
+        user_answer = msg
+        correct_answer = str(session_data["answer"])
+        
+        if user_answer == correct_answer:
+            reward = session_data["reward"]
+            today = date.today().isoformat()
+            
+            async def fn(session):
+                await self._ensure_user(session, user_id)
+                await self._add_points(session, user_id, reward, f"速算挑战（{session_data['difficulty']}）")
+                balance = await self._balance(session, user_id)
+                
+                # 更新每日次数
+                await session.execute(
+                    text(
+                        "INSERT INTO math_daily_count(user_id, date, count) VALUES(:u, :d, 1) "
+                        "ON CONFLICT(user_id, date) DO UPDATE SET count=count+1"
+                    ),
+                    {"u": user_id, "d": today}
+                )
+                
+                # 清理挑战记录
+                await session.execute(
+                    text("DELETE FROM math_challenges WHERE user_id=:u"), {"u": user_id}
+                )
+                
+                return True, balance, None
+            
+            ok, balance, _ = await self._tx(fn)
+            yield event.plain_result(f"✅ 正确！+{reward} 积分！当前余额：{balance}")
+        else:
+            yield event.plain_result(f"❌ 错了！正确答案是 {correct_answer} 喵~")
+            
+            # 清理数据库记录
+            async def cleanup(session):
+                await session.execute(
+                    text("DELETE FROM math_challenges WHERE user_id=:u"), {"u": user_id}
+                )
+                return True, None, None
+            
+            await self._tx(cleanup)
+
+    def _generate_math_question(self):
+        """生成速算题目，返回 (难度, 题目字符串, 答案)"""
+        difficulty_roll = random.random()
+        
+        if difficulty_roll < 0.5:  # 50% 简单
+            difficulty = "简单"
+            a = random.randint(1, 50)
+            b = random.randint(1, 50)
+            op = random.choice(["+", "-"])
+            if op == "+":
+                question = f"{a} + {b}"
+                answer = a + b
+            else:
+                question = f"{a} - {b}"
+                answer = a - b
+        
+        elif difficulty_roll < 0.85:  # 35% 中等
+            difficulty = "中等"
+            a = random.randint(1, 100)
+            b = random.randint(1, 100)
+            op = random.choice(["+", "-", "×"])
+            if op == "+":
+                question = f"{a} + {b}"
+                answer = a + b
+            elif op == "-":
+                question = f"{a} - {b}"
+                answer = a - b
+            else:
+                b = random.randint(2, 12)  # 乘法用小数字
+                question = f"{a} × {b}"
+                answer = a * b
+        
+        else:  # 15% 困难
+            difficulty = "困难"
+            a = random.randint(10, 50)
+            b = random.randint(2, 20)
+            op = random.choice(["×", "÷"])
+            if op == "×":
+                question = f"{a} × {b}"
+                answer = a * b
+            else:
+                # 确保整除
+                answer = random.randint(5, 50)
+                b = random.randint(2, 10)
+                a = answer * b
+                question = f"{a} ÷ {b}"
+        
+        return difficulty, question, answer
+
+    # ============================================================
+    #  功能11：谁是欧皇（抽卡系统）
+    # ============================================================
+    @filter.command("积分 抽卡")
+    async def gacha_draw(self, event: AstrMessageEvent):
+        """抽卡：消耗10积分抽一张卡"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "抽卡")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        
+        user_id = event.get_sender_id()
+        
+        async def fn(session):
+            await self._ensure_user(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            
+            balance = await self._balance(session, user_id)
+            if balance < self.CARD_COST:
+                raise _BizError(f"积分不足喵~ 抽卡需要 {self.CARD_COST} 积分")
+            
+            # 扣除积分
+            await self._add_points(session, user_id, -self.CARD_COST, "抽卡")
+            
+            # 抽卡逻辑
+            rarity, card_name = self._draw_card()
+            
+            # 保存卡牌
+            row = (await session.execute(
+                text("SELECT count FROM cards WHERE user_id=:u AND card_name=:c"),
+                {"u": user_id, "c": card_name}
+            )).first()
+            
+            if row:
+                await session.execute(
+                    text("UPDATE cards SET count=count+1 WHERE user_id=:u AND card_name=:c"),
+                    {"u": user_id, "c": card_name}
+                )
+                is_new = False
+                count = row[0] + 1
+            else:
+                await session.execute(
+                    text("INSERT INTO cards(user_id, card_name, rarity, count) VALUES(:u, :c, :r, 1)"),
+                    {"u": user_id, "c": card_name, "r": rarity}
+                )
+                is_new = True
+                count = 1
+            
+            new_balance = await self._balance(session, user_id)
+            
+            # 检查是否集齐所有稀有度
+            complete_check = (await session.execute(
+                text("SELECT DISTINCT rarity FROM cards WHERE user_id=:u"), {"u": user_id}
+            )).fetchall()
+            collected_rarities = set(r[0] for r in complete_check)
+            all_rarities = set(self.CARD_POOL.keys())
+            
+            # 判断是否首次集齐（检查是否已经领过奖励）
+            already_rewarded = (await session.execute(
+                text("SELECT 1 FROM point_transactions WHERE user_id=:u AND operation='集齐卡牌奖励'"),
+                {"u": user_id}
+            )).first()
+            
+            is_complete = (collected_rarities == all_rarities) and not already_rewarded
+            
+            return True, (rarity, card_name, is_new, count, new_balance, is_complete), None
+        
+        ok, data, _ = await self._tx(fn)
+        if not ok:
+            yield event.plain_result(data)
+            return
+        
+        rarity, card_name, is_new, count, new_balance, is_complete = data
+        
+        rarity_emoji = {"N": "⚪", "R": "🔵", "SR": "🟣", "SSR": "🟡"}
+        emoji = rarity_emoji.get(rarity, "⚪")
+        
+        result = f"{emoji} 抽到了 {card_name}！"
+        if is_new:
+            result += " (NEW!)"
+        else:
+            result += f" (已拥有 {count} 张)"
+        result += f"\n当前余额：{new_balance}"
+        
+        if is_complete:
+            # 发放集齐奖励
+            async def reward_fn(session):
+                await self._add_points(session, user_id, self.CARD_COMPLETE_REWARD, "集齐卡牌奖励")
+                final_balance = await self._balance(session, user_id)
+                return True, final_balance, None
+            
+            ok, final_balance, _ = await self._tx(reward_fn)
+            result += f"\n🎉 恭喜集齐所有稀有度！获得 {self.CARD_COMPLETE_REWARD} 积分奖励！\n当前余额：{final_balance}"
+        
+        yield event.plain_result(result)
+
+    def _draw_card(self):
+        """抽卡逻辑，返回 (稀有度, 卡名)"""
+        roll = random.random()
+        cumulative = 0.0
+        
+        for rarity, (prob, cards) in self.CARD_POOL.items():
+            cumulative += prob
+            if roll < cumulative:
+                card_name = random.choice(cards)
+                return rarity, card_name
+        
+        # 兜底（理论上不会到这里）
+        return "N", random.choice(self.CARD_POOL["N"][1])
+
+    @filter.command("积分 图鉴")
+    async def gacha_collection(self, event: AstrMessageEvent):
+        """查看卡牌收集进度"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "图鉴")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        
+        user_id = event.get_sender_id()
+        
+        async def fn(session):
+            rows = (await session.execute(
+                text("SELECT rarity, card_name, count FROM cards WHERE user_id=:u ORDER BY rarity, card_name"),
+                {"u": user_id}
+            )).fetchall()
+            
+            if not rows:
+                return True, None, None
+            
+            # 按稀有度分组
+            by_rarity = {"N": [], "R": [], "SR": [], "SSR": []}
+            for r in rows:
+                rarity, card_name, count = r
+                by_rarity[rarity].append((card_name, count))
+            
+            collected_rarities = set(r[0] for r in rows)
+            all_rarities = set(self.CARD_POOL.keys())
+            is_complete = collected_rarities == all_rarities
+            
+            return True, (by_rarity, is_complete), None
+        
+        ok, data, _ = await self._tx(fn)
+        
+        if data is None:
+            yield event.plain_result("你还没有收集任何卡牌喵~ 发送 /积分 抽卡 开始收集吧！")
+            return
+        
+        by_rarity, is_complete = data
+        
+        lines = ["📖 卡牌图鉴"]
+        rarity_emoji = {"N": "⚪", "R": "🔵", "SR": "🟣", "SSR": "🟡"}
+        
+        for rarity in ["N", "R", "SR", "SSR"]:
+            cards = by_rarity[rarity]
+            emoji = rarity_emoji[rarity]
+            if cards:
+                lines.append(f"\n{emoji} {rarity} 稀有度：")
+                for card_name, count in cards:
+                    lines.append(f"  • {card_name} ×{count}")
+            else:
+                lines.append(f"\n{emoji} {rarity} 稀有度：暂未收集")
+        
+        total = sum(len(v) for v in by_rarity.values())
+        all_cards_count = sum(len(cards) for _, (_, cards) in self.CARD_POOL.items())
+        
+        lines.append(f"\n收集进度：{total}/{all_cards_count}")
+        if is_complete:
+            lines.append("✅ 已集齐所有稀有度！")
+        
+        yield event.plain_result("\n".join(lines))
 
     async def sign_in(self, event: AstrMessageEvent):
         """兼容旧代码调用；实际群消息由 daily_car_checkin 统一处理。"""
