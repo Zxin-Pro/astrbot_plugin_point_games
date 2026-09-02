@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.10
+作者：Zxin_Pro    版本：2.5.1
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -15,6 +15,7 @@ import random
 import re
 import time
 from datetime import date, datetime, timedelta
+from string import Formatter
 from typing import Any, Optional
 
 from sqlalchemy import text
@@ -115,6 +116,18 @@ QUESTION_BANK: list[dict] = [
 # ============================================================
 #  谁是卧底词库（35 组相近词对）
 # ============================================================
+DAILY_CAR_FIELDS = {"user_name", "car", "date"}
+DAILY_CAR_DEFAULT_POOL = [
+    "豪华旅行车 | 年代：2017 | 保时捷 Panamera Sport Turismo | 马力：330–680",
+    "跑车 | 年代：2023 | 保时捷 911 GT3 RS (992) | 马力：525",
+    "SUV | 年代：2021 | 保时捷 Cayenne Turbo GT (E3) | 马力：640",
+    "超级跑车 | 年代：2013 | 保时捷 918 Spyder | 马力：887（综合）",
+    "纯电轿车 | 年代：2024 | 保时捷 Taycan Turbo GT | 马力：815–1034（超增压）",
+]
+DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
+DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
+DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
+
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
     ("火车", "高铁"), ("微信", "QQ"), ("面包", "蛋糕"), ("牛奶", "豆浆"),
@@ -150,7 +163,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分 加入卧底", "报名卧底游戏"),
     ("/积分 投票 @某人", "投票阶段投出卧底"),
     ("/积分 卧底结束", "管理员强制结束"),
-    ("/积分 签到", "每日签到，连签7天额外+20"),
+    ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到"),
     ("/积分 查询", "查看自己的积分、收入、支出与签到信息"),
     ("/积分 排行", "全服积分排行榜"),
     ("/积分 加积分 /减积分", "调整积分（仅配置页管理员QQ）"),
@@ -184,11 +197,11 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.10",
+    version="2.5.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
-    """积分游戏：发送 /积分 帮助 查看全部玩法说明"""
+    """积分游戏：发送 /积分 帮助 查看全部玩法说明，签到触发每日座驾"""
 
     # ---------- 数字常量（可自行调整） ----------
     # 幸运转盘概率表：[区间下限, 区间上限, 返还比例, 表情]
@@ -329,6 +342,12 @@ class PointGamesPlugin(Star):
             create_time TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_pt_user ON point_transactions(user_id)",
+        """CREATE TABLE IF NOT EXISTS daily_cars (
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            car_name TEXT NOT NULL,
+            PRIMARY KEY(user_id, date)
+        )""",
         """CREATE TABLE IF NOT EXISTS group_settings (
             group_id TEXT PRIMARY KEY,
             enabled INTEGER DEFAULT 0,
@@ -348,10 +367,11 @@ class PointGamesPlugin(Star):
         super().__init__(context, config)
         # AstrBot 会把 _conf_schema.json 中的配置作为 dict 注入这里。
         # 运行时配置只在插件加载时读取，修改后重新加载插件即可生效。
-        self.config = config or {}
+        self.config = config if config is not None else {}
         self._apply_runtime_config(self.config)
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._uc_jobs: dict[str, Any] = {}      # group_id -> apscheduler Job（卧底计时器）
+        self._daily_car_lock = asyncio.Lock()
         # 兼容不同版本的数据库获取方式
         self._db = None
         ctx = self.context
@@ -444,6 +464,36 @@ class PointGamesPlugin(Star):
         elif not isinstance(raw, (list, tuple, set)):
             raw = []
         self.ADMIN_QQ = {str(x).strip() for x in raw if str(x).strip()}
+        self.daily_car_pool, self.daily_car_template = self._validate_daily_car_config(config)
+
+    @staticmethod
+    def _normalize_car_text(car: str) -> str:
+        """兼容配置页中的真实换行和 \\n 转义换行。"""
+        return car.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\r", "\n").strip()
+
+    @classmethod
+    def _validate_daily_car_config(cls, config: dict) -> tuple[list[str], str]:
+        """校验并加载每日座驾配置，格式与原每日座驾插件一致。"""
+        raw_pool = config.get("car_pool", DAILY_CAR_DEFAULT_POOL)
+        if not isinstance(raw_pool, list):
+            raw_pool = DAILY_CAR_DEFAULT_POOL
+        pool = [cls._normalize_car_text(car) for car in raw_pool if isinstance(car, str) and car.strip()]
+        pool = [car for car in pool if car]
+        template = config.get("reply_template", DAILY_CAR_DEFAULT_TEMPLATE)
+        if not isinstance(template, str) or not template.strip():
+            template = DAILY_CAR_DEFAULT_TEMPLATE
+        try:
+            for _, field_name, format_spec, conversion in Formatter().parse(template):
+                if field_name is not None and (field_name not in DAILY_CAR_FIELDS or format_spec or conversion is not None):
+                    raise ValueError
+        except (ValueError, KeyError):
+            template = DAILY_CAR_DEFAULT_TEMPLATE
+        return pool, template
+
+    @staticmethod
+    def _format_car_entry(car: str) -> str:
+        """按原配置顺序输出车辆条目，清理空行。"""
+        return "\n".join(part.strip() for part in car.split("\n") if part.strip())
 
     # ---------- 数据库工具 ----------
     def _get_db(self):
@@ -473,6 +523,52 @@ class PointGamesPlugin(Star):
         except Exception as e:  # 数据库异常统一兜底
             self.logger.exception("积分游戏插件数据库操作失败")
             return (False, f"数据库开小差了喵~：{e}", None)
+
+    async def _save_daily_car_config(self, pool: list[str]) -> None:
+        """将车池回写 AstrBot 插件配置页。"""
+        self.daily_car_pool = pool
+        try:
+            self.config["car_pool"] = pool
+            saver = getattr(self.config, "save_config_async", None)
+            if saver:
+                await saver({"car_pool": pool})
+        except Exception:
+            self.logger.exception("每日座驾车池保存失败")
+            raise _BizError("车池保存失败，请稍后再试")
+
+    async def _daily_car_text(self, event: AstrMessageEvent) -> str:
+        """返回玩家当天固定座驾；抽取记录保存在积分插件数据库。"""
+        if not self.daily_car_pool:
+            return "🚗 车池为空，请联系管理员添加车辆"
+        user_id = str(event.get_sender_id()).strip()
+        if not user_id:
+            return "🚗 无法获取用户 ID，今日座驾抽取失败"
+        today = datetime.now(TZ).date().isoformat()
+
+        async with self._daily_car_lock:
+            async def fn(session):
+                row = (await session.execute(text(
+                    "SELECT car_name FROM daily_cars WHERE user_id=:u AND date=:d"
+                ), {"u": user_id, "d": today})).first()
+                car = str(row[0]) if row else random.choice(self.daily_car_pool)
+                if not row:
+                    await session.execute(text(
+                        "INSERT INTO daily_cars(user_id, date, car_name) VALUES(:u, :d, :c)"
+                    ), {"u": user_id, "d": today, "c": car})
+                return True, "ok", car
+
+            ok, msg, car = await self._tx(fn)
+        if not ok:
+            return f"🚗 今日座驾抽取失败：{msg}"
+        try:
+            user_name = event.get_sender_name() or user_id
+        except Exception:
+            user_name = user_id
+        return self.daily_car_template.format(
+            user_name=user_name,
+            car=self._format_car_entry(self._normalize_car_text(car)),
+            date=today,
+        )
 
     async def _ensure_user(self, session, user_id: str):
         """确保用户存在，不存在则插入默认行"""
@@ -959,17 +1055,20 @@ class PointGamesPlugin(Star):
         yield event.plain_result(self._help_text())
 
     def _help_text(self) -> str:
-        """构建 /积分 帮助 共用的指令说明。"""
-        lines = ["🎮 积分游戏 v1.5.10 by Zxin_Pro", "━━━━━━━━━━━━━━"]
-        for cmd, desc in COMMAND_HELP:
-            lines.append(f"📌 {cmd}  {desc}")
-        lines += [
-            "━━━━━━━━━━━━━━",
-            "🌐 全群积分互通，排行榜为全服排名",
-            "🖥️ WebUI 面板：AstrBot 面板 → 插件 → 积分游戏 → 积分游戏面板",
-            "✨ 更多玩法开发中，敬请期待喵~",
-        ]
-        return "\n".join(lines)
+        """构建精简的 /积分 帮助说明。"""
+        return "\n".join([
+            "🎮 积分游戏 v2.5.1",
+            "所有玩法均以 /积分 开头",
+            "查询：/积分",
+            "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
+            "彩票：买彩票 [积分]｜彩票奖池",
+            "卧底：卧底开始 [人数]｜加入卧底｜投票 @玩家｜卧底结束",
+            "其他：签到｜排行",
+            "管理：加积分 @玩家 数量｜减积分 @玩家 数量",
+            "　　　清除数据 @玩家｜初始化 @玩家",
+            "群管理：本群玩法 开|关｜玩法模式 白名单|黑名单｜本群状态",
+            "帮助：/积分 帮助",
+        ])
 
     # ============================================================
     #  功能一：幸运转盘
@@ -2055,13 +2154,15 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 签到")
     async def sign_in(self, event: AstrMessageEvent):
-        """/积分 签到 —— 每日签到，连续7天额外+20"""
+        """兼容旧代码调用；实际群消息由 daily_car_checkin 统一处理。"""
+        yield event.plain_result(await self._sign_in_text(event))
+
+    async def _sign_in_text(self, event: AstrMessageEvent) -> str:
+        """执行积分签到并返回结果，供座驾签到监听器合并输出。"""
         ok_gate, msg_gate = await self._check_group_gate(event, "签到")
         if not ok_gate:
-            yield event.plain_result(msg_gate)
-            return
+            return msg_gate
         user_id = event.get_sender_id()
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
@@ -2083,25 +2184,83 @@ class PointGamesPlugin(Star):
             if row and row[0] == yesterday:
                 streak = int(row[1]) + 1
             reward = random.randint(self.SIGN_IN_MIN, self.SIGN_IN_MAX)
-            bonus = 0
-            if streak % 7 == 0:
-                bonus = self.SIGN_IN_WEEK_BONUS
+            bonus = self.SIGN_IN_WEEK_BONUS if streak % 7 == 0 else 0
             await self._add_points(session, user_id, reward + bonus, "每日签到")
             await session.execute(
-                text(
-                    "UPDATE users SET sign_in_date=:d, sign_in_streak=:s WHERE user_id=:u"
-                ),
+                text("UPDATE users SET sign_in_date=:d, sign_in_streak=:s WHERE user_id=:u"),
                 {"d": today, "s": streak, "u": user_id},
             )
             msg = f"📝 签到成功！+{reward} 积分，已连续签到 {streak} 天"
             if bonus:
                 msg += f"\n🎉 连续签到 {streak} 天额外 +{bonus} 积分！"
-            bal = await self._balance(session, user_id)
-            msg += f"\n当前积分：{bal} 喵~"
+            msg += f"\n当前积分：{await self._balance(session, user_id)} 喵~"
             return True, msg, None
 
-        ok, msg, _ = await self._tx(fn)
-        yield event.plain_result(msg)
+        _, msg, _ = await self._tx(fn)
+        return msg
+
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    @filter.regex(re.compile(r"(?i)^(?:签到|jrzj|今日座驾)\s*$"))
+    async def daily_car_checkin(self, event: AstrMessageEvent):
+        """群内发送 签到、jrzj 或 今日座驾，合并输出座驾和积分签到。"""
+        car_text = await self._daily_car_text(event)
+        sign_text = await self._sign_in_text(event)
+        yield event.plain_result(f"{car_text}\n\n{sign_text}")
+        event.stop_event()
+
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    @filter.regex(DAILY_CAR_ADD_PATTERN)
+    @filter.permission_type(PermissionType.ADMIN)
+    async def add_daily_car(self, event: AstrMessageEvent):
+        """群管理员发送 添加车辆 车型，将车型写入每日座驾车池。"""
+        match = DAILY_CAR_ADD_PATTERN.match(event.get_message_str().strip())
+        car_name = self._normalize_car_text(match.group("car")) if match else ""
+        if not car_name:
+            yield event.plain_result("格式：添加车辆 车辆名称")
+            event.stop_event()
+            return
+        if car_name in self.daily_car_pool:
+            yield event.plain_result("这辆车已经在车池里了")
+            event.stop_event()
+            return
+        try:
+            await self._save_daily_car_config([*self.daily_car_pool, car_name])
+            yield event.plain_result(f"已添加车辆：{car_name}")
+        except _BizError as e:
+            yield event.plain_result(e.msg)
+        event.stop_event()
+
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    @filter.regex(re.compile(r"^查看车池$"))
+    async def view_daily_car_pool(self, event: AstrMessageEvent):
+        """群成员发送 查看车池，列出每日座驾车辆池。"""
+        message = "车池为空" if not self.daily_car_pool else "当前车池：\n" + "\n".join(
+            self._format_car_entry(car) for car in self.daily_car_pool
+        )
+        yield event.plain_result(message)
+        event.stop_event()
+
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    @filter.regex(DAILY_CAR_DELETE_PATTERN)
+    @filter.permission_type(PermissionType.ADMIN)
+    async def delete_daily_car(self, event: AstrMessageEvent):
+        """群管理员发送 删除车辆 车型，从每日座驾车池移除。"""
+        match = DAILY_CAR_DELETE_PATTERN.match(event.get_message_str().strip())
+        car_name = self._normalize_car_text(match.group("car")) if match else ""
+        if not car_name:
+            yield event.plain_result("格式：删除车辆 车辆名称")
+            event.stop_event()
+            return
+        if car_name not in self.daily_car_pool:
+            yield event.plain_result("车池里没有这辆车")
+            event.stop_event()
+            return
+        try:
+            await self._save_daily_car_config([car for car in self.daily_car_pool if car != car_name])
+            yield event.plain_result(f"已删除车辆：{car_name}")
+        except _BizError as e:
+            yield event.plain_result(e.msg)
+        event.stop_event()
 
     # ============================================================
     #  WebUI 面板（API + 页面）

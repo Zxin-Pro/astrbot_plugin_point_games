@@ -69,5 +69,23 @@
     "description": "黑名单模式：拉黑的群号，多个用逗号分隔（如 33333,44444）",
     "type": "list",
     "default": []
+  },
+  "car_pool": {
+    "type": "list",
+    "description": "每日座驾车辆池",
+    "hint": "每行填写一辆车，可用竖线分隔类型、年代、车名、马力等信息。插件会从这里随机抽取。",
+    "default": [
+      "豪华旅行车 | 年代：2017 | 保时捷 Panamera Sport Turismo | 马力：330–680",
+      "跑车 | 年代：2023 | 保时捷 911 GT3 RS (992) | 马力：525",
+      "SUV | 年代：2021 | 保时捷 Cayenne Turbo GT (E3) | 马力：640",
+      "超级跑车 | 年代：2013 | 保时捷 918 Spyder | 马力：887（综合）",
+      "纯电轿车 | 年代：2024 | 保时捷 Taycan Turbo GT | 马力：815–1034（超增压）"
+    ]
+  },
+  "reply_template": {
+    "type": "text",
+    "description": "抽车后的回复模板",
+    "hint": "仅支持 {user_name}、{car}、{date} 三个占位符，不会追加额外文案。",
+    "default": "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
   }
 }
