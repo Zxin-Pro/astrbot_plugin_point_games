@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.5.9
+作者：Zxin_Pro    版本：2.5.11
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -201,7 +201,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.5.9",
+    version="2.5.11",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -248,6 +248,8 @@ class PointGamesPlugin(Star):
     DICE_DAILY_LIMIT = 5            # 掷骰每日次数上限（可配置）
     ACTIVITY_SETTLE_HOUR = 22       # 群活跃奖励结算小时（可配置）
     ACTIVITY_SETTLE_MINUTE = 0      # 群活跃奖励结算分钟（可配置）
+    LEADERBOARD_BROADCAST_HOUR = 12 # 全服排行榜播报小时（可配置）
+    LEADERBOARD_BROADCAST_MINUTE = 0 # 全服排行榜播报分钟（可配置）
     ACTIVITY_REWARDS = (50, 30, 10)
     # 谁是卧底
     UC_MIN_PLAYERS = 4
@@ -372,7 +374,8 @@ class PointGamesPlugin(Star):
         """CREATE TABLE IF NOT EXISTS group_settings (
             group_id TEXT PRIMARY KEY,
             enabled INTEGER DEFAULT 0,
-            updated_at TIMESTAMP
+            updated_at TIMESTAMP,
+            platform_id TEXT DEFAULT ''
         )""",
         """CREATE TABLE IF NOT EXISTS plugin_config (
             key TEXT PRIMARY KEY,
@@ -474,6 +477,8 @@ class PointGamesPlugin(Star):
         self.DICE_DAILY_LIMIT = integer("dice_daily_limit", self.DICE_DAILY_LIMIT, 1)
         self.ACTIVITY_SETTLE_HOUR = min(integer("activity_settle_hour", self.ACTIVITY_SETTLE_HOUR, 0), 23)
         self.ACTIVITY_SETTLE_MINUTE = min(integer("activity_settle_minute", self.ACTIVITY_SETTLE_MINUTE, 0), 59)
+        self.LEADERBOARD_BROADCAST_HOUR = min(integer("leaderboard_broadcast_hour", self.LEADERBOARD_BROADCAST_HOUR, 0), 23)
+        self.LEADERBOARD_BROADCAST_MINUTE = min(integer("leaderboard_broadcast_minute", self.LEADERBOARD_BROADCAST_MINUTE, 0), 59)
         self.UC_MIN_PLAYERS = integer("uc_min_players", self.UC_MIN_PLAYERS, 2)
         self.UC_MAX_PLAYERS = max(integer("uc_max_players", self.UC_MAX_PLAYERS, 2), self.UC_MIN_PLAYERS)
         self.UC_DEFAULT_PLAYERS = min(
@@ -767,6 +772,12 @@ class PointGamesPlugin(Star):
                     await session.execute(text(ddl))
 
                 # 旧版数据库没有昵称和流水明细字段，启动时补齐并回填可推导数据。
+                group_columns = {
+                    str(row[1]) for row in (await session.execute(text("PRAGMA table_info(group_settings)"))).all()
+                }
+                if "platform_id" not in group_columns:
+                    await session.execute(text("ALTER TABLE group_settings ADD COLUMN platform_id TEXT DEFAULT ''"))
+
                 user_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(users)"))).all()
                 }
@@ -862,6 +873,11 @@ class PointGamesPlugin(Star):
             self._settle_activity_rewards,
             CronTrigger(hour=self.ACTIVITY_SETTLE_HOUR, minute=self.ACTIVITY_SETTLE_MINUTE, timezone=TZ),
             id="point_games_activity_rewards", replace_existing=True,
+        )
+        self._scheduler.add_job(
+            self._broadcast_leaderboard,
+            CronTrigger(hour=self.LEADERBOARD_BROADCAST_HOUR, minute=self.LEADERBOARD_BROADCAST_MINUTE, timezone=TZ),
+            id="point_games_leaderboard_broadcast", replace_existing=True,
         )
         self._scheduler.start()
         # 3. 注册 WebUI
@@ -961,7 +977,7 @@ class PointGamesPlugin(Star):
                     for uid, nums in winners[cnt]:
                         await self._add_points(session, uid, per, "彩票中奖")
                         paid_any = True
-                        detail_lines.append(f"@{uid} 命中{cnt}个，奖金 {per} 积分")
+                        detail_lines.append((uid, cnt, per))
             if not paid_any:
                 # 无人中奖：奖池累积到下一期
                 nxt = (date.today() + timedelta(days=1)).isoformat()
@@ -980,22 +996,71 @@ class PointGamesPlugin(Star):
                 ),
                 {"p": today, "v": 0},
             )
-            text_lines = (
-                [f"🎰 大乐透开奖（{today}）", f"开奖号码：{' '.join(map(str, winning))}",
-                 f"本期奖池：{pool} 积分"]
-                + detail_lines
-                + (["很遗憾，无人中奖，奖池累计到明天喵~"] if not detail_lines else [])
-            )
+            broadcast_chain = [AtAll(), Plain(
+                f"🎰 大乐透开奖（{today}）\n"
+                f"开奖号码：{' '.join(map(str, winning))}\n"
+                f"本期奖池：{pool} 积分"
+            )]
+            for uid, cnt, per in detail_lines:
+                broadcast_chain.extend([
+                    Plain("\n"), At(qq=str(uid)),
+                    Plain(f" 命中{cnt}个，奖金 {per} 积分"),
+                ])
+            if not detail_lines:
+                broadcast_chain.append(Plain("\n很遗憾，无人中奖，奖池累计到明天喵~"))
             # 广播到当日所有购买过的群
             seen: set = set()
             for t in tickets:
                 pid, gid = t.platform_id or "", t.group_id or ""
                 if gid and (pid, gid) not in seen:
                     seen.add((pid, gid))
-                    await self._send_to_group(pid, gid, "\n".join(text_lines), at_all=True)
+                    await self._send_group_chain(pid, gid, broadcast_chain)
             return True, "开奖完成", {"winning": winning, "pool": pool}
 
         await self._tx(fn)
+
+    async def _broadcast_leaderboard(self):
+        """每天向已开启玩法的群播报全服积分排行榜。"""
+        async def fn(session):
+            rows = (await session.execute(text(
+                "SELECT user_id, user_name, balance FROM users "
+                "ORDER BY balance DESC LIMIT 10"
+            ))).all()
+            groups = (await session.execute(text(
+                "SELECT group_id, platform_id FROM group_settings WHERE enabled=1"
+            ))).all()
+            return True, "ok", (rows, groups)
+
+        ok, _, data = await self._tx(fn)
+        if not ok or not data:
+            return
+        rows, groups = data
+        if not rows:
+            broadcast_chain = [Plain("🏆 全服积分排行榜\n暂无玩家数据喵~")]
+        else:
+            medals = ["🥇", "🥈", "🥉"]
+            broadcast_chain = [Plain("🏆 全服积分排行榜 TOP10")]
+            for rank, row in enumerate(rows, 1):
+                prefix = medals[rank - 1] if rank <= 3 else f"{rank}."
+                name = row[1] or "未知玩家"
+                broadcast_chain.extend([
+                    Plain(f"\n{prefix} "),
+                    At(qq=str(row[0])),
+                    Plain(f" {name} —— {int(row[2])} 积分"),
+                ])
+        platform_ids = []
+        try:
+            manager = getattr(self.context, "platform_manager", None)
+            if manager and hasattr(manager, "get_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+            elif manager and hasattr(manager, "platform_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+        except Exception:
+            platform_ids = []
+        for group_id, platform_id in groups:
+            targets = [str(platform_id)] if platform_id else platform_ids
+            for target_platform in targets:
+                await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
 
     async def _maintenance(self):
         """每分钟维护：清理超时闯关会话、超时卧底游戏"""
@@ -1053,6 +1118,12 @@ class PointGamesPlugin(Star):
         await self._send_to_session(platform_id, _MessageType.GROUP_MESSAGE, group_id,
                                     MessageChain(chain_objs))
 
+    async def _send_group_chain(self, platform_id: str, group_id: str, chain_objs):
+        """向群发送消息链，支持真实 At 组件。"""
+        await self._send_to_session(
+            platform_id, _MessageType.GROUP_MESSAGE, group_id, MessageChain(chain_objs)
+        )
+
     async def _send_private(self, platform_id: str, user_id: str, text_msg: str):
         await self._send_to_session(platform_id, _MessageType.FRIEND_MESSAGE, user_id,
                                     MessageChain([Plain(text_msg)]))
@@ -1080,10 +1151,11 @@ class PointGamesPlugin(Star):
         async def fn(session):
             await session.execute(
                 text(
-                    "INSERT INTO group_settings(group_id, enabled, updated_at) VALUES(:g, :e, :t) "
-                    "ON CONFLICT(group_id) DO UPDATE SET enabled=:e, updated_at=:t"
+                    "INSERT INTO group_settings(group_id, enabled, updated_at, platform_id) VALUES(:g, :e, :t, :p) "
+                    "ON CONFLICT(group_id) DO UPDATE SET enabled=:e, updated_at=:t, platform_id=:p"
                 ),
-                {"g": group_id, "e": 1 if enable else 0, "t": time.time()},
+                {"g": group_id, "e": 1 if enable else 0, "t": time.time(),
+                 "p": str(event.get_platform_id() or "")},
             )
             return True, ("本群积分游戏已开启喵~" if enable else "本群积分游戏已关闭喵~"), None
 
@@ -1154,7 +1226,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的 /积分 帮助说明。"""
         return "\n".join([
-            "🎮 积分游戏 v2.5.9",
+            "🎮 积分游戏 v2.5.11",
             "所有玩法均以 /积分 开头",
             "查询：/积分",
             "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
@@ -1762,7 +1834,10 @@ class PointGamesPlugin(Star):
             word = undercover_word if uid == undercover_id else civilian_word
             ok_sent = await self._send_private(platform_id, uid, f"🕵️ 你的卧底词语是：【{word}】喵~ 别让卧底发现你！")
             if not ok_sent:
-                await self._send_to_group(platform_id, group_id, f"@{uid} 私聊发词失败，你的词是：【{word}】（注意保密喵~）")
+                await self._send_group_chain(platform_id, group_id, [
+                    At(qq=str(uid)),
+                    Plain(f" 私聊发词失败，你的词是：【{word}】（注意保密喵~）"),
+                ])
         await self._uc_schedule_next(session, group_id)
 
     def _alive_players(self, players: list, eliminated: list) -> list:
@@ -2162,20 +2237,24 @@ class PointGamesPlugin(Star):
                 second = random.randint(1, 6)
                 await self._increase_dice_count(session, challenger, today)
                 await self._increase_dice_count(session, target, today)
+                chain = [Plain(f"🎲 你掷出了 {first}，"), At(qq=target), Plain(f" {target_name} 掷出了 {second}\n")]
                 if first > second:
                     await self._add_points(session, challenger, 10, "掷骰获胜")
-                    result = f"🎲 你掷出了 {first}，@{target_name} 掷出了 {second}\n🎉 你赢了！获得10积分！"
+                    chain.append(Plain("🎉 你赢了！获得10积分！"))
                 elif first < second:
                     await self._add_points(session, target, 10, "掷骰获胜")
-                    result = f"🎲 你掷出了 {first}，@{target_name} 掷出了 {second}\n🎉 @{target_name} 赢了！获得10积分！"
+                    chain.extend([At(qq=target), Plain(f" 赢了！获得10积分！")])
                 else:
                     await self._add_points(session, challenger, 5, "掷骰平局")
                     await self._add_points(session, target, 5, "掷骰平局")
-                    result = f"🎲 你掷出了 {first}，@{target_name} 掷出了 {second}\n🤝 平局！各得5积分！"
-                return True, result, None
+                    chain.append(Plain("🤝 平局！各得5积分！"))
+                return True, "ok", chain
 
-            ok, msg, _ = await self._tx(fn)
-        yield event.plain_result(msg)
+            ok, msg, data = await self._tx(fn)
+        if ok and data:
+            yield event.chain_result(MessageChain(data))
+        else:
+            yield event.plain_result(msg)
 
     # ============================================================
     #  功能七：群活跃奖励
@@ -2211,16 +2290,20 @@ class PointGamesPlugin(Star):
             rewards = (50, 30, 10)
 
             async def fn(session):
-                lines = ["🔥 群活跃奖励结算"]
+                chain = [Plain("🔥 群活跃奖励结算")]
                 for rank, ((user_id, info), reward) in enumerate(zip(ranking, rewards), 1):
                     await self._ensure_user(session, user_id, info["name"])
                     await self._add_points(session, user_id, reward, "群活跃第%d名" % rank)
-                    lines.append(f"第{rank}名 @{info['name']}：{info['count']} 条，+{reward} 积分")
-                return True, "\n".join(lines), None
+                    chain.extend([
+                        Plain(f"\n第{rank}名 "),
+                        At(qq=str(user_id)),
+                        Plain(f" {info['name']}：{info['count']} 条，+{reward} 积分"),
+                    ])
+                return True, "ok", chain
 
-            ok, message, _ = await self._tx(fn)
-            if ok:
-                await self._send_to_group(platform_id, group_id, message)
+            ok, _, chain = await self._tx(fn)
+            if ok and chain:
+                await self._send_group_chain(platform_id, group_id, chain)
                 async with self._activity_lock:
                     current = self._activity_counts.get(key)
                     if current is bucket:
@@ -2846,6 +2929,7 @@ class PointGamesPlugin(Star):
             body = await req.json()
             group_id = str(body.get("group_id", "")).strip()
             enabled = 1 if body.get("enabled") else 0
+            platform_id = str(body.get("platform_id", "")).strip()
         except Exception as e:
             return error_response(f"参数错误：{e}")
         if not group_id:
@@ -2854,10 +2938,10 @@ class PointGamesPlugin(Star):
         async def fn(session):
             await session.execute(
                 text(
-                    "INSERT INTO group_settings(group_id, enabled, updated_at) VALUES(:g, :e, :t) "
-                    "ON CONFLICT(group_id) DO UPDATE SET enabled=:e, updated_at=:t"
+                    "INSERT INTO group_settings(group_id, enabled, updated_at, platform_id) VALUES(:g, :e, :t, :p) "
+                    "ON CONFLICT(group_id) DO UPDATE SET enabled=:e, updated_at=:t, platform_id=:p"
                 ),
-                {"g": group_id, "e": enabled, "t": time.time()},
+                {"g": group_id, "e": enabled, "t": time.time(), "p": platform_id},
             )
             return True, "ok", None
 

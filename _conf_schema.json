@@ -52,6 +52,8 @@
   "dice_daily_limit": {"description": "掷骰每日次数上限", "type": "int", "default": 5},
   "activity_settle_hour": {"description": "群活跃奖励结算小时", "type": "int", "default": 22},
   "activity_settle_minute": {"description": "群活跃奖励结算分钟", "type": "int", "default": 0},
+  "leaderboard_broadcast_hour": {"description": "全服排行榜自动播报小时", "type": "int", "default": 12},
+  "leaderboard_broadcast_minute": {"description": "全服排行榜自动播报分钟", "type": "int", "default": 0},
   "uc_min_players": {"description": "卧底最少人数", "type": "int", "default": 4},
   "uc_max_players": {"description": "卧底最多人数", "type": "int", "default": 12},
   "uc_default_players": {"description": "卧底默认人数", "type": "int", "default": 6},
