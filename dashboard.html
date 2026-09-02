@@ -39,7 +39,7 @@
 </head>
 <body>
 <div class="toast" id="toast"></div>
-<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.5 · 全群数据互通</span></h1>
+<h1>🎮 积分游戏 <span style="font-size:13px;color:var(--sub)" id="ver">v1.5.5 · 独立面板窗口</span></h1>
 <div class="sub">当前面板用户：<span id="whoami">-</span> <span id="adminflag"></span></div>
 
 <div class="grid" id="statcards"></div>
@@ -118,47 +118,16 @@ function toast(msg, ok=true){
   t.style.display = "block"; t.style.background = ok ? "#1d3a2a" : "#3a1d22";
   setTimeout(()=> t.style.display = "none", 2500);
 }
-// 三通道 API：① 官方注入的 bridge SDK → ② 自实现 postMessage 协议（不依赖 SDK 注入）
-// → ③ 原生 fetch（iframe 沙箱外同源访问时可用），全部失败会给出具体错误
-const _CH = "astrbot-plugin-page";
-let _pmCounter = 0;
-const _pmPending = new Map();
-function _pmSend(kind, payload){
-  try{
-    window.parent.postMessage(Object.assign({ channel: _CH, kind }, payload || {}), "*");
-    return true;
-  }catch(e){ return false; }
+// 独立窗口版 API：页面由插件 Web 路由直接服务，相对路径请求同源 API
+// （自动携带面板登录 cookie / localStorage token，兼容新版与旧版路由）
+async function apiGet(path, params){
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return _relFetch(path + qs, { method: "GET" });
 }
-function _pmRequest(action, endpoint, data){
-  return new Promise((resolve, reject) => {
-    const requestId = "pg_req_" + (++_pmCounter);
-    const timer = setTimeout(() => { _pmPending.delete(requestId); reject(new Error("bridge 无响应")); }, 8000);
-    _pmPending.set(requestId, {
-      resolve: v => { clearTimeout(timer); resolve(v); },
-      reject: e => { clearTimeout(timer); reject(e); },
-    });
-    const payload = { requestId, action, endpoint };
-    if(action === "api:get") payload.params = data;
-    else payload.body = data;
-    _pmSend("request", payload);
-  });
+async function apiPost(path, body){
+  return _relFetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
 }
-window.addEventListener("message", function(e){
-  const m = e.data;
-  if(!m || m.channel !== _CH) return;
-  if(m.kind === "response"){
-    const p = _pmPending.get(m.requestId);
-    if(p){
-      _pmPending.delete(m.requestId);
-      if(m.ok) p.resolve(m.data);
-      else p.reject(new Error(m.error || "请求失败"));
-    }
-  }
-});
-function _withTimeout(p, ms, msg){
-  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
-}
-async function _fetchFallback(path, opts){
+async function _relFetch(path, opts){
   const base = Object.assign({ credentials: "include" }, opts || {});
   base.headers = Object.assign({}, base.headers || {});
   try{
@@ -166,7 +135,7 @@ async function _fetchFallback(path, opts){
     if(t) base.headers["Authorization"] = "Bearer " + t;
   }catch(e){}
   let lastErr = null;
-  for(const u of ["/api/v1/plugins/extensions/point_games/" + path, "/api/plug/point_games/" + path]){
+  for(const u of [path, "/api/v1/plugins/extensions/point_games/" + path, "/api/plug/point_games/" + path]){
     try{
       const r = await fetch(u, base);
       const j = await r.json().catch(()=>null);
@@ -176,34 +145,6 @@ async function _fetchFallback(path, opts){
     }catch(e){ lastErr = e; }
   }
   throw lastErr || new Error("请求失败");
-}
-async function apiGet(path, params){
-  // ① 官方 bridge SDK
-  try{
-    const b = window.AstrBotPluginPage;
-    if(b && typeof b.apiGet === "function"){
-      return await _withTimeout(b.apiGet(path, params), 5000, "bridge 超时");
-    }
-  }catch(e){ /* 继续下一通道 */ }
-  // ② 自实现 postMessage 协议
-  try{
-    return await _withTimeout(_pmRequest("api:get", path, params), 7000, "bridge 无响应");
-  }catch(e){ /* 继续下一通道 */ }
-  // ③ 原生 fetch
-  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-  return _fetchFallback(path + qs, { method: "GET" });
-}
-async function apiPost(path, body){
-  try{
-    const b = window.AstrBotPluginPage;
-    if(b && typeof b.apiPost === "function"){
-      return await _withTimeout(b.apiPost(path, body), 5000, "bridge 超时");
-    }
-  }catch(e){}
-  try{
-    return await _withTimeout(_pmRequest("api:post", path, body), 7000, "bridge 无响应");
-  }catch(e){}
-  return _fetchFallback(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
 }
 async function loadWhoami(){
   // 面板不再依赖用户校验，这里只展示登录用户名，失败也保持可用
@@ -227,13 +168,8 @@ async function loadStats(){
     $("statcards").innerHTML = cards.map(([t,v]) =>
       `<div class="card"><h3>${t}</h3><div class="val">${v}</div></div>`).join("");
   }catch(e){
-    const err = String(e.message||e).replace(/</g,"&lt;");
-    $("statcards").innerHTML = `<div class="card" style="grid-column:1/-1"><h3>⚠️ 加载失败</h3>
-      <div class="val" style="font-size:12px;color:var(--err)">${err}</div>
-      <div style="font-size:12px;color:var(--sub);margin-top:8px">
-        iframe 内无法访问 API 时，请在浏览器新窗口打开：<br>
-        <code style="color:var(--acc);word-break:break-all">/api/v1/plugins/extensions/point_games/dashboard</code>
-      </div></div>`;
+    $("statcards").innerHTML = `<div class="card"><h3>加载失败</h3>
+      <div class="val" style="font-size:12px;color:var(--err)">${String(e.message||e).replace(/</g,"&lt;")}</div></div>`;
   }
 }
 

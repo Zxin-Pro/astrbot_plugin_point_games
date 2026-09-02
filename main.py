@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.4
+作者：Zxin_Pro    版本：1.5.5
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.4",
+    version="1.5.5",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -938,7 +938,7 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏 v1.5.4 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏 v1.5.5 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
@@ -1989,6 +1989,7 @@ class PointGamesPlugin(Star):
         if not hasattr(ctx, "register_web_api"):
             self.logger.warning("当前 AstrBot 版本不支持 register_web_api，WebUI 面板不可用")
             return
+        ctx.register_web_api("/point_games/dashboard", self._web_dashboard, ["GET"], "积分游戏面板（独立窗口）")
         ctx.register_web_api("/point_games/api/whoami", self._web_whoami, ["GET"], "当前面板用户")
         ctx.register_web_api("/point_games/api/stats", self._web_stats, ["GET"], "积分游戏总览")
         ctx.register_web_api("/point_games/api/leaderboard", self._web_leaderboard, ["GET"], "积分排行榜")
@@ -2004,6 +2005,17 @@ class PointGamesPlugin(Star):
     def _web_admin_ok(self) -> bool:
         """WebUI 管理操作已开放给所有已登录面板用户（AstrBot 面板登录即视为可信）"""
         return True
+
+    async def _web_dashboard(self):
+        from fastapi.responses import HTMLResponse
+        import os
+        html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.html")
+        try:
+            with open(html_path, "r", encoding="utf-8") as f:
+                html = f.read()
+        except Exception:
+            html = "<h1>dashboard.html 缺失</h1><p>请确认插件目录下存在 dashboard.html</p>"
+        return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 
     async def _web_whoami(self):
         from astrbot.api.web import json_response, request as web_request
