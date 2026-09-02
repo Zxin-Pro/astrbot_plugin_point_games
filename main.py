@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.6
+作者：Zxin_Pro    版本：1.5.7
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -137,7 +137,7 @@ WORD_PAIRS: list[tuple[str, str]] = [
 #   介绍指令 /积分游戏 会自动展示，无需改动其他代码
 # ============================================================
 COMMAND_HELP: list[tuple[str, str]] = [
-    ("/积分游戏", "玩法介绍与指令列表"),
+    ("/积分游戏 /帮助", "玩法介绍与指令列表"),
     ("/转盘 [积分]", "幸运转盘，最高5倍返还"),
     ("/闯关", "答题闯关，答对得分答错扣分"),
     ("/攻击", "消耗5积分打BOSS，伤害100-500"),
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.6",
+    version="1.5.7",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -943,7 +943,16 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏 v1.5.6 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        yield event.plain_result(self._help_text())
+
+    @filter.command("帮助")
+    async def help(self, event: AstrMessageEvent):
+        """/帮助 —— 玩法介绍与指令列表"""
+        yield event.plain_result(self._help_text())
+
+    def _help_text(self) -> str:
+        """构建 /积分游戏 与 /帮助 共用的指令说明。"""
+        lines = ["🎮 积分游戏 v1.5.7 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
@@ -952,7 +961,7 @@ class PointGamesPlugin(Star):
             "🖥️ WebUI 面板：AstrBot 面板 → 插件 → 积分游戏 → 积分游戏面板",
             "✨ 更多玩法开发中，敬请期待喵~",
         ]
-        yield event.plain_result("\n".join(lines))
+        return "\n".join(lines)
 
     # ============================================================
     #  功能一：幸运转盘
