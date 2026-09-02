@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.7
+作者：Zxin_Pro    版本：1.5.8
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.7",
+    version="1.5.8",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -952,7 +952,7 @@ class PointGamesPlugin(Star):
 
     def _help_text(self) -> str:
         """构建 /积分游戏 与 /帮助 共用的指令说明。"""
-        lines = ["🎮 积分游戏 v1.5.7 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏 v1.5.8 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
@@ -2048,6 +2048,7 @@ class PointGamesPlugin(Star):
         ctx.register_web_api("/point_games/api/groups/toggle", self._web_group_toggle, ["POST"], "开关群玩法")
         ctx.register_web_api("/point_games/api/config/mode", self._web_mode_set, ["POST"], "切换全局模式")
         ctx.register_web_api("/point_games/api/admin/grant", self._web_grant, ["POST"], "WebUI 加/扣积分")
+        ctx.register_web_api("/point_games/api/admin/clear_user", self._web_clear_user, ["POST"], "WebUI 清除玩家数据")
 
     def _web_admin_ok(self) -> bool:
         """WebUI 管理操作已开放给所有已登录面板用户（AstrBot 面板登录即视为可信）"""
@@ -2356,6 +2357,40 @@ class PointGamesPlugin(Star):
             await self._add_points(session, user_id, amount, "管理员加分" if amount > 0 else "管理员扣分")
             new_bal = await self._balance(session, user_id)
             return True, f"ok", {"user_id": user_id, "balance": new_bal}
+
+        ok, msg, data = await self._tx(fn)
+        if not ok:
+            return error_response(msg)
+        return json_response(data)
+
+    async def _web_clear_user(self):
+        """清除玩家账户统计与积分流水，保留用户记录。"""
+        from astrbot.api.web import json_response, error_response, request as web_request
+        if not self._web_admin_ok():
+            return error_response("无权限：当前面板用户不在管理名单中", 403)
+        try:
+            req = web_request
+            body = await req.json()
+            user_id = str(body.get("user_id", "")).strip()
+        except Exception as e:
+            return error_response(f"参数错误：{e}")
+        if not user_id:
+            return error_response("缺少 user_id")
+
+        async def fn(session):
+            row = (await session.execute(
+                text("SELECT user_id FROM users WHERE user_id=:u"), {"u": user_id}
+            )).first()
+            if not row:
+                return False, "玩家不存在", None
+            await session.execute(text(
+                "UPDATE users SET balance=0, total_earned=0, total_spent=0, "
+                "sign_in_date=NULL, sign_in_streak=0 WHERE user_id=:u"
+            ), {"u": user_id})
+            await session.execute(
+                text("DELETE FROM point_transactions WHERE user_id=:u"), {"u": user_id}
+            )
+            return True, "ok", {"user_id": user_id, "balance": 0}
 
         ok, msg, data = await self._tx(fn)
         if not ok:
