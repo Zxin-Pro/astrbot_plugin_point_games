@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：1.5.1
+作者：Zxin_Pro    版本：1.5.2
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -152,7 +152,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/签到", "每日签到，连签7天额外+20"),
     ("/积分", "查看自己的积分、收入、支出与签到信息"),
     ("/排行", "全服积分排行榜"),
-    ("/加积分 /扣积分", "管理员调整积分"),
+    ("/加积分 /扣积分", "调整积分（仅配置页管理员QQ）"),
     ("/本群玩法 开|关", "群管理员开关本群玩法"),
     ("/玩法模式 白名单|黑名单", "全局模式切换"),
     ("/本群状态", "查看本群与全局状态"),
@@ -171,7 +171,7 @@ class _BizError(Exception):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="1.5.1",
+    version="1.5.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -423,6 +423,14 @@ class PointGamesPlugin(Star):
         self.UC_SPEECH_SECONDS = integer("uc_speech_seconds", self.UC_SPEECH_SECONDS, 1)
         self.UC_VOTE_SECONDS = integer("uc_vote_seconds", self.UC_VOTE_SECONDS, 1)
         self.UC_LOBBY_SECONDS = integer("uc_lobby_seconds", self.UC_LOBBY_SECONDS, 1)
+
+        # 管理员QQ：/加积分 /扣积分 指令仅对名单内QQ生效（支持逗号/中文逗号分隔）
+        raw = config.get("admin_qq", [])
+        if isinstance(raw, str):
+            raw = [x for x in raw.replace("，", ",").split(",") if x.strip()]
+        elif not isinstance(raw, (list, tuple, set)):
+            raw = []
+        self.ADMIN_QQ = {str(x).strip() for x in raw if str(x).strip()}
 
     # ---------- 数据库工具 ----------
     def _get_db(self):
@@ -900,7 +908,7 @@ class PointGamesPlugin(Star):
     @filter.command("积分游戏")
     async def intro(self, event: AstrMessageEvent):
         """/积分游戏 —— 玩法介绍与指令列表"""
-        lines = ["🎮 积分游戏 v1.5.1 by Zxin_Pro", "━━━━━━━━━━━━━━"]
+        lines = ["🎮 积分游戏 v1.5.2 by Zxin_Pro", "━━━━━━━━━━━━━━"]
         for cmd, desc in COMMAND_HELP:
             lines.append(f"📌 {cmd}  {desc}")
         lines += [
@@ -1798,7 +1806,11 @@ class PointGamesPlugin(Star):
     #  功能六：管理指令 / 签到 / 排行
     # ============================================================
     async def _grant_points(self, event: AstrMessageEvent, negative: bool):
-        """/加积分 @用户 数量 或 /扣积分 @用户 数量（管理员）"""
+        """/加积分 @用户 数量 或 /扣积分 @用户 数量（仅配置页管理员QQ可用）"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
         user_id = self._extract_at(event)
         cmd = "扣积分" if negative else "加积分"
         args = event.message_str.replace(f"/{cmd}", "", 1).strip()
@@ -1827,13 +1839,11 @@ class PointGamesPlugin(Star):
         yield event.plain_result(msg)
 
     @filter.command("加积分")
-    @filter.permission_type(PermissionType.ADMIN)
     async def grant_add(self, event: AstrMessageEvent):
         async for result in self._grant_points(event, negative=False):
             yield result
 
     @filter.command("扣积分")
-    @filter.permission_type(PermissionType.ADMIN)
     async def grant_sub(self, event: AstrMessageEvent):
         async for result in self._grant_points(event, negative=True):
             yield result

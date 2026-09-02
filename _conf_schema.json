@@ -54,5 +54,10 @@
   "uc_default_players": {"description": "卧底默认人数", "type": "int", "default": 6},
   "uc_speech_seconds": {"description": "卧底每人发言限时秒数", "type": "int", "default": 120},
   "uc_vote_seconds": {"description": "卧底投票限时秒数", "type": "int", "default": 60},
-  "uc_lobby_seconds": {"description": "卧底报名等待秒数", "type": "int", "default": 120}
+  "uc_lobby_seconds": {"description": "卧底报名等待秒数", "type": "int", "default": 120},
+  "admin_qq": {
+    "description": "可使用加/扣积分指令的管理员QQ，多个用逗号分隔（如 10001,10002）",
+    "type": "list",
+    "default": []
+  }
 }
