@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.12
+作者：Zxin_Pro    版本：2.13.13
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -213,7 +213,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.13.12",
+    version="2.13.13",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -3397,7 +3397,7 @@ class PointGamesPlugin(Star):
         
         # 通知用户
         try:
-            user_msg = f"✅ 您的赞助申请已通过！+{points}积分已到账\n当前余额：{new_balance}积分"
+            user_msg = f"✅ 您的赞助申请已通过！\n已添加 {points} 积分到账\n当前余额：{new_balance} 积分"
             await self.context.send_msg(_MessageType.FRIEND_MESSAGE, target_id, user_msg)
         except Exception as e:
             self.logger.warning(f"通知用户 {target_id} 失败：{e}")
