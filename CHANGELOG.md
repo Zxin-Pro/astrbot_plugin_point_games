@@ -1,5 +1,12 @@
 # 更新日志
 
+## [2.13.4] - 2026-09-03
+
+### 修复
+- 修复赞助功能群聊判断方法
+  - 将 `event.is_group()` 改为 `event.is_private_chat()`
+  - 修复 'AiocqhttpMessageEvent' object has no attribute 'is_group' 错误
+
 ## [2.13.3] - 2026-09-03
 
 ### 优化
