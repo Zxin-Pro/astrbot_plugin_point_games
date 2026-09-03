@@ -3217,7 +3217,17 @@ class PointGamesPlugin(Star):
         # 检查文件是否存在
         if not os.path.exists(sponsor_image_path):
             self.logger.error(f"收款码文件不存在: {sponsor_image_path}")
-            yield event.plain_result(f"❌ 收款码文件不存在，请联系管理员检查配置\n调试信息：{sponsor_image_path}")
+            yield event.plain_result(
+                f"❌ 收款码文件不存在\n"
+                f"\n💡 解决方法：\n"
+                f"1. 管理员进入 AstrBot 插件配置页\n"
+                f"2. 找到「赞助系统收款码」字段，重新上传收款码图片\n"
+                f"3. 点击保存配置\n"
+                f"4. 重载插件后再试\n"
+                f"\n🔧 调试信息：\n"
+                f"配置路径：{sponsor_image_path}\n"
+                f"目录是否存在：{os.path.exists(os.path.dirname(sponsor_image_path))}"
+            )
             return
         
         msg = (
