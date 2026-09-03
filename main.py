@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.5
+作者：Zxin_Pro    版本：2.13.6
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -3204,8 +3204,20 @@ class PointGamesPlugin(Star):
         if isinstance(sponsor_image_path, list):
             sponsor_image_path = sponsor_image_path[0] if sponsor_image_path else ""
         
-        if not sponsor_image_path or not os.path.exists(sponsor_image_path):
+        # 如果路径为空或者不存在
+        if not sponsor_image_path:
             yield event.plain_result("❌ 赞助功能未配置收款码，请联系管理员在插件配置页上传收款码图片")
+            return
+        
+        # 如果是相对路径，拼接插件目录
+        if not os.path.isabs(sponsor_image_path):
+            plugin_dir = os.path.dirname(os.path.abspath(__file__))
+            sponsor_image_path = os.path.join(plugin_dir, sponsor_image_path)
+        
+        # 检查文件是否存在
+        if not os.path.exists(sponsor_image_path):
+            self.context.logger.error(f"收款码文件不存在: {sponsor_image_path}")
+            yield event.plain_result(f"❌ 收款码文件不存在，请联系管理员检查配置\n调试信息：{sponsor_image_path}")
             return
         
         msg = (
