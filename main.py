@@ -267,6 +267,8 @@ class PointGamesPlugin(Star):
     UC_MIN_PLAYERS = 4
     UC_MAX_PLAYERS = 12
     UC_DEFAULT_PLAYERS = 6
+    # 消费达标提醒
+    SPEND_REWARD_THRESHOLD = 10000  # 消费达标阈值
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -338,7 +340,8 @@ class PointGamesPlugin(Star):
             total_earned INTEGER DEFAULT 0,
             total_spent INTEGER DEFAULT 0,
             sign_in_date TEXT,
-            sign_in_streak INTEGER DEFAULT 0
+            sign_in_streak INTEGER DEFAULT 0,
+            reward_reminded INTEGER DEFAULT 0
         )""",
         """CREATE TABLE IF NOT EXISTS lottery (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -820,6 +823,26 @@ class PointGamesPlugin(Star):
              "e": earned, "s": spent, "b": current_balance, "t": time.time()},
         )
 
+    async def _check_spend_reward(self, session, user_id: str, group_id: str = None):
+        """检查用户消费是否达标，并发送提醒（必须在事务内调用）"""
+        row = (
+            await session.execute(
+                text("SELECT total_spent, reward_reminded FROM users WHERE user_id=:u"),
+                {"u": user_id}
+            )
+        ).first()
+        if not row:
+            return
+        total_spent, reminded = int(row[0] or 0), int(row[1] or 0)
+        if total_spent >= self.SPEND_REWARD_THRESHOLD and reminded == 0:
+            await session.execute(
+                text("UPDATE users SET reward_reminded=1 WHERE user_id=:u"),
+                {"u": user_id}
+            )
+            # 提醒消息在事务外发送（下方调用处理）
+            return True
+        return False
+
     async def _enforce_cooldown(self, session, user_id: str, seconds: int = None) -> float:
         """指令冷却：3 秒内重复指令返回剩余秒数（>0 表示被拦截）。必须在事务内调用"""
         seconds = seconds or self.COMMAND_COOLDOWN
@@ -901,6 +924,8 @@ class PointGamesPlugin(Star):
                 }
                 if "user_name" not in user_columns:
                     await session.execute(text("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''"))
+                if "reward_reminded" not in user_columns:
+                    await session.execute(text("ALTER TABLE users ADD COLUMN reward_reminded INTEGER DEFAULT 0"))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -1421,14 +1446,27 @@ class PointGamesPlugin(Star):
                 earned=refund, spent=cost,
             )
             new_bal = await self._balance(session, user_id)
+            # 检查消费达标提醒
+            should_remind = await self._check_spend_reward(session, user_id, event.get_group_id())
             if net >= 0:
                 msg = f"{emoji} 转盘结果：{roll} 点！返还 {refund} 积分（净赚 +{net}）当前积分：{new_bal} 喵~"
             else:
                 msg = f"{emoji} 转盘结果：{roll} 点！返还 {refund} 积分（亏损 {abs(net)}）当前积分：{new_bal} 喵~"
-            return True, msg, None
+            return True, msg, should_remind
 
-        ok, msg, _ = await self._tx(fn)
+        ok, msg, should_remind = await self._tx(fn)
         yield event.plain_result(msg)
+        # 事务外发送提醒（避免阻塞数据库）
+        if ok and should_remind:
+            group_id = event.get_group_id()
+            if group_id:
+                try:
+                    yield event.plain_result(
+                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"可联系管理员兑换小礼品一份！"
+                    )
+                except Exception:
+                    pass
 
     # ============================================================
     #  功能二：闯关答题
@@ -1599,6 +1637,8 @@ class PointGamesPlugin(Star):
             await self._ensure_boss_reset(session)
             # 扣费 + 记录伤害
             await self._add_points(session, user_id, -self.ATTACK_COST, "BOSS攻击")
+            # 检查消费达标提醒
+            should_remind = await self._check_spend_reward(session, user_id, event.get_group_id())
             damage = random.randint(self.ATTACK_DAMAGE_MIN, self.ATTACK_DAMAGE_MAX)
             await session.execute(
                 text(
@@ -1643,14 +1683,25 @@ class PointGamesPlugin(Star):
                     f"💥 BOSS 被击杀了！你造成了 {damage} 点致命伤害！\n"
                     f"🏆 分红结果：{share_txt}\n"
                     f"🔄 新 BOSS 已刷新（{self.BOSS_MAX_HP} 血，奖池 {self.BOSS_POOL}）"
-                ), None
+                ), should_remind
             await session.execute(
                 text("UPDATE boss SET current_hp=:hp WHERE id=1"), {"hp": hp}
             )
-            return True, f"⚔️ 你对 BOSS 造成了 {damage} 点伤害！BOSS 剩余血量：{hp}/{self.BOSS_MAX_HP}", None
+            return True, f"⚔️ 你对 BOSS 造成了 {damage} 点伤害！BOSS 剩余血量：{hp}/{self.BOSS_MAX_HP}", should_remind
 
-        ok, msg, _ = await self._tx(fn)
+        ok, msg, should_remind = await self._tx(fn)
         yield event.plain_result(msg)
+        # 事务外发送提醒
+        if ok and should_remind:
+            group_id = event.get_group_id()
+            if group_id:
+                try:
+                    yield event.plain_result(
+                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"可联系管理员兑换小礼品一份！"
+                    )
+                except Exception:
+                    pass
 
     @filter.command("积分 BOSS状态")
     async def boss_status(self, event: AstrMessageEvent):
@@ -1764,6 +1815,8 @@ class PointGamesPlugin(Star):
                 raise _BizError(f"积分不足喵~ 需要 {cost} 积分，你只有 {bal} 积分")
             numbers = sorted(random.sample(range(1, 101), 5))
             await self._add_points(session, user_id, -cost, "购买彩票")
+            # 检查消费达标提醒
+            should_remind = await self._check_spend_reward(session, user_id, event.get_group_id())
             await session.execute(
                 text(
                     "INSERT INTO lottery(user_id, numbers, cost, period, platform_id, group_id) "
@@ -1776,10 +1829,21 @@ class PointGamesPlugin(Star):
                 f"🎰 购彩成功！你的号码：{' '.join(map(str, numbers))}\n"
                 f"花费 {cost} 积分，今日已购 {int(cnt[0]) + 1}/{self.LOTTERY_LIMIT_PER_DAY} 注\n"
                 f"⏰ 每日 20:00 开奖，祝好运喵~"
-            ), None
+            ), should_remind
 
-        ok, msg, _ = await self._tx(fn)
+        ok, msg, should_remind = await self._tx(fn)
         yield event.plain_result(msg)
+        # 事务外发送提醒
+        if ok and should_remind:
+            group_id = event.get_group_id()
+            if group_id:
+                try:
+                    yield event.plain_result(
+                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"可联系管理员兑换小礼品一份！"
+                    )
+                except Exception:
+                    pass
 
     @filter.command("积分 彩票奖池")
     async def lottery_pool_status(self, event: AstrMessageEvent):
@@ -2961,6 +3025,8 @@ class PointGamesPlugin(Star):
             
             # 扣除积分
             await self._add_points(session, user_id, -self.CARD_COST, "抽卡")
+            # 检查消费达标提醒
+            should_remind = await self._check_spend_reward(session, user_id, event.get_group_id())
             
             # 抽卡逻辑
             rarity, card_name = self._draw_card()
@@ -3003,9 +3069,9 @@ class PointGamesPlugin(Star):
             
             is_complete = (collected_rarities == all_rarities) and not already_rewarded
             
-            return True, (rarity, card_name, is_new, count, new_balance, is_complete), None
+            return True, (rarity, card_name, is_new, count, new_balance, is_complete), should_remind
         
-        ok, data, _ = await self._tx(fn)
+        ok, data, should_remind = await self._tx(fn)
         if not ok:
             yield event.plain_result(data)
             return
@@ -3033,6 +3099,18 @@ class PointGamesPlugin(Star):
             result += f"\n🎉 恭喜集齐所有稀有度！获得 {self.CARD_COMPLETE_REWARD} 积分奖励！\n当前余额：{final_balance}"
         
         yield event.plain_result(result)
+        
+        # 事务外发送提醒
+        if ok and should_remind:
+            group_id = event.get_group_id()
+            if group_id:
+                try:
+                    yield event.plain_result(
+                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"可联系管理员兑换小礼品一份！"
+                    )
+                except Exception:
+                    pass
 
     def _draw_card(self):
         """抽卡逻辑，返回 (稀有度, 卡名)"""
