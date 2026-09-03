@@ -5,12 +5,13 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.0
+作者：Zxin_Pro    版本：2.13.1
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
 import asyncio
 import json
+import os
 import random
 import re
 import time
@@ -212,7 +213,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.13.0",
+    version="2.13.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -290,7 +291,6 @@ class PointGamesPlugin(Star):
     }
     CARD_COMPLETE_REWARD = 100      # 集齐所有稀有度奖励
     # 赞助系统
-    SPONSOR_QR_CODE_URL = ""        # 收款码图床链接（配置页填写）
     SPONSOR_RATE = 100              # 1元=100积分（仅展示）
     SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
     SPONSOR_GROUP_ID = None         # 管理员群ID（可选，配置页填写）
@@ -604,7 +604,6 @@ class PointGamesPlugin(Star):
         self.ADMIN_QQ = {str(x).strip() for x in raw if str(x).strip()}
         
         # 赞助系统配置
-        self.SPONSOR_QR_CODE_URL = str(config.get("sponsor_qr_code_url", "")).strip()
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
         raw_admin = config.get("sponsor_admin_qq", [])
         if isinstance(raw_admin, str):
@@ -3120,8 +3119,13 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
             return
         
-        if not self.SPONSOR_QR_CODE_URL:
-            yield event.plain_result("❌ 赞助功能未配置，请联系管理员")
+        # 检查是否上传了收款码图片
+        sponsor_image_path = os.path.join(os.path.dirname(__file__), "sponsor_qrcode.jpg")
+        if not os.path.exists(sponsor_image_path):
+            sponsor_image_path = os.path.join(os.path.dirname(__file__), "sponsor_qrcode.png")
+        
+        if not os.path.exists(sponsor_image_path):
+            yield event.plain_result("❌ 赞助功能未配置收款码，请联系管理员上传 sponsor_qrcode.jpg 或 sponsor_qrcode.png 到插件目录")
             return
         
         msg = (
@@ -3133,11 +3137,15 @@ class PointGamesPlugin(Star):
             f"⚠️ 截图需清晰显示订单号和金额，截图P图或伪造将被永久拉黑"
         )
         yield event.plain_result(msg)
-        # 发送收款码图片
+        
+        # 发送本地收款码图片
         try:
-            yield event.image_result(self.SPONSOR_QR_CODE_URL)
-        except Exception:
-            yield event.plain_result(f"收款码：{self.SPONSOR_QR_CODE_URL}")
+            with open(sponsor_image_path, "rb") as f:
+                image_data = f.read()
+            yield event.image_result(image_data)
+        except Exception as e:
+            self.context.logger.error(f"发送收款码图片失败：{e}")
+            yield event.plain_result(f"❌ 收款码图片加载失败，请联系管理员")
 
     @filter.command("赞助审核")
     async def sponsor_apply(self, event: AstrMessageEvent):
