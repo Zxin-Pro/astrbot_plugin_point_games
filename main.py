@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.11
+作者：Zxin_Pro    版本：2.13.12
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -213,7 +213,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.13.11",
+    version="2.13.12",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -3350,7 +3350,8 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 权限不足，仅管理员可执行")
             return
         
-        args = event.get_message_str().replace("/赞助通过", "").strip().split()
+        # 兼容 AstrBot 传入带/或不带/的命令文本。
+        args = self._strip_command(event, "赞助通过").split()
         if len(args) < 2:
             yield event.plain_result("❌ 格式错误：/赞助通过 [QQ号] [积分数量]")
             return
@@ -3369,17 +3370,17 @@ class PointGamesPlugin(Star):
         async def fn(session):
             # 检查是否有pending申请
             pending = (await session.execute(
-                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending'"),
+                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending' ORDER BY id DESC LIMIT 1"),
                 {"u": target_id}
             )).first()
             
             if not pending:
                 raise _BizError(f"❌ 用户 {target_id} 没有待审核的赞助申请")
             
-            # 更新申请状态
+            # 仅更新本次最新待审核申请，避免意外处理历史记录。
             await session.execute(
-                text("UPDATE sponsor_requests SET status='approved', admin_id=:a, handle_time=:t, amount=:p WHERE user_id=:u AND status='pending'"),
-                {"a": admin_id, "t": time.time(), "p": points, "u": target_id}
+                text("UPDATE sponsor_requests SET status='approved', admin_id=:a, handle_time=:t, amount=:p WHERE id=:id"),
+                {"a": admin_id, "t": time.time(), "p": points, "id": pending[0]}
             )
             
             # 发放积分
@@ -3412,8 +3413,9 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 权限不足，仅管理员可执行")
             return
         
-        args = event.get_message_str().replace("/赞助拒绝", "").strip().split(maxsplit=1)
-        if len(args) < 1:
+        # 兼容 AstrBot 传入带/或不带/的命令文本。
+        args = self._strip_command(event, "赞助拒绝").split(maxsplit=1)
+        if not args:
             yield event.plain_result("❌ 格式错误：/赞助拒绝 [QQ号] [理由]")
             return
         
@@ -3423,17 +3425,17 @@ class PointGamesPlugin(Star):
         async def fn(session):
             # 检查是否有pending申请
             pending = (await session.execute(
-                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending'"),
+                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending' ORDER BY id DESC LIMIT 1"),
                 {"u": target_id}
             )).first()
             
             if not pending:
                 raise _BizError(f"❌ 用户 {target_id} 没有待审核的赞助申请")
             
-            # 更新申请状态
+            # 仅更新本次最新待审核申请，避免意外处理历史记录。
             await session.execute(
-                text("UPDATE sponsor_requests SET status='rejected', admin_id=:a, handle_time=:t, remark=:r WHERE user_id=:u AND status='pending'"),
-                {"a": admin_id, "t": time.time(), "r": reason, "u": target_id}
+                text("UPDATE sponsor_requests SET status='rejected', admin_id=:a, handle_time=:t, remark=:r WHERE id=:id"),
+                {"a": admin_id, "t": time.time(), "r": reason, "id": pending[0]}
             )
             
             return True, "ok", None
