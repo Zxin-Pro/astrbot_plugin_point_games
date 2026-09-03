@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.11.0
+作者：Zxin_Pro    版本：2.11.1
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -207,7 +207,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.11.0",
+    version="2.11.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -272,11 +272,9 @@ class PointGamesPlugin(Star):
     # 速算挑战
     MATH_TIMEOUT = 15               # 速算限时（秒）
     MATH_DAILY_LIMIT = 10           # 每天限玩次数
-    MATH_REWARDS = {                # 难度 -> 奖励积分
-        "简单": 5,
-        "中等": 15,
-        "困难": 30,
-    }
+    MATH_REWARD_EASY = 5            # 简单题奖励
+    MATH_REWARD_MEDIUM = 15         # 中等题奖励
+    MATH_REWARD_HARD = 30           # 困难题奖励
     # 抽卡系统
     CARD_COST = 10                  # 每次抽卡消耗
     CARD_POOL = {                   # 卡池：稀有度 -> (概率, [卡牌名])
@@ -529,6 +527,23 @@ class PointGamesPlugin(Star):
         spin_keys = ["spin_weight_0", "spin_weight_50", "spin_weight_80",
                      "spin_weight_120", "spin_weight_200", "spin_weight_500"]
         self.spin_weights = [integer(k, d, 0) for k, d in zip(spin_keys, spin_defaults)]
+        
+        # 数字炸弹配置
+        self.BOMB_MIN = integer("bomb_min", self.BOMB_MIN, 1)
+        self.BOMB_MAX = max(integer("bomb_max", self.BOMB_MAX, 2), self.BOMB_MIN + 1)
+        self.BOMB_PENALTY = integer("bomb_penalty", self.BOMB_PENALTY, 0)
+        self.BOMB_REWARD = integer("bomb_reward", self.BOMB_REWARD, 0)
+        
+        # 速算挑战配置
+        self.MATH_TIMEOUT = integer("math_timeout", self.MATH_TIMEOUT, 1)
+        self.MATH_DAILY_LIMIT = integer("math_daily_limit", self.MATH_DAILY_LIMIT, 1)
+        self.MATH_REWARD_EASY = integer("math_reward_easy", self.MATH_REWARD_EASY, 0)
+        self.MATH_REWARD_MEDIUM = integer("math_reward_medium", self.MATH_REWARD_MEDIUM, 0)
+        self.MATH_REWARD_HARD = integer("math_reward_hard", self.MATH_REWARD_HARD, 0)
+        
+        # 抽卡系统配置
+        self.CARD_COST = integer("card_cost", self.CARD_COST, 1)
+        self.CARD_COMPLETE_REWARD = integer("card_complete_reward", self.CARD_COMPLETE_REWARD, 0)
         if sum(self.spin_weights) <= 0:
             self.spin_weights = spin_defaults
         rate_keys = ["spin_rate_0", "spin_rate_50", "spin_rate_80",
@@ -1304,7 +1319,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的 /积分 帮助说明。"""
         return "\n".join([
-            "🎮 积分游戏 v2.11.0",
+            "🎮 积分游戏 v2.11.1",
             "所有玩法均以 /积分 开头",
             "查询：/积分",
             "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
@@ -2742,7 +2757,11 @@ class PointGamesPlugin(Star):
             
             # 生成题目
             difficulty, question_str, answer = self._generate_math_question()
-            reward = self.MATH_REWARDS[difficulty]
+            reward = {
+                "简单": self.MATH_REWARD_EASY,
+                "中等": self.MATH_REWARD_MEDIUM,
+                "困难": self.MATH_REWARD_HARD,
+            }[difficulty]
             
             # 保存会话
             expire_time = time.time() + self.MATH_TIMEOUT
