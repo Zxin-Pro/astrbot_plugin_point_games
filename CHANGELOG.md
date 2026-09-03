@@ -1,5 +1,12 @@
 # 更新日志
 
+## [2.13.7] - 2026-09-03
+
+### 修复
+- 修复 logger 调用错误
+  - self.context.logger → self.logger
+  - 解决 'Context' object has no attribute 'logger' 错误
+
 ## [2.13.6] - 2026-09-03
 
 ### 修复

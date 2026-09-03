@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.6
+作者：Zxin_Pro    版本：2.13.7
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -3216,7 +3216,7 @@ class PointGamesPlugin(Star):
         
         # 检查文件是否存在
         if not os.path.exists(sponsor_image_path):
-            self.context.logger.error(f"收款码文件不存在: {sponsor_image_path}")
+            self.logger.error(f"收款码文件不存在: {sponsor_image_path}")
             yield event.plain_result(f"❌ 收款码文件不存在，请联系管理员检查配置\n调试信息：{sponsor_image_path}")
             return
         
@@ -3236,7 +3236,7 @@ class PointGamesPlugin(Star):
                 image_data = f.read()
             yield event.image_result(image_data)
         except Exception as e:
-            self.context.logger.error(f"发送收款码图片失败：{e}")
+            self.logger.error(f"发送收款码图片失败：{e}")
             yield event.plain_result(f"❌ 收款码图片加载失败，请联系管理员")
 
     @filter.command("赞助审核")
@@ -3309,7 +3309,7 @@ class PointGamesPlugin(Star):
                 # 转发截图
                 await self.context.send_msg(_MessageType.FRIEND_MESSAGE, admin_qq, reply_msg.message)
             except Exception as e:
-                self.context.logger.warning(f"转发赞助申请给管理员 {admin_qq} 失败：{e}")
+                self.logger.warning(f"转发赞助申请给管理员 {admin_qq} 失败：{e}")
         
         # 群聊@管理员（如有配置）
         if self.SPONSOR_GROUP_ID:
@@ -3318,7 +3318,7 @@ class PointGamesPlugin(Star):
                 group_msg = f"📢 赞助申请提醒\n申请人：{user_id}\n请管理员及时处理 {ats}"
                 await self.context.send_msg(_MessageType.GROUP_MESSAGE, self.SPONSOR_GROUP_ID, group_msg)
             except Exception as e:
-                self.context.logger.warning(f"群聊提醒管理员失败：{e}")
+                self.logger.warning(f"群聊提醒管理员失败：{e}")
         
         yield event.plain_result("✅ 已收到您的赞助申请，截图已转发给管理员\n⏳ 请耐心等待审核")
 
@@ -3380,7 +3380,7 @@ class PointGamesPlugin(Star):
             user_msg = f"✅ 您的赞助申请已通过！+{points}积分已到账\n当前余额：{new_balance}积分"
             await self.context.send_msg(_MessageType.FRIEND_MESSAGE, target_id, user_msg)
         except Exception as e:
-            self.context.logger.warning(f"通知用户 {target_id} 失败：{e}")
+            self.logger.warning(f"通知用户 {target_id} 失败：{e}")
         
         yield event.plain_result(f"✅ 已为 {target_id} 增加 {points} 积分")
 
@@ -3429,7 +3429,7 @@ class PointGamesPlugin(Star):
             user_msg = f"❌ 您的赞助申请被拒绝\n理由：{reason}\n如有疑问请联系管理员"
             await self.context.send_msg(_MessageType.FRIEND_MESSAGE, target_id, user_msg)
         except Exception as e:
-            self.context.logger.warning(f"通知用户 {target_id} 失败：{e}")
+            self.logger.warning(f"通知用户 {target_id} 失败：{e}")
         
         yield event.plain_result(f"❌ 已拒绝 {target_id} 的赞助申请")
 
