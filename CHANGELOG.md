@@ -1,5 +1,10 @@
 # 更新日志
 
+## [2.11.2] - 2026-09-03
+
+### 修复
+- 修正数字炸弹属性名称不一致导致的初始化错误（BOMB_LOSER_PENALTY/BOMB_WINNER_REWARD -> BOMB_PENALTY/BOMB_REWARD）
+
 ## [2.11.1] - 2026-09-03
 
 ### 新增
