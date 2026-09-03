@@ -267,8 +267,8 @@ class PointGamesPlugin(Star):
     # 数字炸弹
     BOMB_MIN = 1                    # 炸弹范围最小值
     BOMB_MAX = 100                  # 炸弹范围最大值
-    BOMB_LOSER_PENALTY = 30         # 踩到炸弹扣分
-    BOMB_WINNER_REWARD = 5          # 其他参与者奖励
+    BOMB_PENALTY = 30               # 踩到炸弹扣分
+    BOMB_REWARD = 5                 # 其他参与者奖励
     # 速算挑战
     MATH_TIMEOUT = 15               # 速算限时（秒）
     MATH_DAILY_LIMIT = 10           # 每天限玩次数
@@ -2674,13 +2674,13 @@ class PointGamesPlugin(Star):
             async def fn(session):
                 # 扣除踩雷者积分
                 await self._ensure_user(session, user_id)
-                await self._add_points(session, user_id, -self.BOMB_LOSER_PENALTY, f"数字炸弹踩雷")
+                await self._add_points(session, user_id, -self.BOMB_PENALTY, f"数字炸弹踩雷")
                 loser_balance = await self._balance(session, user_id)
                 
                 # 给其他参与者加分
                 for pid in participants:
                     await self._ensure_user(session, pid)
-                    await self._add_points(session, pid, self.BOMB_WINNER_REWARD, f"数字炸弹获胜")
+                    await self._add_points(session, pid, self.BOMB_REWARD, f"数字炸弹获胜")
                 
                 return True, (loser_balance, participants), None
             
@@ -2691,11 +2691,11 @@ class PointGamesPlugin(Star):
                 Plain(f"💥 BOOM！"),
                 At(user_id),
                 Plain(f" 踩到炸弹了！\n"),
-                Plain(f"扣除 {self.BOMB_LOSER_PENALTY} 积分，当前余额：{loser_balance}\n"),
+                Plain(f"扣除 {self.BOMB_PENALTY} 积分，当前余额：{loser_balance}\n"),
             ])
             
             if participants:
-                result.extend([Plain(f"其他参与者各获得 {self.BOMB_WINNER_REWARD} 积分：\n")])
+                result.extend([Plain(f"其他参与者各获得 {self.BOMB_REWARD} 积分：\n")])
                 for i, pid in enumerate(participants):
                     if i > 0:
                         result.append(Plain("、"))
