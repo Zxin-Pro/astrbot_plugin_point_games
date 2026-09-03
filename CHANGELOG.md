@@ -1,5 +1,12 @@
 # 更新日志
 
+## [2.13.5] - 2026-09-03
+
+### 修复
+- 修复赞助收款码配置读取
+  - 处理 type="file" 配置返回列表的情况
+  - 修复 stat: path should be string, bytes, os.PathLike or integer, not list 错误
+
 ## [2.13.4] - 2026-09-03
 
 ### 修复
