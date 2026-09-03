@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.10
+作者：Zxin_Pro    版本：2.13.11
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -213,7 +213,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.13.10",
+    version="2.13.11",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -2406,10 +2406,9 @@ class PointGamesPlugin(Star):
         if target == challenger:
             yield event.plain_result("不能和自己掷骰喵~")
             return
+        # 兼容 NapCat/OneBot：无需强依赖群成员查询接口，@ 到 QQ 即可参与。
+        # 能取到群昵称则展示昵称，取不到也不阻断玩法。
         member = await self._get_group_member(event, target)
-        if member is None:
-            yield event.plain_result("这个玩家不在群里，无法掷骰喵~")
-            return
         target_name = str(getattr(member, "nickname", "") or "群友").strip()
         challenger_name = str(event.get_sender_name() or "你").strip()
         today = date.today().isoformat()
