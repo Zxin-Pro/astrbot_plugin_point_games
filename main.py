@@ -3193,7 +3193,7 @@ class PointGamesPlugin(Star):
     @filter.command("赞助")
     async def sponsor_info(self, event: AstrMessageEvent):
         """查看赞助积分方式（仅私聊）"""
-        if event.is_group():
+        if not event.is_private_chat():
             yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
             return
         
@@ -3228,7 +3228,7 @@ class PointGamesPlugin(Star):
         """提交赞助申请（引用订单截图，仅私聊）"""
         user_id = str(event.get_sender_id())
         
-        if event.is_group():
+        if not event.is_private_chat():
             yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
             return
         
