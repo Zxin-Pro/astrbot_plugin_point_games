@@ -75,10 +75,10 @@
   "card_cost": {"description": "抽卡每次消耗积分", "type": "int", "default": 10},
   "card_complete_reward": {"description": "抽卡集齐奖励", "type": "int", "default": 100},
   "sponsor_qrcode": {
-    "description": "赞助收款码图片",
-    "type": "file",
-    "accept": "image/*",
-    "hint": "上传支付宝/微信等收款码图片，用户私聊 /赞助 时会显示"
+    "description": "（已弃用）请使用 /设置收款码 命令",
+    "type": "string",
+    "default": "",
+    "hint": "管理员发送收款码图片 + 文字 /设置收款码 即可设置"
   },
   "sponsor_rate": {"description": "赞助积分兑换率（1元=N积分）", "type": "int", "default": 100},
   "sponsor_admin_qq": {

@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.7
+作者：Zxin_Pro    版本：2.13.9
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -3190,6 +3190,36 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能12：赞助积分系统（人工审核版，仅限私聊）
     # ============================================================
+    @filter.command("设置收款码")
+    @filter.permission_type(PermissionType.ADMIN)
+    async def set_sponsor_qrcode(self, event: AstrMessageEvent):
+        """管理员发送图片设置收款码（私聊或群聊均可）"""
+        # 获取消息中的图片
+        images = event.get_images()
+        if not images:
+            yield event.plain_result("❌ 请发送图片并附带命令\n示例：发送图片 + 文字 /设置收款码")
+            return
+        
+        try:
+            plugin_dir = os.path.dirname(os.path.abspath(__file__))
+            save_path = os.path.join(plugin_dir, "sponsor_qrcode.jpg")
+            
+            # 下载图片URL到本地
+            image_url = images[0]
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as resp:
+                    if resp.status == 200:
+                        image_data = await resp.read()
+                        with open(save_path, "wb") as f:
+                            f.write(image_data)
+                        yield event.plain_result(f"✅ 收款码已保存\n文件：sponsor_qrcode.jpg\n用户私聊 /赞助 即可查看")
+                    else:
+                        yield event.plain_result(f"❌ 下载图片失败：HTTP {resp.status}")
+        except Exception as e:
+            self.logger.error(f"保存收款码失败：{e}")
+            yield event.plain_result(f"❌ 保存失败：{e}")
+
     @filter.command("赞助")
     async def sponsor_info(self, event: AstrMessageEvent):
         """查看赞助积分方式（仅私聊）"""
@@ -3197,36 +3227,15 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
             return
         
-        # 从配置项读取上传的收款码图片路径
-        sponsor_image_path = self.config.get("sponsor_qrcode", "")
+        # 固定读取 sponsor_qrcode.jpg（管理员通过 /设置收款码 命令设置）
+        plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        sponsor_image_path = os.path.join(plugin_dir, "sponsor_qrcode.jpg")
         
-        # 如果是列表，取第一个文件路径
-        if isinstance(sponsor_image_path, list):
-            sponsor_image_path = sponsor_image_path[0] if sponsor_image_path else ""
-        
-        # 如果路径为空或者不存在
-        if not sponsor_image_path:
-            yield event.plain_result("❌ 赞助功能未配置收款码，请联系管理员在插件配置页上传收款码图片")
-            return
-        
-        # 如果是相对路径，拼接插件目录
-        if not os.path.isabs(sponsor_image_path):
-            plugin_dir = os.path.dirname(os.path.abspath(__file__))
-            sponsor_image_path = os.path.join(plugin_dir, sponsor_image_path)
-        
-        # 检查文件是否存在
-        if not os.path.exists(sponsor_image_path):
-            self.logger.error(f"收款码文件不存在: {sponsor_image_path}")
+        if not os.path.isfile(sponsor_image_path):
             yield event.plain_result(
-                f"❌ 收款码文件不存在\n"
-                f"\n💡 解决方法：\n"
-                f"1. 管理员进入 AstrBot 插件配置页\n"
-                f"2. 找到「赞助系统收款码」字段，重新上传收款码图片\n"
-                f"3. 点击保存配置\n"
-                f"4. 重载插件后再试\n"
-                f"\n🔧 调试信息：\n"
-                f"配置路径：{sponsor_image_path}\n"
-                f"目录是否存在：{os.path.exists(os.path.dirname(sponsor_image_path))}"
+                "❌ 赞助功能未配置收款码\n\n"
+                "💡 管理员设置方法：\n"
+                "发送收款码图片 + 文字 /设置收款码"
             )
             return
         
