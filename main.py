@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.1
+作者：Zxin_Pro    版本：2.13.3
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -213,7 +213,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.13.1",
+    version="2.13.3",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -3197,13 +3197,11 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
             return
         
-        # 检查是否上传了收款码图片
-        sponsor_image_path = os.path.join(os.path.dirname(__file__), "sponsor_qrcode.jpg")
-        if not os.path.exists(sponsor_image_path):
-            sponsor_image_path = os.path.join(os.path.dirname(__file__), "sponsor_qrcode.png")
+        # 从配置项读取上传的收款码图片路径
+        sponsor_image_path = self.config.get("sponsor_qrcode", "")
         
-        if not os.path.exists(sponsor_image_path):
-            yield event.plain_result("❌ 赞助功能未配置收款码，请联系管理员上传 sponsor_qrcode.jpg 或 sponsor_qrcode.png 到插件目录")
+        if not sponsor_image_path or not os.path.exists(sponsor_image_path):
+            yield event.plain_result("❌ 赞助功能未配置收款码，请联系管理员在插件配置页上传收款码图片")
             return
         
         msg = (
@@ -3216,7 +3214,7 @@ class PointGamesPlugin(Star):
         )
         yield event.plain_result(msg)
         
-        # 发送本地收款码图片
+        # 发送配置页上传的收款码图片
         try:
             with open(sponsor_image_path, "rb") as f:
                 image_data = f.read()
