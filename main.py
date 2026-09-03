@@ -3200,6 +3200,10 @@ class PointGamesPlugin(Star):
         # 从配置项读取上传的收款码图片路径
         sponsor_image_path = self.config.get("sponsor_qrcode", "")
         
+        # 如果是列表，取第一个文件路径
+        if isinstance(sponsor_image_path, list):
+            sponsor_image_path = sponsor_image_path[0] if sponsor_image_path else ""
+        
         if not sponsor_image_path or not os.path.exists(sponsor_image_path):
             yield event.plain_result("❌ 赞助功能未配置收款码，请联系管理员在插件配置页上传收款码图片")
             return
