@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.9
+作者：Zxin_Pro    版本：2.13.10
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -24,7 +24,7 @@ from sqlalchemy import text
 # ---------- AstrBot 框架导入 ----------
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.event.filter import CustomFilter, EventMessageType, PermissionType
-from astrbot.api.message_components import At, AtAll, Plain
+from astrbot.api.message_components import At, AtAll, Image, Plain, Reply
 from astrbot.api.star import Context, Star, register
 
 # ---------- 定时任务 ----------
@@ -213,7 +213,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.13.3",
+    version="2.13.10",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -3190,36 +3190,6 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能12：赞助积分系统（人工审核版，仅限私聊）
     # ============================================================
-    @filter.command("设置收款码")
-    @filter.permission_type(PermissionType.ADMIN)
-    async def set_sponsor_qrcode(self, event: AstrMessageEvent):
-        """管理员发送图片设置收款码（私聊或群聊均可）"""
-        # 获取消息中的图片
-        images = event.get_images()
-        if not images:
-            yield event.plain_result("❌ 请发送图片并附带命令\n示例：发送图片 + 文字 /设置收款码")
-            return
-        
-        try:
-            plugin_dir = os.path.dirname(os.path.abspath(__file__))
-            save_path = os.path.join(plugin_dir, "sponsor_qrcode.jpg")
-            
-            # 下载图片URL到本地
-            image_url = images[0]
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.get(image_url) as resp:
-                    if resp.status == 200:
-                        image_data = await resp.read()
-                        with open(save_path, "wb") as f:
-                            f.write(image_data)
-                        yield event.plain_result(f"✅ 收款码已保存\n文件：sponsor_qrcode.jpg\n用户私聊 /赞助 即可查看")
-                    else:
-                        yield event.plain_result(f"❌ 下载图片失败：HTTP {resp.status}")
-        except Exception as e:
-            self.logger.error(f"保存收款码失败：{e}")
-            yield event.plain_result(f"❌ 保存失败：{e}")
-
     @filter.command("赞助")
     async def sponsor_info(self, event: AstrMessageEvent):
         """查看赞助积分方式（仅私聊）"""
@@ -3227,15 +3197,28 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
             return
         
-        # 固定读取 sponsor_qrcode.jpg（管理员通过 /设置收款码 命令设置）
-        plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        sponsor_image_path = os.path.join(plugin_dir, "sponsor_qrcode.jpg")
-        
-        if not os.path.isfile(sponsor_image_path):
+        # 从配置读取上传的收款码路径列表
+        sponsor_qrcode_list = self.config.get("sponsor_qrcode", [])
+        # AstrBot file 类型通常返回 list，兼容旧配置中的单字符串。
+        if isinstance(sponsor_qrcode_list, str):
+            sponsor_qrcode_list = [sponsor_qrcode_list] if sponsor_qrcode_list.strip() else []
+        if not isinstance(sponsor_qrcode_list, list) or not sponsor_qrcode_list:
             yield event.plain_result(
                 "❌ 赞助功能未配置收款码\n\n"
-                "💡 管理员设置方法：\n"
-                "发送收款码图片 + 文字 /设置收款码"
+                "💡 请在 AstrBot 插件配置页上传收款码图片，点击保存后重载插件"
+            )
+            return
+        
+        # 取第一个文件路径；相对路径相对于当前插件目录解析。
+        sponsor_rel_path = str(sponsor_qrcode_list[0]).strip()
+        plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        sponsor_abs_path = sponsor_rel_path if os.path.isabs(sponsor_rel_path) else os.path.join(plugin_dir, sponsor_rel_path)
+        
+        if not os.path.isfile(sponsor_abs_path):
+            self.logger.error(f"收款码文件不存在: {sponsor_abs_path}")
+            yield event.plain_result(
+                f"❌ 收款码文件不存在\n\n"
+                f"💡 请在插件配置页重新上传收款码图片"
             )
             return
         
@@ -3249,14 +3232,8 @@ class PointGamesPlugin(Star):
         )
         yield event.plain_result(msg)
         
-        # 发送配置页上传的收款码图片
-        try:
-            with open(sponsor_image_path, "rb") as f:
-                image_data = f.read()
-            yield event.image_result(image_data)
-        except Exception as e:
-            self.logger.error(f"发送收款码图片失败：{e}")
-            yield event.plain_result(f"❌ 收款码图片加载失败，请联系管理员")
+        # 直接发送配置页上传的本地图片路径。
+        yield event.image_result(sponsor_abs_path)
 
     @filter.command("赞助审核")
     async def sponsor_apply(self, event: AstrMessageEvent):
@@ -3271,22 +3248,24 @@ class PointGamesPlugin(Star):
             yield event.plain_result("❌ 赞助功能未配置管理员，请联系管理员")
             return
         
-        # 检查是否引用了消息
-        reply_msg = event.get_reply()
-        if not reply_msg:
+        # 从当前消息链中寻找引用组件；AstrMessageEvent 没有 get_reply()。
+        reply_component = next(
+            (comp for comp in event.get_messages() if isinstance(comp, Reply)), None
+        )
+        if reply_component is None:
             yield event.plain_result("❌ 请引用您的支付订单截图\n示例：/赞助审核（回复图片消息）")
             return
         
-        # 检查引用的消息是否包含图片
-        has_image = False
-        for comp in reply_msg.message:
-            if hasattr(comp, 'type') and comp.type == 'image':
-                has_image = True
-                break
-        
-        if not has_image:
-            yield event.plain_result("❌ 请引用包含图片的订单截图消息")
+        reply_chain = list(getattr(reply_component, "chain", None) or [])
+        image_component = next(
+            (comp for comp in reply_chain if isinstance(comp, Image)), None
+        )
+        if image_component is None:
+            yield event.plain_result("❌ 请引用包含图片的支付订单截图")
             return
+        
+        # 优先使用引用消息中的图片组件；同时保留回复链，供平台发送原图。
+        forwarded_chain = [image_component]
         
         async def fn(session):
             # 检查是否有pending申请
@@ -3323,10 +3302,16 @@ class PointGamesPlugin(Star):
                     f"/赞助通过 {user_id} [积分数量]\n"
                     f"/赞助拒绝 {user_id} [理由]"
                 )
-                await self.context.send_msg(_MessageType.FRIEND_MESSAGE, admin_qq, admin_msg)
-                
-                # 转发截图
-                await self.context.send_msg(_MessageType.FRIEND_MESSAGE, admin_qq, reply_msg.message)
+                platform_id = event.get_platform_id()
+                await self._send_to_session(
+                    platform_id, _MessageType.FRIEND_MESSAGE, str(admin_qq),
+                    MessageChain([Plain(admin_msg)])
+                )
+                # 转发引用的原图组件，避免调用不存在的 get_reply/get_message API。
+                await self._send_to_session(
+                    platform_id, _MessageType.FRIEND_MESSAGE, str(admin_qq),
+                    MessageChain(forwarded_chain)
+                )
             except Exception as e:
                 self.logger.warning(f"转发赞助申请给管理员 {admin_qq} 失败：{e}")
         
