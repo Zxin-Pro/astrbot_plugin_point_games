@@ -74,6 +74,25 @@
   "math_reward_hard": {"description": "速算困难题奖励", "type": "int", "default": 30},
   "card_cost": {"description": "抽卡每次消耗积分", "type": "int", "default": 10},
   "card_complete_reward": {"description": "抽卡集齐奖励", "type": "int", "default": 100},
+  "sponsor_qr_code_url": {
+    "description": "赞助收款码图片URL（图床链接）",
+    "type": "string",
+    "default": "",
+    "hint": "请上传收款码到图床并填写图片URL"
+  },
+  "sponsor_rate": {"description": "赞助积分兑换率（1元=N积分）", "type": "int", "default": 100},
+  "sponsor_admin_qq": {
+    "description": "赞助审核管理员QQ，多个用逗号分隔（如 10001,10002）",
+    "type": "list",
+    "default": [],
+    "hint": "只有这些QQ可以执行 /赞助通过 /赞助拒绝"
+  },
+  "sponsor_group_id": {
+    "description": "赞助申请提醒群ID（可选）",
+    "type": "string",
+    "default": "",
+    "hint": "填写后会在该群@管理员提醒，留空则仅私聊通知"
+  },
   "admin_qq": {
     "description": "可使用加/扣积分指令的管理员QQ，多个用逗号分隔（如 10001,10002）",
     "type": "list",

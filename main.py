@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.11.3
+作者：Zxin_Pro    版本：2.13.0
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -172,6 +172,11 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分 速算", "速算挑战（答对得5/15/30积分，每天10次）"),
     ("/积分 抽卡", "消耗10积分抽卡（N/R/SR/SSR）"),
     ("/积分 图鉴", "查看已收集的卡牌和进度"),
+    ("/赞助", "查看赞助积分方式（仅私聊）"),
+    ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
+    ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
+    ("/赞助拒绝 [QQ] [理由]", "管理员拒绝申请"),
+    ("/赞助列表", "查看待审核申请（管理员）"),
     ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到"),
     ("/积分 查询", "查看自己的积分、收入、支出与签到信息"),
     ("/积分 查积分 @玩家", "查询其他玩家的积分信息"),
@@ -207,7 +212,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.11.3",
+    version="2.13.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -284,6 +289,11 @@ class PointGamesPlugin(Star):
         "SSR": (0.05, ["SSR-神龙", "SSR-金龙", "SSR-银龙", "SSR-冰龙", "SSR-火龙"]),
     }
     CARD_COMPLETE_REWARD = 100      # 集齐所有稀有度奖励
+    # 赞助系统
+    SPONSOR_QR_CODE_URL = ""        # 收款码图床链接（配置页填写）
+    SPONSOR_RATE = 100              # 1元=100积分（仅展示）
+    SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
+    SPONSOR_GROUP_ID = None         # 管理员群ID（可选，配置页填写）
     DEFAULT_GROUP_MODE = "whitelist"
     FEATURES = {
         "enable_spin": True,
@@ -450,6 +460,18 @@ class PointGamesPlugin(Star):
             PRIMARY KEY(user_id, card_name)
         )""",
         "CREATE INDEX IF NOT EXISTS idx_cards_user ON cards(user_id)",
+        """CREATE TABLE IF NOT EXISTS sponsor_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            amount INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            admin_id TEXT,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            handle_time TIMESTAMP,
+            remark TEXT
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_sponsor_user ON sponsor_requests(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sponsor_status ON sponsor_requests(status)",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -580,6 +602,19 @@ class PointGamesPlugin(Star):
         elif not isinstance(raw, (list, tuple, set)):
             raw = []
         self.ADMIN_QQ = {str(x).strip() for x in raw if str(x).strip()}
+        
+        # 赞助系统配置
+        self.SPONSOR_QR_CODE_URL = str(config.get("sponsor_qr_code_url", "")).strip()
+        self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
+        raw_admin = config.get("sponsor_admin_qq", [])
+        if isinstance(raw_admin, str):
+            raw_admin = [x for x in raw_admin.replace("，", ",").split(",") if x.strip()]
+        elif not isinstance(raw_admin, (list, tuple, set)):
+            raw_admin = []
+        self.SPONSOR_ADMIN_QQ_LIST = [str(x).strip() for x in raw_admin if str(x).strip()]
+        group_id_raw = config.get("sponsor_group_id", "")
+        self.SPONSOR_GROUP_ID = str(group_id_raw).strip() if str(group_id_raw).strip() else None
+        
         self.daily_car_pool, self.daily_car_template = self._validate_daily_car_config(config)
 
     @staticmethod
@@ -3072,6 +3107,258 @@ class PointGamesPlugin(Star):
         lines.append(f"\n收集进度：{total}/{all_cards_count}")
         if is_complete:
             lines.append("✅ 已集齐所有稀有度！")
+        
+        yield event.plain_result("\n".join(lines))
+
+    # ============================================================
+    #  功能12：赞助积分系统（人工审核版，仅限私聊）
+    # ============================================================
+    @filter.command("赞助")
+    async def sponsor_info(self, event: AstrMessageEvent):
+        """查看赞助积分方式（仅私聊）"""
+        if event.is_group():
+            yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
+            return
+        
+        if not self.SPONSOR_QR_CODE_URL:
+            yield event.plain_result("❌ 赞助功能未配置，请联系管理员")
+            return
+        
+        msg = (
+            f"💰 赞助积分：1元={self.SPONSOR_RATE}积分\n"
+            f"📱 请扫码支付，支付时务必备注您的QQ号\n"
+            f"📸 支付完成后，请发送 /赞助审核 并引用（回复）订单截图\n"
+            f"⏳ 管理员审核后积分将自动到账，请耐心等待\n"
+            f"⚠️ 请务必在支付备注中填写您的QQ号，否则无法核实\n"
+            f"⚠️ 截图需清晰显示订单号和金额，截图P图或伪造将被永久拉黑"
+        )
+        yield event.plain_result(msg)
+        # 发送收款码图片
+        try:
+            yield event.image_result(self.SPONSOR_QR_CODE_URL)
+        except Exception:
+            yield event.plain_result(f"收款码：{self.SPONSOR_QR_CODE_URL}")
+
+    @filter.command("赞助审核")
+    async def sponsor_apply(self, event: AstrMessageEvent):
+        """提交赞助申请（引用订单截图，仅私聊）"""
+        user_id = str(event.get_sender_id())
+        
+        if event.is_group():
+            yield event.plain_result("❌ 赞助功能仅支持私聊使用，请添加机器人好友后操作")
+            return
+        
+        if not self.SPONSOR_ADMIN_QQ_LIST:
+            yield event.plain_result("❌ 赞助功能未配置管理员，请联系管理员")
+            return
+        
+        # 检查是否引用了消息
+        reply_msg = event.get_reply()
+        if not reply_msg:
+            yield event.plain_result("❌ 请引用您的支付订单截图\n示例：/赞助审核（回复图片消息）")
+            return
+        
+        # 检查引用的消息是否包含图片
+        has_image = False
+        for comp in reply_msg.message:
+            if hasattr(comp, 'type') and comp.type == 'image':
+                has_image = True
+                break
+        
+        if not has_image:
+            yield event.plain_result("❌ 请引用包含图片的订单截图消息")
+            return
+        
+        async def fn(session):
+            # 检查是否有pending申请
+            pending = (await session.execute(
+                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending'"),
+                {"u": user_id}
+            )).first()
+            
+            if pending:
+                raise _BizError("⏳ 您有正在审核的申请，请勿重复提交")
+            
+            # 插入申请记录
+            await session.execute(
+                text("INSERT INTO sponsor_requests(user_id, status, create_time) VALUES(:u, 'pending', :t)"),
+                {"u": user_id, "t": time.time()}
+            )
+            
+            return True, "ok", None
+        
+        ok, msg, _ = await self._tx(fn)
+        if not ok:
+            yield event.plain_result(msg)
+            return
+        
+        # 转发给所有管理员
+        for admin_qq in self.SPONSOR_ADMIN_QQ_LIST:
+            try:
+                # 发送提醒文本
+                admin_msg = (
+                    f"📢 赞助申请提醒\n"
+                    f"申请人QQ：{user_id}\n"
+                    f"申请时间：{datetime.now(TZ).strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"请使用以下指令处理：\n"
+                    f"/赞助通过 {user_id} [积分数量]\n"
+                    f"/赞助拒绝 {user_id} [理由]"
+                )
+                await self.context.send_msg(_MessageType.FRIEND_MESSAGE, admin_qq, admin_msg)
+                
+                # 转发截图
+                await self.context.send_msg(_MessageType.FRIEND_MESSAGE, admin_qq, reply_msg.message)
+            except Exception as e:
+                self.context.logger.warning(f"转发赞助申请给管理员 {admin_qq} 失败：{e}")
+        
+        # 群聊@管理员（如有配置）
+        if self.SPONSOR_GROUP_ID:
+            try:
+                ats = "".join([f"[CQ:at,qq={qq}]" for qq in self.SPONSOR_ADMIN_QQ_LIST])
+                group_msg = f"📢 赞助申请提醒\n申请人：{user_id}\n请管理员及时处理 {ats}"
+                await self.context.send_msg(_MessageType.GROUP_MESSAGE, self.SPONSOR_GROUP_ID, group_msg)
+            except Exception as e:
+                self.context.logger.warning(f"群聊提醒管理员失败：{e}")
+        
+        yield event.plain_result("✅ 已收到您的赞助申请，截图已转发给管理员\n⏳ 请耐心等待审核")
+
+    @filter.command("赞助通过")
+    async def sponsor_approve(self, event: AstrMessageEvent):
+        """管理员审核通过"""
+        admin_id = str(event.get_sender_id())
+        
+        if admin_id not in self.SPONSOR_ADMIN_QQ_LIST:
+            yield event.plain_result("❌ 权限不足，仅管理员可执行")
+            return
+        
+        args = event.get_message_str().replace("/赞助通过", "").strip().split()
+        if len(args) < 2:
+            yield event.plain_result("❌ 格式错误：/赞助通过 [QQ号] [积分数量]")
+            return
+        
+        target_id = args[0].strip()
+        try:
+            points = int(args[1])
+        except ValueError:
+            yield event.plain_result("❌ 积分数量必须是数字")
+            return
+        
+        if points <= 0:
+            yield event.plain_result("❌ 积分数量必须大于0")
+            return
+        
+        async def fn(session):
+            # 检查是否有pending申请
+            pending = (await session.execute(
+                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending'"),
+                {"u": target_id}
+            )).first()
+            
+            if not pending:
+                raise _BizError(f"❌ 用户 {target_id} 没有待审核的赞助申请")
+            
+            # 更新申请状态
+            await session.execute(
+                text("UPDATE sponsor_requests SET status='approved', admin_id=:a, handle_time=:t, amount=:p WHERE user_id=:u AND status='pending'"),
+                {"a": admin_id, "t": time.time(), "p": points, "u": target_id}
+            )
+            
+            # 发放积分
+            await self._ensure_user(session, target_id)
+            await self._add_points(session, target_id, points, "sponsor")
+            new_balance = await self._balance(session, target_id)
+            
+            return True, new_balance, None
+        
+        ok, new_balance, _ = await self._tx(fn)
+        if not ok:
+            yield event.plain_result(new_balance)
+            return
+        
+        # 通知用户
+        try:
+            user_msg = f"✅ 您的赞助申请已通过！+{points}积分已到账\n当前余额：{new_balance}积分"
+            await self.context.send_msg(_MessageType.FRIEND_MESSAGE, target_id, user_msg)
+        except Exception as e:
+            self.context.logger.warning(f"通知用户 {target_id} 失败：{e}")
+        
+        yield event.plain_result(f"✅ 已为 {target_id} 增加 {points} 积分")
+
+    @filter.command("赞助拒绝")
+    async def sponsor_reject(self, event: AstrMessageEvent):
+        """管理员拒绝申请"""
+        admin_id = str(event.get_sender_id())
+        
+        if admin_id not in self.SPONSOR_ADMIN_QQ_LIST:
+            yield event.plain_result("❌ 权限不足，仅管理员可执行")
+            return
+        
+        args = event.get_message_str().replace("/赞助拒绝", "").strip().split(maxsplit=1)
+        if len(args) < 1:
+            yield event.plain_result("❌ 格式错误：/赞助拒绝 [QQ号] [理由]")
+            return
+        
+        target_id = args[0].strip()
+        reason = args[1].strip() if len(args) > 1 else "未提供理由"
+        
+        async def fn(session):
+            # 检查是否有pending申请
+            pending = (await session.execute(
+                text("SELECT id FROM sponsor_requests WHERE user_id=:u AND status='pending'"),
+                {"u": target_id}
+            )).first()
+            
+            if not pending:
+                raise _BizError(f"❌ 用户 {target_id} 没有待审核的赞助申请")
+            
+            # 更新申请状态
+            await session.execute(
+                text("UPDATE sponsor_requests SET status='rejected', admin_id=:a, handle_time=:t, remark=:r WHERE user_id=:u AND status='pending'"),
+                {"a": admin_id, "t": time.time(), "r": reason, "u": target_id}
+            )
+            
+            return True, "ok", None
+        
+        ok, msg, _ = await self._tx(fn)
+        if not ok:
+            yield event.plain_result(msg)
+            return
+        
+        # 通知用户
+        try:
+            user_msg = f"❌ 您的赞助申请被拒绝\n理由：{reason}\n如有疑问请联系管理员"
+            await self.context.send_msg(_MessageType.FRIEND_MESSAGE, target_id, user_msg)
+        except Exception as e:
+            self.context.logger.warning(f"通知用户 {target_id} 失败：{e}")
+        
+        yield event.plain_result(f"❌ 已拒绝 {target_id} 的赞助申请")
+
+    @filter.command("赞助列表")
+    async def sponsor_list(self, event: AstrMessageEvent):
+        """查看待审核申请（管理员）"""
+        admin_id = str(event.get_sender_id())
+        
+        if admin_id not in self.SPONSOR_ADMIN_QQ_LIST:
+            yield event.plain_result("❌ 权限不足，仅管理员可执行")
+            return
+        
+        async def fn(session):
+            rows = (await session.execute(
+                text("SELECT user_id, create_time FROM sponsor_requests WHERE status='pending' ORDER BY create_time DESC LIMIT 20")
+            )).fetchall()
+            
+            return True, rows, None
+        
+        ok, rows, _ = await self._tx(fn)
+        
+        if not rows:
+            yield event.plain_result("当前没有待审核的赞助申请")
+            return
+        
+        lines = ["📋 待审核赞助申请："]
+        for user_id, create_time in rows:
+            time_str = datetime.fromtimestamp(float(create_time), TZ).strftime("%Y-%m-%d %H:%M:%S")
+            lines.append(f"• {user_id} - {time_str}")
         
         yield event.plain_result("\n".join(lines))
 
