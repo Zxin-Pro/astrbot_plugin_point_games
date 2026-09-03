@@ -3209,16 +3209,32 @@ class PointGamesPlugin(Star):
             )
             return
         
-        # 取第一个文件路径；相对路径相对于当前插件目录解析。
+        # 取第一个文件路径。AstrBot 4.27 的 file 文件保存在 data/plugin_data/point_games，
+        # 兼容旧版保存在插件目录的情况。
         sponsor_rel_path = str(sponsor_qrcode_list[0]).strip()
         plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        sponsor_abs_path = sponsor_rel_path if os.path.isabs(sponsor_rel_path) else os.path.join(plugin_dir, sponsor_rel_path)
-        
-        if not os.path.isfile(sponsor_abs_path):
-            self.logger.error(f"收款码文件不存在: {sponsor_abs_path}")
+        candidates = []
+        if os.path.isabs(sponsor_rel_path):
+            candidates.append(sponsor_rel_path)
+        else:
+            candidates.append(os.path.join(plugin_dir, sponsor_rel_path))
+        try:
+            from astrbot.core.utils.astrbot_path import get_astrbot_plugin_data_path
+            candidates.append(os.path.join(
+                get_astrbot_plugin_data_path(), "point_games", sponsor_rel_path
+            ))
+        except Exception:
+            pass
+        # 兼容配置里残留的旧 plugins/point_games 绝对路径。
+        if "/data/plugins/point_games/" in sponsor_rel_path:
+            candidates.append(sponsor_rel_path.replace(
+                "/data/plugins/point_games/", "/data/plugin_data/point_games/"
+            ))
+        sponsor_abs_path = next((p for p in candidates if os.path.isfile(p)), "")
+        if not sponsor_abs_path:
+            self.logger.error(f"收款码文件不存在，尝试路径: {candidates}")
             yield event.plain_result(
-                f"❌ 收款码文件不存在\n\n"
-                f"💡 请在插件配置页重新上传收款码图片"
+                "❌ 收款码文件不存在，请在配置页删除旧文件后重新上传并保存"
             )
             return
         
