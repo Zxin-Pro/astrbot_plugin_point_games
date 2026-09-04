@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.15.6
+作者：Zxin_Pro    版本：2.15.7
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -594,6 +594,15 @@ class PointGamesPlugin(Star):
         )""",
         "CREATE INDEX IF NOT EXISTS idx_sponsor_user ON sponsor_requests(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_sponsor_status ON sponsor_requests(status)",
+        # ---------- 群活跃统计（落库，插件重启/更新后可恢复） ----------
+        """CREATE TABLE IF NOT EXISTS activity_stats (
+            group_key TEXT NOT NULL,
+            date TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            user_name TEXT DEFAULT '',
+            count INTEGER DEFAULT 0,
+            PRIMARY KEY(group_key, date, user_id)
+        )""",
         # ---------- 钓鱼系统 ----------
         """CREATE TABLE IF NOT EXISTS fishing_rods (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1185,6 +1194,8 @@ class PointGamesPlugin(Star):
     async def initialize(self):
         """插件激活时：建表、启动定时任务、注册 WebUI 接口"""
         await self._init_db_tables()
+        # 恢复今日群活跃统计（插件更新/重启不丢数）
+        await self._load_activity_counts()
         # 2. 定时任务
         self._scheduler = AsyncIOScheduler(timezone=TZ)
         self._scheduler.add_job(
@@ -2812,6 +2823,41 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能七：群活跃奖励
     # ============================================================
+    async def _load_activity_counts(self):
+        """启动时从数据库恢复今日发言统计，避免插件更新后活跃计数清零。"""
+        today = datetime.now(TZ).date().isoformat()
+        try:
+            async with self._session() as session:
+                rows = (await session.execute(text(
+                    "SELECT group_key, user_id, user_name, count FROM activity_stats "
+                    "WHERE date=:d"
+                ), {"d": today})).all()
+            for gk, uid, name, cnt in rows:
+                bucket = self._activity_counts.setdefault(
+                    str(gk), {"date": today, "users": {}}
+                )
+                bucket["users"][str(uid)] = {
+                    "name": str(name or uid), "count": int(cnt or 0)
+                }
+            if rows:
+                self.logger.info(f"已恢复 {len(rows)} 条今日群活跃统计")
+        except Exception:
+            self.logger.exception("恢复群活跃统计失败")
+
+    async def _persist_activity(self, key: str, today: str, user_id: str, user_name: str):
+        """把一次发言计数落库（失败不影响消息处理）。"""
+        try:
+            async with self._session() as session:
+                async with session.begin():
+                    await session.execute(text(
+                        "INSERT INTO activity_stats(group_key, date, user_id, user_name, count) "
+                        "VALUES(:k, :d, :u, :n, 1) "
+                        "ON CONFLICT(group_key, date, user_id) DO UPDATE SET "
+                        "count=activity_stats.count+1, user_name=:n"
+                    ), {"k": key, "d": today, "u": user_id, "n": user_name})
+        except Exception:
+            self.logger.exception("群活跃统计落库失败")
+
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     async def count_group_activity(self, event: AstrMessageEvent):
         """统计群聊发言，系统消息也按一条消息计数。"""
@@ -2830,12 +2876,23 @@ class PointGamesPlugin(Star):
             entry = bucket["users"].setdefault(user_id, {"name": user_name, "count": 0})
             entry["name"] = user_name or entry["name"]
             entry["count"] += 1
+        # 写透到数据库，插件重启/更新后可恢复
+        await self._persist_activity(key, today, user_id, user_name)
 
     async def _settle_activity_rewards(self):
         """每天22:00按群结算发言前三名并清空统计。"""
         if not self.feature_flags.get("enable_activity", True):
             return  # 配置页关闭群活跃奖励，跳过结算
         today = datetime.now(TZ).date().isoformat()
+        # 顺手清理过期日期的统计
+        try:
+            async with self._session() as session:
+                async with session.begin():
+                    await session.execute(text(
+                        "DELETE FROM activity_stats WHERE date < :d"
+                    ), {"d": today})
+        except Exception:
+            self.logger.exception("清理过期群活跃统计失败")
         async with self._activity_lock:
             snapshots = [(key, bucket) for key, bucket in self._activity_counts.items()
                          if bucket.get("date") == today and bucket.get("users")]
@@ -2863,6 +2920,15 @@ class PointGamesPlugin(Star):
                     current = self._activity_counts.get(key)
                     if current is bucket:
                         current["users"] = {}
+                # 同步清理数据库里该群今日统计
+                try:
+                    async with self._session() as session:
+                        async with session.begin():
+                            await session.execute(text(
+                                "DELETE FROM activity_stats WHERE group_key=:k AND date=:d"
+                            ), {"k": key, "d": today})
+                except Exception:
+                    self.logger.exception("清理群活跃统计失败")
 
     # ============================================================
     #  功能八：管理指令 / 签到 / 排行
