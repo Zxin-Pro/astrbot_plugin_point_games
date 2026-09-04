@@ -8,6 +8,7 @@
   "enable_math": {"description": "启用速算挑战", "type": "bool", "default": true},
   "enable_card": {"description": "启用抽卡系统", "type": "bool", "default": true},
   "enable_fishing": {"description": "启用钓鱼系统", "type": "bool", "default": true},
+  "enable_transfer": {"description": "启用积分转账", "type": "bool", "default": true},
   "enable_sign_in": {"description": "启用每日签到", "type": "bool", "default": true},
   "enable_ranking": {"description": "启用积分查询和排行榜", "type": "bool", "default": true},
   "group_mode": {
@@ -15,6 +16,12 @@
     "type": "string",
     "default": "whitelist",
     "hint": "whitelist=所有群默认关闭；blacklist=所有群默认开启，关闭的群除外"
+  },
+  "fee_receiver": {
+    "description": "转账手续费接收QQ",
+    "type": "string",
+    "default": "",
+    "hint": "转账手续费流入此账户；留空时自动使用管理员QQ列表中的第一个"
   },
   "spin_default_cost": {"description": "转盘默认消耗积分", "type": "int", "default": 10},
   "spin_weight_0": {"description": "转盘返还0倍的概率权重", "type": "int", "default": 40},

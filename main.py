@@ -128,7 +128,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -252,6 +252,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/钓鱼排行", "钓鱼系统：累计卖鱼收入前十名"),
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
     ("/兑换礼品", "花费10000积分兑换小礼品一份（兑换后联系管理员领取）"),
+    ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
     ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
@@ -348,6 +349,13 @@ class PointGamesPlugin(Star):
     UC_DEFAULT_PLAYERS = 6
     # 消费达标提醒
     SPEND_REWARD_THRESHOLD = 10000  # 消费达标阈值
+    # 积分转账
+    TRANSFER_FEE_RATE = 0.1         # 手续费比例：10%（向下取整）
+    TRANSFER_MIN = 1                # 单次转账最低积分
+    TRANSFER_MAX = 5000             # 单次转账最高积分
+    TRANSFER_DAILY_LIMIT = 10       # 每日转账次数上限
+    TRANSFER_COOLDOWN = 10          # 转账冷却（秒）
+    FEE_RECEIVER = ""               # 手续费接收账户QQ（配置页 fee_receiver，默认第一个管理员）
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -404,6 +412,7 @@ class PointGamesPlugin(Star):
         "enable_math": True,
         "enable_card": True,
         "enable_fishing": True,
+        "enable_transfer": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -436,6 +445,7 @@ class PointGamesPlugin(Star):
         "钓鱼排行": ("enable_fishing", "钓鱼系统"),
         "钓鱼统计": ("enable_fishing", "钓鱼系统"),
         "兑换礼品": ("enable_ranking", "消费兑换"),
+        "转账": ("enable_transfer", "积分转账"),
     }
 
     # ---------- 表结构定义 ----------
@@ -630,6 +640,15 @@ class PointGamesPlugin(Star):
             today_count INTEGER DEFAULT 0,
             today_date TEXT
         )""",
+        """CREATE TABLE IF NOT EXISTS transfer_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_user TEXT,
+            to_user TEXT,
+            amount INTEGER,
+            fee INTEGER,
+            total INTEGER,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -760,6 +779,15 @@ class PointGamesPlugin(Star):
         elif not isinstance(raw, (list, tuple, set)):
             raw = []
         self.ADMIN_QQ = {str(x).strip() for x in raw if str(x).strip()}
+        # 记录配置页中的第一个管理员，作为手续费账户的默认值
+        first_admin = ""
+        if isinstance(raw, list) and raw:
+            first_admin = str(raw[0]).strip()
+        elif isinstance(raw, str) and raw.strip():
+            first_admin = raw.split(",")[0].strip()
+        # 积分转账手续费接收账户：优先配置页 fee_receiver，缺省回落到第一个管理员
+        fee_receiver = str(config.get("fee_receiver", "") or "").strip()
+        self.FEE_RECEIVER = fee_receiver or first_admin
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -2619,6 +2647,162 @@ class PointGamesPlugin(Star):
             yield event.chain_result(data)
         else:
             yield event.plain_result(msg)
+
+    # ============================================================
+    #  功能：积分转账
+    # ============================================================
+    def _parse_transfer_args(self, event: AstrMessageEvent, args: list[str]):
+        """解析转账参数，返回 (目标QQ, 金额, 是否显式@了人)。
+
+        兼容两种目标写法：群聊 @张三（At 组件）和纯 QQ 号（私聊/群聊均可）。
+        金额取参数中最后一个纯数字；目标取 At 组件优先，其次第一个 5 位以上数字。
+        """
+        at_qq = self._extract_at(event)
+        nums = [a for a in args if a.isdigit()]
+        amount = int(nums[-1]) if nums else None
+        target = at_qq
+        if not target and len(nums) >= 2:
+            # 没有 At 组件时，第一个数字视为目标 QQ（金额取最后一个）
+            target = nums[0]
+        explicit_at = bool(at_qq)
+        return target, amount, explicit_at
+
+    @filter.command("转账")
+    async def transfer_points(self, event: AstrMessageEvent):
+        """/转账 @群友 或 QQ号 [积分] —— 转账积分给其他玩家，收取10%手续费。"""
+        is_private = event.is_private_chat()
+        args = self._strip_command(event, "转账").split()
+        target, amount, explicit_at = self._parse_transfer_args(event, args)
+
+        # 目标校验：群聊必须 @，私聊必须给 QQ 号
+        if not target:
+            if is_private:
+                yield event.plain_result("❌ 请提供目标用户QQ号，如：/转账 123456 50")
+            else:
+                yield event.plain_result("❌ 请@要转账的群友，如：/转账 @张三 50")
+            return
+        sender = str(event.get_sender_id()).strip()
+        if target == sender:
+            yield event.plain_result("❌ 不能转账给自己！")
+            return
+        # 金额校验：1-5000 积分
+        if amount is None or not (self.TRANSFER_MIN <= amount <= self.TRANSFER_MAX):
+            yield event.plain_result("❌ 请输入有效的转账金额（1-5000积分）")
+            return
+
+        # 群聊时顺带查一下目标昵称（查不到也不阻断，兜底用 QQ 号）
+        target_name = ""
+        if not is_private:
+            member = await self._get_group_member(event, target)
+            if member:
+                target_name = str(getattr(member, "nickname", "") or "").strip()
+
+        fee = int(amount * self.TRANSFER_FEE_RATE)  # 手续费：10% 向下取整
+        total = amount + fee
+
+        async def fn(session):
+            # 冷却检查：查本表最近一次转账时间（独立于全局指令冷却，互不影响）
+            row = (await session.execute(text(
+                "SELECT MAX(create_time) FROM transfer_records WHERE from_user=:u"
+            ), {"u": sender})).first()
+            if row and row[0] is not None:
+                wait = self.TRANSFER_COOLDOWN - (time.time() - float(row[0]))
+                if wait > 0:
+                    raise _BizError(f"⏳ 操作太快，请等待 {int(wait) + 1} 秒后再试")
+            # 每日次数检查：按北京时间当天 0 点起统计
+            midnight = datetime.now(TZ).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ).timestamp()
+            row = (await session.execute(text(
+                "SELECT COUNT(*) FROM transfer_records "
+                "WHERE from_user=:u AND create_time>=:t"
+            ), {"u": sender, "t": midnight})).first()
+            used = int(row[0]) if row else 0
+            if used >= self.TRANSFER_DAILY_LIMIT:
+                raise _BizError("❌ 今日转账次数已达上限（10次）")
+            # 目标用户校验：私聊要求对方已在积分系统注册；群聊里对方是本群成员则自动建档
+            row = (await session.execute(text(
+                "SELECT user_name FROM users WHERE user_id=:u"
+            ), {"u": target})).first()
+            if not row:
+                if is_private:
+                    raise _BizError("❌ 目标用户不存在")
+                if not target_name:
+                    raise _BizError("❌ 目标用户不存在")
+                await self._ensure_user(session, target, target_name)
+            elif not target_name:
+                target_name = str(row[0] or "").strip()
+            # 余额校验：必须 >= 转账金额 + 手续费
+            balance = await self._balance(session, sender)
+            if balance < total:
+                raise _BizError(
+                    f"❌ 积分不足！本次转账需扣除 {total} 积分"
+                    f"（转账{amount}+手续费{fee}），当前余额：{balance}积分"
+                )
+            # 转出方扣除 转账金额+手续费，收入记 0、支出记 total
+            await self._add_points(session, sender, -total, "transfer_out",
+                                   earned=0, spent=total)
+            # 接收方到账 转账金额
+            await self._add_points(session, target, amount, "transfer_in",
+                                   earned=amount, spent=0)
+            # 手续费流入管理员账户；未配置 fee_receiver 时直接回收
+            if fee > 0:
+                if self.FEE_RECEIVER:
+                    await self._add_points(session, self.FEE_RECEIVER, fee, "fee_income",
+                                           earned=fee, spent=0)
+                    fee_note = f"💸 手续费：{fee}积分（10%已转入管理员账户）\n"
+                else:
+                    fee_note = f"💸 手续费：{fee}积分\n"
+            else:
+                fee_note = ""
+            # 写转账记录（用北京时间时间戳，便于冷却/每日次数统计）
+            await session.execute(text(
+                "INSERT INTO transfer_records(from_user, to_user, amount, fee, total, create_time) "
+                "VALUES(:f, :t, :a, :fee, :tot, :time)"
+            ), {"f": sender, "t": target, "a": amount, "fee": fee,
+                "tot": total, "time": time.time()})
+            new_balance = await self._balance(session, sender)
+            remaining = self.TRANSFER_DAILY_LIMIT - used - 1
+            should_remind = await self._check_spend_reward(session, sender,
+                                                           event.get_group_id())
+            display_name = target_name or target
+            if is_private:
+                msg = (f"✅ 转账成功！用户 {display_name} 收到 {amount}积分\n"
+                       f"{fee_note}"
+                       f"你实际扣除：{total}积分\n"
+                       f"当前余额：{new_balance}积分\n"
+                       f"今日剩余转账次数：{remaining}次")
+                chain = None
+            else:
+                # 群聊用真实 CQ 码（At 组件）@目标用户
+                msg = (f"✅ 转账成功！@{display_name} 收到 {amount}积分\n"
+                       f"{fee_note}"
+                       f"你实际扣除：{total}积分\n"
+                       f"当前余额：{new_balance}积分\n"
+                       f"今日剩余转账次数：{remaining}次")
+                chain = [Plain("✅ 转账成功！"), At(qq=target),
+                         Plain(f" 收到 {amount}积分\n{fee_note}"
+                               f"你实际扣除：{total}积分\n"
+                               f"当前余额：{new_balance}积分\n"
+                               f"今日剩余转账次数：{remaining}次")]
+            return True, msg, (chain, should_remind)
+
+        ok, msg, data = await self._tx(fn)
+        if is_private:
+            yield event.plain_result(msg)
+        elif ok and data and data[0]:
+            yield event.chain_result(data[0])
+        else:
+            yield event.plain_result(msg)
+        # 事务外发送消费达标提醒（与其它玩法保持一致）
+        if ok and data and data[1]:
+            try:
+                yield event.plain_result(
+                    f"🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                    f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
+                )
+            except Exception:
+                pass
 
     # ============================================================
     #  功能七：群活跃奖励
