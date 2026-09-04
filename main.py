@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.14.1
+作者：Zxin_Pro    版本：2.15.0
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -128,7 +128,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -180,8 +180,8 @@ FISH_TABLE: dict[str, tuple[float, list[tuple[str, int]]]] = {
     "终极神话": (0.005, [
         ("东方青龙", 3000), ("玄武神龟", 2500), ("鲲鹏之祖", 4000),
     ]),
-    "至高传说": (0.0002, [
-        ("烛心", 10000), ("闲鱼", 10000),
+    "至高传说": (0.0003, [
+        ("烛心", 10000), ("闲鱼", 10000), ("小洛", 10000),
     ]),
 }
 
@@ -218,30 +218,30 @@ FISHING_EVENTS: list[tuple[str, float]] = [
 #   1. 在下方 COMMAND_HELP 加一行 (指令, 说明)
 #   2. 在类里新增一个 @filter.command 处理器 + 对应的内部方法
 #   3. 需要定时任务就在 initialize() 里 add_job
-#   介绍指令 /积分 帮助 会自动展示，无需改动其他代码
+#   介绍指令 /帮助 会自动展示，无需改动其他代码
 # ============================================================
 COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分", "查看自己的积分、收入、支出与签到信息"),
-    ("/积分 帮助", "玩法介绍与指令列表"),
-    ("/积分 掷骰 @群友", "与群友比大小，胜者+10，平局各+5"),
+    ("/帮助", "玩法介绍与指令列表"),
+    ("/掷骰 @群友", "与群友比大小，胜者+10，平局各+5"),
     ("群活跃奖励", "每日结算群内发言前三名，奖励50/30/10积分"),
-    ("/积分 转盘 [积分]", "幸运转盘，最高5倍返还"),
-    ("/积分 闯关", "答题闯关，答对得分答错扣分"),
-    ("/积分 攻击", "消耗5积分打BOSS，伤害100-500"),
-    ("/积分 BOSS状态", "查看BOSS血量与今日战况"),
-    ("/积分 BOSS排行", "今日伤害前十"),
-    ("/积分 买彩票 [积分]", "每日20:00开奖，每期限购10注"),
-    ("/积分 彩票奖池", "查看当前奖池与参与人数"),
-    ("/积分 卧底开始 [人数]", "谁是卧底（群聊，需报名）"),
-    ("/积分 加入卧底", "报名卧底游戏"),
-    ("/积分 投票 @某人", "投票阶段投出卧底"),
-    ("/积分 卧底结束", "管理员强制结束"),
-    ("/积分 炸弹开始", "数字炸弹（1-100猜数字，猜中者-30，其他人+5）"),
-    ("/积分 猜 [数字]", "炸弹游戏中猜数字"),
-    ("/积分 炸弹结束", "强制结束炸弹游戏（仅管理员）"),
-    ("/积分 速算", "速算挑战（答对得5/15/30积分，每天10次）"),
-    ("/积分 抽卡", "消耗10积分抽卡（N/R/SR/SSR）"),
-    ("/积分 图鉴", "查看已收集的卡牌和进度"),
+    ("/转盘 [积分]", "幸运转盘，最高5倍返还"),
+    ("/闯关", "答题闯关，答对得分答错扣分"),
+    ("/攻击", "消耗5积分打BOSS，伤害100-500"),
+    ("/BOSS状态", "查看BOSS血量与今日战况"),
+    ("/BOSS排行", "今日伤害前十"),
+    ("/买彩票 [积分]", "每日20:00开奖，每期限购10注"),
+    ("/彩票奖池", "查看当前奖池与参与人数"),
+    ("/卧底开始 [人数]", "谁是卧底（群聊，需报名）"),
+    ("/加入卧底", "报名卧底游戏"),
+    ("/投票 @某人", "投票阶段投出卧底"),
+    ("/卧底结束", "管理员强制结束"),
+    ("/炸弹开始", "数字炸弹（1-100猜数字，猜中者-30，其他人+5）"),
+    ("/猜 [数字]", "炸弹游戏中猜数字"),
+    ("/炸弹结束", "强制结束炸弹游戏（仅管理员）"),
+    ("/速算", "速算挑战（答对得5/15/30积分，每天10次）"),
+    ("/抽卡", "消耗10积分抽卡（N/R/SR/SSR）"),
+    ("/图鉴", "查看已收集的卡牌和进度"),
     ("/买鱼竿", "钓鱼系统：200积分购买鱼竿（最多5根）"),
     ("/买鱼饵 [数量]", "钓鱼系统：10积分/个购买鱼饵"),
     ("/挂机钓鱼 [编号]", "钓鱼系统：鱼竿挂机，每30分钟判定一次"),
@@ -259,15 +259,15 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/赞助拒绝 [QQ] [理由]", "管理员拒绝申请"),
     ("/赞助列表", "查看待审核申请（管理员）"),
     ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到"),
-    ("/积分 查询", "查看自己的积分、收入、支出与签到信息"),
-    ("/积分 查积分 @玩家", "查询其他玩家的积分信息"),
-    ("/积分 排行", "全服积分排行榜"),
-    ("/积分 加积分 /减积分", "调整积分（仅配置页管理员QQ）"),
-    ("/积分 清除数据 @玩家", "清除指定玩家账户和流水（仅管理员）"),
-    ("/积分 初始化 @玩家", "清除指定玩家账户和流水（仅管理员）"),
-    ("/积分 本群玩法 开|关", "群管理员开关本群玩法"),
-    ("/积分 玩法模式 白名单|黑名单", "全局模式切换"),
-    ("/积分 本群状态", "查看本群与全局状态"),
+    ("/查询", "查看自己的积分、收入、支出与签到信息"),
+    ("/查积分 @玩家", "查询其他玩家的积分信息"),
+    ("/排行", "全服积分排行榜"),
+    ("/加积分 /减积分", "调整积分（仅配置页管理员QQ）"),
+    ("/清除数据 @玩家", "清除指定玩家账户和流水（仅管理员）"),
+    ("/初始化 @玩家", "清除指定玩家账户和流水（仅管理员）"),
+    ("/本群玩法 开|关", "群管理员开关本群玩法"),
+    ("/玩法模式 白名单|黑名单", "全局模式切换"),
+    ("/本群状态", "查看本群与全局状态"),
 ]
 
 
@@ -280,7 +280,7 @@ class _BizError(Exception):
 
 
 class _ExactPointsCommandFilter(CustomFilter):
-    """只匹配单独的 /积分，避免抢占 /积分 子指令。"""
+    """只匹配单独的 /积分，避免抢占 /子指令。"""
 
     def filter(self, event: AstrMessageEvent, cfg) -> bool:
         try:
@@ -297,7 +297,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
-    """积分游戏：发送 /积分 帮助 查看全部玩法说明，签到触发每日座驾"""
+    """积分游戏：发送 /帮助 查看全部玩法说明，签到触发每日座驾"""
 
     # ---------- 数字常量（可自行调整） ----------
     # 幸运转盘概率表：[区间下限, 区间上限, 返还比例, 表情]
@@ -356,6 +356,7 @@ class PointGamesPlugin(Star):
     BOMB_MIN = 1                    # 炸弹范围最小值
     BOMB_MAX = 100                  # 炸弹范围最大值
     BOMB_PENALTY = 30               # 踩到炸弹扣分
+    BOMB_MIN_BALANCE = 30           # 玩炸弹的积分门槛（低于不给玩）
     BOMB_REWARD = 5                 # 其他参与者奖励
     # 速算挑战
     MATH_TIMEOUT = 15               # 速算限时（秒）
@@ -1452,18 +1453,18 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  群黑白名单指令
     # ============================================================
-    @filter.command("积分 本群玩法")
+    @filter.command("本群玩法")
     @filter.permission_type(PermissionType.ADMIN)
     async def group_toggle(self, event: AstrMessageEvent):
-        """/积分 本群玩法 开|关 —— 群管理员开启/关闭本群积分游戏"""
+        """/本群玩法 开|关 —— 群管理员开启/关闭本群积分游戏"""
         if event.is_private_chat():
             yield event.plain_result("本群玩法只能在群里设置喵~")
             return
-        args = self._strip_command(event, "积分 本群玩法")
+        args = self._strip_command(event, "本群玩法")
         # 从参数中提取动作词（兼容 at 尾巴、多余文本、全角空格），取最后一个
         words = re.findall(r"开|关|开启|关闭|打开|on|off|1|0", args.lower())
         if not words:
-            yield event.plain_result("用法：/积分 本群玩法 开 或 /积分 本群玩法 关喵~")
+            yield event.plain_result("用法：/本群玩法 开 或 /本群玩法 关喵~")
             return
         action = words[-1]
         group_id = event.get_group_id()
@@ -1483,17 +1484,17 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 玩法模式")
+    @filter.command("玩法模式")
     @filter.permission_type(PermissionType.ADMIN)
     async def mode_set(self, event: AstrMessageEvent):
-        """/积分 玩法模式 白名单|黑名单 —— 全局模式（管理员）"""
-        mode = self._strip_command(event, "积分 玩法模式").lower()
+        """/玩法模式 白名单|黑名单 —— 全局模式（管理员）"""
+        mode = self._strip_command(event, "玩法模式").lower()
         if mode in ("白名单", "whitelist"):
             real = "whitelist"
         elif mode in ("黑名单", "blacklist"):
             real = "blacklist"
         else:
-            yield event.plain_result("用法：/积分 玩法模式 白名单 或 /积分 玩法模式 黑名单喵~")
+            yield event.plain_result("用法：/玩法模式 白名单 或 /玩法模式 黑名单喵~")
             return
         desc = "白名单（默认全关，仅开启的群可玩）" if real == "whitelist" else "黑名单（默认全开，拉黑的群不可玩）"
 
@@ -1504,7 +1505,7 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 本群状态")
+    @filter.command("本群状态")
     async def group_status(self, event: AstrMessageEvent):
         """/本群状态 —— 查看本群玩法状态与全局模式"""
         group_id = event.get_group_id()
@@ -1516,7 +1517,7 @@ class PointGamesPlugin(Star):
             allowed, mode, enabled = await self._group_allowed(session, group_id)
             mode_txt = "白名单" if mode == "whitelist" else "黑名单"
             status_txt = "✅ 已开启" if allowed else "🚫 已关闭/拉黑"
-            return True, f"全局模式：{mode_txt}\n本群状态：{status_txt}\n（管理员可用 /积分 本群玩法 开|关 调整）", None
+            return True, f"全局模式：{mode_txt}\n本群状态：{status_txt}\n（管理员可用 /本群玩法 开|关 调整）", None
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
@@ -1533,46 +1534,50 @@ class PointGamesPlugin(Star):
         async with self._session() as session:
             allowed, mode, enabled = await self._group_allowed(session, group_id)
         if not allowed:
-            return False, "本群未开启积分游戏喵~ 管理员发送 /积分 本群玩法 开 即可开启（私聊不受限制）"
+            return False, "本群未开启积分游戏喵~ 管理员发送 /本群玩法 开 即可开启（私聊不受限制）"
         return True, None
 
     # ============================================================
     #  指令入口：积分游戏介绍
     # ============================================================
-    @filter.command("积分 帮助")
+    @filter.command("帮助")
     async def intro(self, event: AstrMessageEvent):
-        """/积分 帮助 —— 玩法介绍与指令列表"""
+        """/帮助 —— 玩法介绍与指令列表"""
         yield event.plain_result(self._help_text())
 
     def _help_text(self) -> str:
-        """构建精简的 /积分 帮助说明。"""
+        """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v2.11.3",
-            "所有玩法均以 /积分 开头",
-            "查询：/积分",
-            "玩法：转盘 [积分]｜闯关｜攻击｜BOSS状态｜BOSS排行",
-            "彩票：买彩票 [积分]｜彩票奖池",
-            "卧底：卧底开始 [人数]｜加入卧底｜投票 @玩家｜卧底结束",
-            "签到：群发 签到 / jrzj / 今日座驾｜排行：/积分 排行",
-            "管理：加积分 @玩家 数量｜减积分 @玩家 数量",
-            "　　　清除数据 @玩家｜初始化 @玩家",
-            "群管理：本群玩法 开|关｜玩法模式 白名单|黑名单｜本群状态",
-            "帮助：/积分 帮助",
+            "🎮 积分游戏 v2.15.0",
+            "所有指令直接发送，无需 /积分 前缀",
+            "查询：/积分 或 /查询",
+            "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
+            "彩票：/买彩票 [积分]｜/彩票奖池",
+            "卧底：/卧底开始 [人数]｜/加入卧底｜/投票 @玩家｜/卧底结束",
+            "炸弹：/炸弹开始｜/猜 [数字]（余额需满30）",
+            "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
+            "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计",
+            "兑换：/兑换礼品（花费10000积分）",
+            "签到：群发 签到 / jrzj / 今日座驾｜排行：/排行",
+            "管理：/加积分 @玩家 数量｜/减积分 @玩家 数量",
+            "　　　/清除数据 @玩家｜/初始化 @玩家",
+            "群管理：/本群玩法 开|关｜/玩法模式 白名单|黑名单｜/本群状态",
+            "帮助：/帮助",
         ])
 
     # ============================================================
     #  功能一：幸运转盘
     # ============================================================
-    @filter.command("积分 转盘")
+    @filter.command("转盘")
     async def spin(self, event: AstrMessageEvent):
-        """/积分 转盘 [积分数量]"""
+        """/转盘 [积分数量]"""
         ok_gate, msg_gate = await self._check_group_gate(event, "转盘")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
         user_id = event.get_sender_id()
         cost = self.SPIN_DEFAULT_COST
-        args = self._strip_command(event, "积分 转盘")
+        args = self._strip_command(event, "转盘")
         if args:
             try:
                 cost = int(args.split()[0])
@@ -1640,7 +1645,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能二：闯关答题
     # ============================================================
-    @filter.command("积分 闯关")
+    @filter.command("闯关")
     async def quiz_start(self, event: AstrMessageEvent):
         """/闯关 —— 开始答题闯关"""
         ok_gate, msg_gate = await self._check_group_gate(event, "闯关")
@@ -1774,7 +1779,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能三：BOSS 战
     # ============================================================
-    @filter.command("积分 攻击")
+    @filter.command("攻击")
     async def boss_attack(self, event: AstrMessageEvent):
         """/攻击 —— 消耗5积分攻击BOSS"""
         ok_gate, msg_gate = await self._check_group_gate(event, "攻击")
@@ -1872,7 +1877,7 @@ class PointGamesPlugin(Star):
                 except Exception:
                     pass
 
-    @filter.command("积分 BOSS状态")
+    @filter.command("BOSS状态")
     async def boss_status(self, event: AstrMessageEvent):
         """/BOSS状态"""
         ok_gate, msg_gate = await self._check_group_gate(event, "BOSS状态")
@@ -1907,7 +1912,7 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 BOSS排行")
+    @filter.command("BOSS排行")
     async def boss_rank(self, event: AstrMessageEvent):
         """/BOSS排行 —— 今日伤害前10"""
         ok_gate, msg_gate = await self._check_group_gate(event, "BOSS排行")
@@ -1943,7 +1948,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能四：大乐透
     # ============================================================
-    @filter.command("积分 买彩票", alias={"积分 彩票"})
+    @filter.command("买彩票", alias={"彩票"})
     async def lottery_buy(self, event: AstrMessageEvent):
         """/买彩票 [积分数量] —— 购买1注随机号码，每人每期限购10注"""
         ok_gate, msg_gate = await self._check_group_gate(event, "买彩票")
@@ -1952,9 +1957,9 @@ class PointGamesPlugin(Star):
             return
         user_id = event.get_sender_id()
         cost = self.LOTTERY_DEFAULT_COST
-        args = self._strip_command(event, "积分 买彩票")
+        args = self._strip_command(event, "买彩票")
         if not args:
-            args = self._strip_command(event, "积分 彩票")
+            args = self._strip_command(event, "彩票")
         if args:
             try:
                 cost = int(args.split()[0])
@@ -2014,7 +2019,7 @@ class PointGamesPlugin(Star):
                 except Exception:
                     pass
 
-    @filter.command("积分 彩票奖池")
+    @filter.command("彩票奖池")
     async def lottery_pool_status(self, event: AstrMessageEvent):
         """/彩票奖池"""
         ok_gate, msg_gate = await self._check_group_gate(event, "彩票奖池")
@@ -2053,7 +2058,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能五：谁是卧底（群聊）
     # ============================================================
-    @filter.command("积分 卧底开始")
+    @filter.command("卧底开始")
     async def uc_start(self, event: AstrMessageEvent):
         """/卧底开始 [人数] —— 发起卧底游戏报名"""
         if event.is_private_chat():
@@ -2067,7 +2072,7 @@ class PointGamesPlugin(Star):
         invoker = event.get_sender_id()
         platform_id = event.get_platform_id()
         target = self.UC_DEFAULT_PLAYERS
-        args = self._strip_command(event, "积分 卧底开始")
+        args = self._strip_command(event, "卧底开始")
         if args:
             try:
                 target = int(args.split()[0])
@@ -2115,7 +2120,7 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 加入卧底")
+    @filter.command("加入卧底")
     async def uc_join(self, event: AstrMessageEvent):
         """/加入卧底 —— 报名卧底游戏"""
         if event.is_private_chat():
@@ -2309,7 +2314,7 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         self._uc_jobs.pop(f"lobby_{group_id}", None)
 
-    @filter.command("积分 投票")
+    @filter.command("投票")
     async def uc_vote(self, event: AstrMessageEvent):
         """/投票 @某人 —— 投票阶段投出卧底"""
         if event.is_private_chat():
@@ -2453,7 +2458,7 @@ class PointGamesPlugin(Star):
                 except Exception:
                     pass
 
-    @filter.command("积分 卧底结束")
+    @filter.command("卧底结束")
     @filter.permission_type(PermissionType.ADMIN)
     async def uc_end(self, event: AstrMessageEvent):
         """/卧底结束 —— 管理员强制结束"""
@@ -2531,7 +2536,7 @@ class PointGamesPlugin(Star):
                 pass
         cmd = command.lstrip("/")
         variants = [command, cmd, "/" + cmd]
-        # 兼容只保留子指令文本的事件对象；实际注册仍只接受 /积分 前缀。
+        # 兼容只保留子指令文本的事件对象；实际注册仍只接受 /前缀。
         if " " in cmd:
             child = cmd.split(" ", 1)[1]
             variants.extend([child, "/" + child])
@@ -2557,9 +2562,9 @@ class PointGamesPlugin(Star):
             "ON CONFLICT(user_id, date) DO UPDATE SET count=dice_records.count+1"
         ), {"u": user_id, "d": today})
 
-    @filter.command("积分 掷骰", alias={"掷骰"})
+    @filter.command("掷骰")
     async def dice_roll(self, event: AstrMessageEvent):
-        """/积分 掷骰 @群友 —— 与群友比大小，每日次数可在配置页调整。"""
+        """/掷骰 @群友 —— 与群友比大小，每日次数可在配置页调整。"""
         if event.is_private_chat():
             yield event.plain_result("掷骰只能在群里玩喵~")
             return
@@ -2570,7 +2575,7 @@ class PointGamesPlugin(Star):
         challenger = str(event.get_sender_id()).strip()
         target = self._extract_at(event)
         if not target:
-            yield event.plain_result("用法：/积分 掷骰 @群友 喵~")
+            yield event.plain_result("用法：/掷骰 @群友 喵~")
             return
         if target == challenger:
             yield event.plain_result("不能和自己掷骰喵~")
@@ -2673,7 +2678,7 @@ class PointGamesPlugin(Star):
     #  功能八：管理指令 / 签到 / 排行
     # ============================================================
     async def _grant_points(self, event: AstrMessageEvent, negative: bool):
-        """/积分 加积分|减积分 @用户 数量（仅配置页管理员QQ可用）"""
+        """/加积分|减积分 @用户 数量（仅配置页管理员QQ可用）"""
         sender = str(event.get_sender_id())
         if sender not in self.ADMIN_QQ:
             yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
@@ -2714,12 +2719,12 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 加积分")
+    @filter.command("加积分")
     async def grant_add(self, event: AstrMessageEvent):
         async for result in self._grant_points(event, negative=False):
             yield result
 
-    @filter.command("积分 减积分", alias={"积分 扣积分"})
+    @filter.command("减积分", alias={"扣积分"})
     async def grant_sub(self, event: AstrMessageEvent):
         async for result in self._grant_points(event, negative=True):
             yield result
@@ -2733,7 +2738,7 @@ class PointGamesPlugin(Star):
         target = self._extract_at(event)
         action = "初始化" if initialize else "清除数据"
         if not target:
-            yield event.plain_result(f"用法：/积分 {action} @玩家 喵~")
+            yield event.plain_result(f"用法：/{action} @玩家 喵~")
             return
 
         async def fn(session):
@@ -2755,12 +2760,12 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 清除数据")
+    @filter.command("清除数据")
     async def clear_user_data(self, event: AstrMessageEvent):
         async for result in self._reset_user_data(event, initialize=False):
             yield result
 
-    @filter.command("积分 初始化")
+    @filter.command("初始化")
     async def initialize_user_data(self, event: AstrMessageEvent):
         async for result in self._reset_user_data(event, initialize=True):
             yield result
@@ -2793,18 +2798,18 @@ class PointGamesPlugin(Star):
     @filter.command("积分")
     @filter.custom_filter(_ExactPointsCommandFilter)
     async def points_root(self, event: AstrMessageEvent):
-        """/积分 —— 查询自己的积分账户"""
+        """/—— 查询自己的积分账户"""
         yield await self._show_points(event)
 
-    @filter.command("积分 查询")
+    @filter.command("查询")
     async def points(self, event: AstrMessageEvent):
-        """/积分 查询 —— 查询自己的积分账户"""
+        """/查询 —— 查询自己的积分账户"""
         yield await self._show_points(event)
 
     async def _query_user_points(self, event: AstrMessageEvent):
         target_id = self._extract_at(event)
         if not target_id:
-            yield event.plain_result("用法：/积分 查积分 @玩家 喵~")
+            yield event.plain_result("用法：/查积分 @玩家 喵~")
             return
 
         async def fn(session):
@@ -2826,13 +2831,13 @@ class PointGamesPlugin(Star):
         _, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
-    @filter.command("积分 查积分", alias={"积分 查"})
+    @filter.command("查积分", alias={"查"})
     async def query_other_points(self, event: AstrMessageEvent):
-        """/积分 查积分 @玩家 —— 查询其他玩家积分"""
+        """/查积分 @玩家 —— 查询其他玩家积分"""
         async for result in self._query_user_points(event):
             yield result
 
-    @filter.command("积分 排行")
+    @filter.command("排行")
     async def rank(self, event: AstrMessageEvent):
         """/排行 —— 全服积分排行榜 TOP10"""
         ok_gate, msg_gate = await self._check_group_gate(event, "排行")
@@ -2866,7 +2871,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能9：数字炸弹
     # ============================================================
-    @filter.command("积分 炸弹开始")
+    @filter.command("炸弹开始")
     async def bomb_start(self, event: AstrMessageEvent):
         """数字炸弹：群内开始游戏"""
         ok_gate, msg_gate = await self._check_group_gate(event, "炸弹开始")
@@ -2882,7 +2887,17 @@ class PointGamesPlugin(Star):
         if group_id in self._bomb_games:
             yield event.plain_result("本群炸弹游戏进行中，请先结束当前游戏喵~")
             return
-        
+
+        # 积分门槛：低于 BOMB_MIN_BALANCE 不给玩（踩雷扣分可能为负）
+        user_id = event.get_sender_id()
+        async with self._session() as session:
+            bal = await self._balance(session, user_id)
+        if bal < self.BOMB_MIN_BALANCE:
+            yield event.plain_result(
+                f"积分不足 {self.BOMB_MIN_BALANCE}，不能玩炸弹喵~（当前积分：{bal}）"
+            )
+            return
+
         target = random.randint(self.BOMB_MIN, self.BOMB_MAX)
         self._bomb_games[group_id] = {
             "target": target,
@@ -2895,10 +2910,10 @@ class PointGamesPlugin(Star):
         yield event.plain_result(
             f"💣 数字炸弹游戏开始！\n"
             f"范围：{self.BOMB_MIN}-{self.BOMB_MAX}\n"
-            f"请发送 /积分 猜 [数字] 进行猜测喵~"
+            f"请发送 /猜 [数字] 进行猜测喵~"
         )
 
-    @filter.command("积分 猜")
+    @filter.command("猜")
     async def bomb_guess(self, event: AstrMessageEvent):
         """数字炸弹：猜数字"""
         ok_gate, msg_gate = await self._check_group_gate(event, "猜")
@@ -2912,47 +2927,64 @@ class PointGamesPlugin(Star):
             return
         
         msg = event.get_message_str().strip()
-        parts = msg.split()
-        if len(parts) < 3:
-            yield event.plain_result("用法：/积分 猜 [数字]")
+        args = self._strip_command(event, "猜")
+        if not args:
+            yield event.plain_result("用法：/猜 [数字]")
             return
-        
+
         try:
-            guess = int(parts[2])
+            guess = int(args.split()[0])
         except ValueError:
             yield event.plain_result("请输入有效的数字喵~")
             return
-        
+
         game = self._bomb_games[group_id]
         user_id = event.get_sender_id()
-        
+
+        # 积分门槛：低于 BOMB_MIN_BALANCE 不给猜（踩雷会扣分）
+        async with self._session() as session:
+            bal = await self._balance(session, user_id)
+        if bal < self.BOMB_MIN_BALANCE:
+            yield event.plain_result(
+                f"积分不足 {self.BOMB_MIN_BALANCE}，不能玩炸弹喵~（当前积分：{bal}）"
+            )
+            return
+
         # 记录参与者
         game["participants"].add(user_id)
-        
+
         if guess < game["min"] or guess > game["max"]:
             yield event.plain_result(f"请在范围 {game['min']}-{game['max']} 内猜测喵~")
             return
-        
+
         # 猜中炸弹
         if guess == game["target"]:
             participants = list(game["participants"])
             participants.remove(user_id)  # 移除踩雷者
-            
+
             async def fn(session):
                 # 扣除踩雷者积分
                 await self._ensure_user(session, user_id)
                 await self._add_points(session, user_id, -self.BOMB_PENALTY, f"数字炸弹踩雷")
                 loser_balance = await self._balance(session, user_id)
-                
+
                 # 给其他参与者加分
                 for pid in participants:
                     await self._ensure_user(session, pid)
                     await self._add_points(session, pid, self.BOMB_REWARD, f"数字炸弹获胜")
-                
+
                 return True, (loser_balance, participants), None
-            
-            ok, data, _ = await self._tx(fn)
-            loser_balance, participants = data
+
+            # 兼容修复：事务结果可能在 msg 或 data 槽位，且避免解包数量不符崩溃
+            # （修复 "too many values to unpack (expected 2)"）
+            ok, tx_msg, tx_data = await self._tx(fn)
+            payload = tx_data if tx_data is not None else tx_msg
+            if not ok or not isinstance(payload, tuple) or len(payload) < 2:
+                yield event.plain_result(
+                    tx_msg if isinstance(tx_msg, str) and tx_msg else "数据库开小差了喵~"
+                )
+                return
+            loser_balance, participants = payload[0], payload[1]
             
             result = MessageChain([
                 Plain(f"💥 BOOM！"),
@@ -2982,7 +3014,7 @@ class PointGamesPlugin(Star):
             game["max"] = guess - 1
             yield event.plain_result(f"⬇️ 大了！范围：{game['min']}-{game['max']}")
 
-    @filter.command("积分 炸弹结束")
+    @filter.command("炸弹结束")
     async def bomb_end(self, event: AstrMessageEvent):
         """数字炸弹：管理员强制结束"""
         if not await self._is_admin(event):
@@ -3000,7 +3032,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能10：速算挑战
     # ============================================================
-    @filter.command("积分 速算")
+    @filter.command("速算")
     async def math_challenge(self, event: AstrMessageEvent):
         """速算挑战：出题"""
         ok_gate, msg_gate = await self._check_group_gate(event, "速算")
@@ -3172,7 +3204,7 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能11：谁是欧皇（抽卡系统）
     # ============================================================
-    @filter.command("积分 抽卡")
+    @filter.command("抽卡")
     async def gacha_draw(self, event: AstrMessageEvent):
         """抽卡：消耗10积分抽一张卡"""
         ok_gate, msg_gate = await self._check_group_gate(event, "抽卡")
@@ -3295,7 +3327,7 @@ class PointGamesPlugin(Star):
         # 兜底（理论上不会到这里）
         return "N", random.choice(self.CARD_POOL["N"][1])
 
-    @filter.command("积分 图鉴")
+    @filter.command("图鉴")
     async def gacha_collection(self, event: AstrMessageEvent):
         """查看卡牌收集进度"""
         ok_gate, msg_gate = await self._check_group_gate(event, "图鉴")
@@ -3329,7 +3361,7 @@ class PointGamesPlugin(Star):
         ok, data, _ = await self._tx(fn)
         
         if data is None:
-            yield event.plain_result("你还没有收集任何卡牌喵~ 发送 /积分 抽卡 开始收集吧！")
+            yield event.plain_result("你还没有收集任何卡牌喵~ 发送 /抽卡 开始收集吧！")
             return
         
         by_rarity, is_complete = data
