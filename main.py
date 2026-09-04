@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.15.5
+作者：Zxin_Pro    版本：2.15.6
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -413,6 +413,7 @@ class PointGamesPlugin(Star):
         "enable_card": True,
         "enable_fishing": True,
         "enable_transfer": True,
+        "enable_activity": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -2832,6 +2833,8 @@ class PointGamesPlugin(Star):
 
     async def _settle_activity_rewards(self):
         """每天22:00按群结算发言前三名并清空统计。"""
+        if not self.feature_flags.get("enable_activity", True):
+            return  # 配置页关闭群活跃奖励，跳过结算
         today = datetime.now(TZ).date().isoformat()
         async with self._activity_lock:
             snapshots = [(key, bucket) for key, bucket in self._activity_counts.items()
