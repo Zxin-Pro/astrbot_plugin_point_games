@@ -293,7 +293,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.15.3",
+    version="2.15.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1575,7 +1575,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v2.15.3",
+            "🎮 积分游戏 v2.15.4",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -2722,6 +2722,9 @@ class PointGamesPlugin(Star):
             if used >= self.TRANSFER_DAILY_LIMIT:
                 raise _BizError("❌ 今日转账次数已达上限（10次）")
             # 目标用户校验：私聊要求对方已在积分系统注册；群聊里对方是本群成员则自动建档
+            # 注意：db_name 是 fn 内局部变量；直接对外层 target_name 赋值会让它变成
+            # 局部变量（闭包陷阱），读取时触发 UnboundLocalError
+            db_name = ""
             row = (await session.execute(text(
                 "SELECT user_name FROM users WHERE user_id=:u"
             ), {"u": target})).first()
@@ -2731,8 +2734,8 @@ class PointGamesPlugin(Star):
                 if not target_name:
                     raise _BizError("❌ 目标用户不存在")
                 await self._ensure_user(session, target, target_name)
-            elif not target_name:
-                target_name = str(row[0] or "").strip()
+            else:
+                db_name = str(row[0] or "").strip()
             # 余额校验：必须 >= 转账金额 + 手续费
             balance = await self._balance(session, sender)
             if balance < total:
@@ -2766,7 +2769,7 @@ class PointGamesPlugin(Star):
             remaining = self.TRANSFER_DAILY_LIMIT - used - 1
             should_remind = await self._check_spend_reward(session, sender,
                                                            event.get_group_id())
-            display_name = target_name or target
+            display_name = target_name or db_name or target
             if is_private:
                 msg = (f"✅ 转账成功！用户 {display_name} 收到 {amount}积分\n"
                        f"{fee_note}"
