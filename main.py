@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.15.7
+作者：Zxin_Pro    版本：2.15.8
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -4528,14 +4528,23 @@ class PointGamesPlugin(Star):
         """
         async def fn(session):
             rods = (await session.execute(text(
-                "SELECT id, user_id, slot, platform_id, group_id FROM fishing_rods "
-                "WHERE status='fishing'"
+                "SELECT r.id, r.user_id, r.slot, r.platform_id, r.group_id, "
+                "COALESCE(NULLIF(u.user_name, ''), r.user_id) "
+                "FROM fishing_rods r LEFT JOIN users u ON u.user_id = r.user_id "
+                "WHERE r.status='fishing'"
             ))).all()
             if not rods:
                 return False, "没有挂机中的鱼竿", None
             broadcasts: list[tuple[str, str, list]] = []   # (platform_id, group_id, 消息链)
+            notices: list[tuple[str, str, str]] = []       # (platform_id, group_id, 事件播报文本)
             for rod in rods:
-                rid, uid, slot, platform_id, group_id = rod
+                rid, uid, slot, platform_id, group_id, user_name = rod
+                group_id = str(group_id or "")
+
+                def notify(text_line: str):
+                    """本群事件播报（不艾特，只说谁遇到了什么事）"""
+                    if group_id:
+                        notices.append((platform_id, group_id, f"🎣 {user_name} {text_line}"))
                 await self._fishing_ensure_stats(session, uid)
                 # 判定前消耗 1 个鱼饵，没鱼饵自动收杆
                 bait = await self._fishing_bait_count(session, uid)
@@ -4543,6 +4552,7 @@ class PointGamesPlugin(Star):
                     await session.execute(
                         text("UPDATE fishing_rods SET status='idle' WHERE id=:i"), {"i": rid}
                     )
+                    notify("的鱼饵用完了，自动收杆休息啦~")
                     continue
                 await session.execute(
                     text("UPDATE fishing_baits SET count=count-1 WHERE user_id=:u"), {"u": uid}
@@ -4564,11 +4574,15 @@ class PointGamesPlugin(Star):
                 if event in ("正常上钩", "双鱼上钩"):
                     # 上钩：鱼先进入 pending，等 /收鱼（也可能钓上杂物一无所得）
                     caught = 2 if event == "双鱼上钩" else 1
+                    fish_names: list[str] = []
+                    junk = 0
                     for _ in range(caught):
                         picked = self._fishing_pick_fish()
                         if picked is None:
+                            junk += 1
                             continue  # 杂物
                         name, price, rarity, prob = picked
+                        fish_names.append(f"{name}（{price}积分）")
                         await session.execute(text(
                             "INSERT INTO fishing_pending(user_id, fish_name, catch_time) "
                             "VALUES(:u, :n, :t)"
@@ -4589,31 +4603,59 @@ class PointGamesPlugin(Star):
                                     f" 🎉🎉🎉 钓到了 {name}（价值{price}积分！概率{prob}%！！！）"
                                 ))
                             if group_id:
-                                broadcasts.append((platform_id, str(group_id), chain))
+                                broadcasts.append((platform_id, group_id, chain))
+                    if junk and not fish_names:
+                        notify("感觉有东西咬钩，拉上来一只破靴子，一无所得…")
+                    elif fish_names:
+                        prefix = "一次钓上两条！" if caught == 2 and fish_names else ""
+                        notify(f"{prefix}有鱼上钩啦，{('、'.join(fish_names))} 进了鱼篓！")
                 elif event == "神秘宝箱":
                     amount = random.randint(self.FISHING_BOX_MIN, self.FISHING_BOX_MAX)
                     await self._add_points(session, uid, amount, "钓鱼宝箱")
+                    notify(f"捞到一个神秘宝箱，开出 {amount} 积分！")
                 elif event == "幸运日":
                     expire = time.time() + self.FISHING_LUCKY_HOURS * 3600
                     await session.execute(text(
                         "UPDATE fishing_stats SET lucky_day=lucky_day+1, lucky_day_expire=:e "
                         "WHERE user_id=:u"
                     ), {"u": uid, "e": expire})
+                    notify(f"时来运转！获得 {self.FISHING_LUCKY_HOURS} 小时幸运buff，期间必定上钩！")
                 elif event in ("鱼竿断裂", "海怪来袭"):
                     await session.execute(
                         text("UPDATE fishing_rods SET status='broken' WHERE id=:i"), {"i": rid}
                     )
-                # 空钩 / 大鱼拔河 / 暴风雨：一无所获，无需处理
-            return True, "判定完成", broadcasts
+                    if event == "鱼竿断裂":
+                        notify("啪！鱼竿断了，记得 /修鱼竿 哦~")
+                    else:
+                        notify("被海怪吓了一跳，鱼跑了，鱼竿也断了…")
+                elif event == "大鱼拔河":
+                    notify("和大鱼拔河输了，眼睁睁看它跑掉…")
+                elif event == "暴风雨":
+                    notify("遇上暴风雨，空手而归…")
+                # 空钩：普通事件也播报一下
+                elif event == "空钩":
+                    notify("守了半天，只有鱼饵被啃了，啥也没钓到…")
+            return True, "判定完成", (broadcasts, notices)
 
-        ok, msg, broadcasts = await self._tx(fn)
-        if ok and broadcasts:
-            # 事务外发送全群广播，避免阻塞数据库
-            for platform_id, group_id, chain in broadcasts:
-                try:
-                    await self._send_group_chain(platform_id, group_id, chain)
-                except Exception:
-                    self.logger.exception("钓鱼系统全群广播发送失败")
+        ok, msg, data = await self._tx(fn)
+        if not ok or not data:
+            return
+        broadcasts, notices = data
+        # 事务外发送全群广播，避免阻塞数据库
+        for platform_id, group_id, chain in broadcasts:
+            try:
+                await self._send_group_chain(platform_id, group_id, chain)
+            except Exception:
+                self.logger.exception("钓鱼系统全群广播发送失败")
+        # 事件播报（不艾特）：按群合并成一条消息发送
+        grouped: dict[tuple[str, str], list[str]] = {}
+        for platform_id, group_id, text_line in notices:
+            grouped.setdefault((platform_id, group_id), []).append(text_line)
+        for (platform_id, group_id), lines in grouped.items():
+            try:
+                await self._send_group_chain(platform_id, group_id, [Plain("\n".join(lines))])
+            except Exception:
+                self.logger.exception("钓鱼事件播报发送失败")
 
     async def _fishing_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
