@@ -2,10 +2,10 @@
 """
 AstrBot 积分游戏插件
 =========================
-功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 签到排行
+功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.13.14
+作者：Zxin_Pro    版本：2.14.0
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -144,6 +144,75 @@ WORD_PAIRS: list[tuple[str, str]] = [
 
 
 # ============================================================
+#  钓鱼系统配置
+# ============================================================
+# 鱼类总表：稀有度 -> (该稀有度总概率%, [(鱼名, 售价), ...])
+# 共 102 种；同稀有度内各鱼均分概率（至高传说两种各 0.0001%）
+FISH_TABLE: dict[str, tuple[float, list[tuple[str, int]]]] = {
+    "普通": (58.0, [
+        ("小虾米", 3), ("鲫鱼", 4), ("鲤鱼", 5), ("草鱼", 5), ("鲢鱼", 4), ("鳙鱼", 4),
+        ("青鱼", 5), ("罗非鱼", 5), ("鲮鱼", 4), ("白条鱼", 3), ("麦穗鱼", 3), ("鳑鲏", 4),
+        ("小黄鱼", 3), ("沙丁鱼", 3), ("凤尾鱼", 4), ("银鱼", 5), ("多春鱼", 3), ("秋刀鱼", 4),
+        ("鲭鱼", 5), ("鲳鱼", 6), ("红杉鱼", 7), ("马鲛鱼", 8), ("鲈鱼", 9), ("鳜鱼", 10),
+    ]),
+    "稀有": (14.0, [
+        ("金鱼", 30), ("银龙鱼", 65), ("红龙鱼", 80), ("金龙鱼", 90), ("七彩神仙", 50),
+        ("罗汉鱼", 45), ("地图鱼", 40), ("鹦鹉鱼", 35), ("招财鱼", 50), ("虎鱼", 70),
+        ("孔雀鱼", 35), ("灯鱼", 45), ("神仙鱼", 65), ("龙睛金鱼", 100), ("七彩鱼", 90),
+    ]),
+    "珍稀": (3.5, [
+        ("中华鲟", 130), ("长江鲥鱼", 110), ("松江鲈鱼", 100), ("大马哈鱼", 90), ("虹鳟鱼", 85),
+        ("银鲳鱼", 80), ("金枪鱼", 120), ("三文鱼", 100), ("石斑鱼", 110), ("东星斑", 140),
+        ("老鼠斑", 150), ("苏眉鱼", 160), ("哲罗鲑", 70), ("狗鱼", 60), ("海鲈鱼", 80),
+        ("黄鱼", 90),
+    ]),
+    "传说": (0.4, [
+        ("神话金龙", 500), ("九色神鲤", 480), ("冰雪龙鱼", 450), ("凤凰锦鲤", 400), ("玄天黑鲤", 380),
+    ]),
+    "远古": (0.08, [
+        ("腔棘鱼", 800), ("恐龙鱼", 700), ("巨骨舌鱼", 650), ("鳄雀鳝", 600), ("龙鱼化石", 900),
+        ("太古鳐鱼", 1000),
+    ]),
+    "海洋传说": (0.02, [
+        ("北海巨妖", 1200), ("沧龙遗种", 1500), ("利维坦幼崽", 1300), ("深海海妖", 1100),
+        ("海神波塞冬", 1500),
+    ]),
+    "终极神话": (0.005, [
+        ("东方青龙", 3000), ("玄武神龟", 2500), ("鲲鹏之祖", 4000),
+    ]),
+    "至高传说": (0.0002, [
+        ("烛心", 10000), ("闲鱼", 10000),
+    ]),
+}
+
+# 展开为 鱼名 -> (售价, 稀有度, 单条概率%)，供加权抽取与广播使用
+# 注意：上表概率合计约 76.0052%，剩余约 24% 判定为钓上杂物（一无所得）
+FISH_POOL: dict[str, tuple[int, str, float]] = {}
+for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
+    _per_prob = _total_prob / len(_fishes)
+    for _name, _price in _fishes:
+        FISH_POOL[_name] = (_price, _rarity, _per_prob)
+del _rarity, _total_prob, _fishes, _per_prob, _name, _price
+
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
+FISHING_EVENTS: list[tuple[str, float]] = [
+    ("正常上钩", 50.0),   # 钓到 1 条鱼
+    ("空钩", 33.0),       # 一无所获（幸运日 buff 期间视为上钩）
+    ("鱼竿断裂", 8.0),    # 鱼竿损坏，停止挂机，需 /修鱼竿
+    ("双鱼上钩", 5.0),    # 一次钓到 2 条
+    ("大鱼拔河", 3.0),    # 大鱼脱钩，一无所获
+    ("神秘宝箱", 0.7),    # 随机开出 50~800 积分
+    ("海怪来袭", 0.2),    # 鱼被吓跑，鱼竿断裂
+    ("暴风雨", 0.08),     # 恶劣天气，一无所获
+    ("幸运日", 0.02),     # 获得 2 小时幸运 buff：期间空钩视为上钩
+]
+
+# 长期期望说明：正常上钩 50% + 双鱼 5% ≈ 每次判定期望卖鱼 9.87 积分，
+# 扣鱼饵 10 积分、断竿摊销 4 积分（8% × 修理费 50），宝箱（50~100）期望回补约 0.53，
+# 长期期望 ≈ -3.6 积分/次（积分回收向玩法，高价值鱼纯看脸）。
+# 想调整亏损幅度：改 上钩/双鱼 概率、鱼价或宝箱区间即可。
+
+# ============================================================
 #  玩法帮助注册表
 #  【扩展玩法】以后新增玩法时：
 #   1. 在下方 COMMAND_HELP 加一行 (指令, 说明)
@@ -173,6 +242,16 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/积分 速算", "速算挑战（答对得5/15/30积分，每天10次）"),
     ("/积分 抽卡", "消耗10积分抽卡（N/R/SR/SSR）"),
     ("/积分 图鉴", "查看已收集的卡牌和进度"),
+    ("/买鱼竿", "钓鱼系统：200积分购买鱼竿（最多5根）"),
+    ("/买鱼饵 [数量]", "钓鱼系统：10积分/个购买鱼饵"),
+    ("/挂机钓鱼 [编号]", "钓鱼系统：鱼竿挂机，每30分钟判定一次"),
+    ("/收鱼", "钓鱼系统：收取挂机钓到的鱼进鱼篓"),
+    ("/卖鱼", "钓鱼系统：一键卖出鱼篓里所有鱼"),
+    ("/鱼图鉴", "钓鱼系统：查看鱼类收集进度（共102种）"),
+    ("/鱼竿列表", "钓鱼系统：查看每根鱼竿状态"),
+    ("/修鱼竿 [编号]", "钓鱼系统：50积分修理损坏的鱼竿"),
+    ("/钓鱼排行", "钓鱼系统：累计卖鱼收入前十名"),
+    ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
     ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
@@ -292,6 +371,21 @@ class PointGamesPlugin(Star):
         "SSR": (0.05, ["SSR-神龙", "SSR-金龙", "SSR-银龙", "SSR-冰龙", "SSR-火龙"]),
     }
     CARD_COMPLETE_REWARD = 100      # 集齐所有稀有度奖励
+    # 钓鱼系统
+    MAX_RODS = 5                    # 每人最多鱼竿数
+    ROD_COST = 200                  # 鱼竿价格
+    BAIT_COST = 10                  # 鱼饵单价
+    REPAIR_COST = 50                # 修鱼竿费用
+    CHECK_INTERVAL = 30             # 挂机判定间隔（分钟）
+    FISHING_BOX_MIN = 50            # 神秘宝箱积分下限
+    FISHING_BOX_MAX = 100           # 神秘宝箱积分上限
+    FISHING_LUCKY_HOURS = 2         # 幸运日 buff 时长（小时）
+    FISHING_FULL_REWARD = 5000      # 集齐 102 种图鉴奖励
+    FISHING_BOTH_LEGEND_REWARD = 1000  # 同时拥有烛心和闲鱼额外奖励
+    FISHING_BROADCAST_PRICE = 1000  # 触发全群广播的鱼价阈值
+    FISHING_RESET_HOUR = 0          # 今日统计重置小时
+    FISHING_RESET_MINUTE = 0        # 今日统计重置分钟
+    FISHING_RANK_SIZE = 10          # 钓鱼排行显示人数
     # 赞助系统
     SPONSOR_RATE = 100              # 1元=100积分（仅展示）
     SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
@@ -308,6 +402,7 @@ class PointGamesPlugin(Star):
         "enable_bomb": True,
         "enable_math": True,
         "enable_card": True,
+        "enable_fishing": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -329,6 +424,16 @@ class PointGamesPlugin(Star):
         "排行": ("enable_ranking", "积分排行"),
         "签到": ("enable_sign_in", "签到"),
         "积分": ("enable_ranking", "积分账户"),
+        "买鱼竿": ("enable_fishing", "钓鱼系统"),
+        "买鱼饵": ("enable_fishing", "钓鱼系统"),
+        "挂机钓鱼": ("enable_fishing", "钓鱼系统"),
+        "收鱼": ("enable_fishing", "钓鱼系统"),
+        "卖鱼": ("enable_fishing", "钓鱼系统"),
+        "鱼图鉴": ("enable_fishing", "钓鱼系统"),
+        "鱼竿列表": ("enable_fishing", "钓鱼系统"),
+        "修鱼竿": ("enable_fishing", "钓鱼系统"),
+        "钓鱼排行": ("enable_fishing", "钓鱼系统"),
+        "钓鱼统计": ("enable_fishing", "钓鱼系统"),
     }
 
     # ---------- 表结构定义 ----------
@@ -475,6 +580,53 @@ class PointGamesPlugin(Star):
         )""",
         "CREATE INDEX IF NOT EXISTS idx_sponsor_user ON sponsor_requests(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_sponsor_status ON sponsor_requests(status)",
+        # ---------- 钓鱼系统 ----------
+        """CREATE TABLE IF NOT EXISTS fishing_rods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            slot INTEGER,
+            status TEXT DEFAULT 'idle',
+            platform_id TEXT DEFAULT '',
+            group_id TEXT DEFAULT '',
+            created_at TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_fishing_rods_user ON fishing_rods(user_id)",
+        """CREATE TABLE IF NOT EXISTS fishing_baits (
+            user_id TEXT PRIMARY KEY,
+            count INTEGER DEFAULT 0
+        )""",
+        """CREATE TABLE IF NOT EXISTS fishing_inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            fish_name TEXT NOT NULL,
+            count INTEGER DEFAULT 0,
+            UNIQUE(user_id, fish_name)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_fishing_inv_user ON fishing_inventory(user_id)",
+        """CREATE TABLE IF NOT EXISTS fishing_pending (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            fish_name TEXT,
+            catch_time TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_fishing_pending_user ON fishing_pending(user_id)",
+        # 图鉴收集（钓到过即记录，卖鱼不影响图鉴进度）
+        """CREATE TABLE IF NOT EXISTS fishing_collection (
+            user_id TEXT NOT NULL,
+            fish_name TEXT NOT NULL,
+            first_time TIMESTAMP,
+            PRIMARY KEY(user_id, fish_name)
+        )""",
+        """CREATE TABLE IF NOT EXISTS fishing_stats (
+            user_id TEXT PRIMARY KEY,
+            total_caught INTEGER DEFAULT 0,
+            total_income INTEGER DEFAULT 0,
+            total_baits_used INTEGER DEFAULT 0,
+            lucky_day INTEGER DEFAULT 0,
+            lucky_day_expire TIMESTAMP,
+            today_count INTEGER DEFAULT 0,
+            today_date TEXT
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -1021,6 +1173,17 @@ class PointGamesPlugin(Star):
             self._broadcast_leaderboard,
             CronTrigger(hour=self.LEADERBOARD_BROADCAST_HOUR, minute=self.LEADERBOARD_BROADCAST_MINUTE, timezone=TZ),
             id="point_games_leaderboard_broadcast", replace_existing=True,
+        )
+        # 钓鱼系统：每 30 分钟判定一次挂机鱼竿 + 每天凌晨重置今日统计
+        self._scheduler.add_job(
+            self._fishing_check,
+            IntervalTrigger(minutes=self.CHECK_INTERVAL, timezone=TZ),
+            id="fishing_check", replace_existing=True,
+        )
+        self._scheduler.add_job(
+            self._fishing_daily_reset,
+            CronTrigger(hour=self.FISHING_RESET_HOUR, minute=self.FISHING_RESET_MINUTE, timezone=TZ),
+            id="fishing_daily_reset", replace_existing=True,
         )
         self._scheduler.start()
         # 3. 注册 WebUI
@@ -3975,6 +4138,639 @@ class PointGamesPlugin(Star):
         if not ok:
             return error_response(msg)
         return json_response(data)
+
+    # ============================================================
+    #  钓鱼系统
+    # ============================================================
+    def _fishing_roll_event(self) -> str:
+        """按 FISHING_EVENTS 概率表随机判定一次挂机事件"""
+        roll = random.uniform(0, 100)
+        cumulative = 0.0
+        for name, prob in FISHING_EVENTS:
+            cumulative += prob
+            if roll <= cumulative:
+                return name
+        return "空钩"
+
+    def _fishing_pick_fish(self):
+        """按概率加权随机抽一条鱼，返回 (鱼名, 售价, 稀有度, 单条概率%)。
+
+        鱼类配置概率合计约 76.0052%，剩余部分视为钓上杂物（返回 None，一无所得）。
+        """
+        roll = random.uniform(0, 100)
+        cumulative = 0.0
+        for name, (price, rarity, prob) in FISH_POOL.items():
+            cumulative += prob
+            if roll <= cumulative:
+                return name, price, rarity, prob
+        return None  # 杂物：水面漂过一片水草，一无所得
+
+    async def _fishing_ensure_stats(self, session, user_id: str) -> None:
+        """确保钓鱼统计行存在，并惰性重置过期计数（必须在事务内调用）"""
+        today = date.today().isoformat()
+        row = (await session.execute(
+            text("SELECT today_date FROM fishing_stats WHERE user_id=:u"), {"u": user_id}
+        )).first()
+        if not row:
+            await session.execute(
+                text("INSERT INTO fishing_stats(user_id, today_date) VALUES(:u, :d)"),
+                {"u": user_id, "d": today},
+            )
+        elif row[0] != today:
+            await session.execute(
+                text("UPDATE fishing_stats SET today_count=0, today_date=:d WHERE user_id=:u"),
+                {"u": user_id, "d": today},
+            )
+
+    async def _fishing_bait_count(self, session, user_id: str) -> int:
+        """查询当前鱼饵数量（必须在事务内调用）"""
+        row = (await session.execute(
+            text("SELECT count FROM fishing_baits WHERE user_id=:u"), {"u": user_id}
+        )).first()
+        return int(row[0] or 0) if row else 0
+
+    async def _fishing_check(self):
+        """定时任务：每 30 分钟判定一次所有挂机中的鱼竿。
+
+        每根竿消耗 1 个鱼饵后随机判定事件：
+        上钩的鱼先进 fishing_pending，等玩家 /收鱼 进鱼篓；
+        高价值鱼 / 至高传说直接全群广播（真实 At 组件）。
+        """
+        async def fn(session):
+            rods = (await session.execute(text(
+                "SELECT id, user_id, slot, platform_id, group_id FROM fishing_rods "
+                "WHERE status='fishing'"
+            ))).all()
+            if not rods:
+                return False, "没有挂机中的鱼竿", None
+            broadcasts: list[tuple[str, str, list]] = []   # (platform_id, group_id, 消息链)
+            for rod in rods:
+                rid, uid, slot, platform_id, group_id = rod
+                await self._fishing_ensure_stats(session, uid)
+                # 判定前消耗 1 个鱼饵，没鱼饵自动收杆
+                bait = await self._fishing_bait_count(session, uid)
+                if bait <= 0:
+                    await session.execute(
+                        text("UPDATE fishing_rods SET status='idle' WHERE id=:i"), {"i": rid}
+                    )
+                    continue
+                await session.execute(
+                    text("UPDATE fishing_baits SET count=count-1 WHERE user_id=:u"), {"u": uid}
+                )
+                # 幸运日 buff：有效期内空钩视为上钩
+                st = (await session.execute(
+                    text("SELECT lucky_day_expire FROM fishing_stats WHERE user_id=:u"),
+                    {"u": uid},
+                )).first()
+                lucky_active = bool(st and st[0] and float(st[0]) > time.time())
+                event = self._fishing_roll_event()
+                if event == "空钩" and lucky_active:
+                    event = "正常上钩"
+                # 本次判定统计（每次判定消耗 1 鱼饵）
+                await session.execute(text(
+                    "UPDATE fishing_stats SET total_baits_used=total_baits_used+1, "
+                    "today_count=today_count+1 WHERE user_id=:u"
+                ), {"u": uid})
+                if event in ("正常上钩", "双鱼上钩"):
+                    # 上钩：鱼先进入 pending，等 /收鱼（也可能钓上杂物一无所得）
+                    caught = 2 if event == "双鱼上钩" else 1
+                    for _ in range(caught):
+                        picked = self._fishing_pick_fish()
+                        if picked is None:
+                            continue  # 杂物
+                        name, price, rarity, prob = picked
+                        await session.execute(text(
+                            "INSERT INTO fishing_pending(user_id, fish_name, catch_time) "
+                            "VALUES(:u, :n, :t)"
+                        ), {"u": uid, "n": name, "t": time.time()})
+                        await session.execute(text(
+                            "UPDATE fishing_stats SET total_caught=total_caught+1 WHERE user_id=:u"
+                        ), {"u": uid})
+                        # 全群广播：售价 > 1000 或至高传说
+                        if price > self.FISHING_BROADCAST_PRICE or rarity == "至高传说":
+                            chain = [At(qq=str(uid))]
+                            if rarity == "至高传说":
+                                chain.append(Plain(
+                                    f" 🌟🌟🌟 钓到了 {name}（价值{price}积分！概率{prob}%！！！）\n"
+                                    f"此乃万中无一之奇迹！"
+                                ))
+                            else:
+                                chain.append(Plain(
+                                    f" 🎉🎉🎉 钓到了 {name}（价值{price}积分！概率{prob}%！！！）"
+                                ))
+                            if group_id:
+                                broadcasts.append((platform_id, str(group_id), chain))
+                elif event == "神秘宝箱":
+                    amount = random.randint(self.FISHING_BOX_MIN, self.FISHING_BOX_MAX)
+                    await self._add_points(session, uid, amount, "钓鱼宝箱")
+                elif event == "幸运日":
+                    expire = time.time() + self.FISHING_LUCKY_HOURS * 3600
+                    await session.execute(text(
+                        "UPDATE fishing_stats SET lucky_day=lucky_day+1, lucky_day_expire=:e "
+                        "WHERE user_id=:u"
+                    ), {"u": uid, "e": expire})
+                elif event in ("鱼竿断裂", "海怪来袭"):
+                    await session.execute(
+                        text("UPDATE fishing_rods SET status='broken' WHERE id=:i"), {"i": rid}
+                    )
+                # 空钩 / 大鱼拔河 / 暴风雨：一无所获，无需处理
+            return True, "判定完成", broadcasts
+
+        ok, msg, broadcasts = await self._tx(fn)
+        if ok and broadcasts:
+            # 事务外发送全群广播，避免阻塞数据库
+            for platform_id, group_id, chain in broadcasts:
+                try:
+                    await self._send_group_chain(platform_id, group_id, chain)
+                except Exception:
+                    self.logger.exception("钓鱼系统全群广播发送失败")
+
+    async def _fishing_daily_reset(self):
+        """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
+        async def fn(session):
+            await session.execute(text(
+                "UPDATE fishing_stats SET today_count=0, today_date=:d"
+            ), {"d": date.today().isoformat()})
+            return True, "今日钓鱼统计已重置", None
+
+        await self._tx(fn)
+
+    async def _fishing_grant_titles(
+        self, session, user_id: str, collected: set[str]
+    ) -> list[str]:
+        """图鉴收集奖励判定（必须在事务内调用），返回奖励提示列表。
+
+        称号规则：
+        - 钓到烛心 → 烛心持有者；钓到闲鱼 → 闲鱼之王（纯称号，无积分）
+        - 同时拥有烛心和闲鱼 → 额外 1000 积分 + 至高传说之主（只发一次）
+        - 集齐全部 102 种 → 5000 积分 + 万物之主（只发一次）
+        """
+        rewards: list[str] = []
+        if {"烛心", "闲鱼"} <= collected:
+            already = (await session.execute(text(
+                "SELECT 1 FROM point_transactions WHERE user_id=:u AND operation='钓鱼至高奖励'"
+            ), {"u": user_id})).first()
+            if not already:
+                await self._add_points(
+                    session, user_id, self.FISHING_BOTH_LEGEND_REWARD, "钓鱼至高奖励"
+                )
+                rewards.append(
+                    f"🏆 同时拥有烛心和闲鱼：获得「至高传说之主」称号 "
+                    f"+{self.FISHING_BOTH_LEGEND_REWARD} 积分！"
+                )
+        if len(collected) >= len(FISH_POOL):
+            already = (await session.execute(text(
+                "SELECT 1 FROM point_transactions WHERE user_id=:u AND operation='钓鱼集齐奖励'"
+            ), {"u": user_id})).first()
+            if not already:
+                await self._add_points(
+                    session, user_id, self.FISHING_FULL_REWARD, "钓鱼集齐奖励"
+                )
+                rewards.append(
+                    f"👑 集齐全部 {len(FISH_POOL)} 种鱼：获得「万物之主」称号 "
+                    f"+{self.FISHING_FULL_REWARD} 积分！"
+                )
+        return rewards
+
+    @filter.command("买鱼竿")
+    async def fishing_buy_rod(self, event: AstrMessageEvent):
+        """/买鱼竿 —— 花费 200 积分购买一根鱼竿（最多 5 根）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "买鱼竿")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._ensure_user(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            cnt = (await session.execute(text(
+                "SELECT COUNT(*) FROM fishing_rods WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if int(cnt[0]) >= self.MAX_RODS:
+                raise _BizError(f"鱼竿已经满 {self.MAX_RODS} 根啦，不能再买了喵~")
+            slots = {int(r[0]) for r in (await session.execute(text(
+                "SELECT slot FROM fishing_rods WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            slot = next(i for i in range(1, self.MAX_RODS + 1) if i not in slots)
+            bal = await self._balance(session, user_id)
+            if bal < self.ROD_COST:
+                raise _BizError(
+                    f"积分不足喵~ 买鱼竿需要 {self.ROD_COST} 积分，你只有 {bal} 积分"
+                )
+            await self._add_points(session, user_id, -self.ROD_COST, "buy_rod")
+            await session.execute(text(
+                "INSERT INTO fishing_rods(user_id, slot, status, created_at) "
+                "VALUES(:u, :s, 'idle', :t)"
+            ), {"u": user_id, "s": slot, "t": time.time()})
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🎣 购买成功！获得 {slot} 号鱼竿，花费 {self.ROD_COST} 积分，"
+                f"当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("买鱼饵")
+    async def fishing_buy_bait(self, event: AstrMessageEvent):
+        """/买鱼饵 [数量] —— 10 积分/个购买鱼饵，不填数量默认买 1 个"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "买鱼饵")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        count = 1
+        args = self._strip_command(event, "买鱼饵")
+        if args:
+            try:
+                count = int(args.split()[0])
+                if count <= 0:
+                    raise ValueError
+            except ValueError:
+                yield event.plain_result("鱼饵数量得是正整数喵~")
+                return
+
+        async def fn(session):
+            await self._ensure_user(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            cost = count * self.BAIT_COST
+            bal = await self._balance(session, user_id)
+            if bal < cost:
+                raise _BizError(
+                    f"积分不足喵~ 买 {count} 个鱼饵需要 {cost} 积分，你只有 {bal} 积分"
+                )
+            await self._add_points(session, user_id, -cost, "buy_bait")
+            await session.execute(text(
+                "INSERT INTO fishing_baits(user_id, count) VALUES(:u, :c) "
+                "ON CONFLICT(user_id) DO UPDATE SET count=fishing_baits.count+:c"
+            ), {"u": user_id, "c": count})
+            bait = await self._fishing_bait_count(session, user_id)
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🪱 购买成功！获得 {count} 个鱼饵（花费 {cost} 积分），"
+                f"现有鱼饵 {bait} 个，当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("挂机钓鱼")
+    async def fishing_start(self, event: AstrMessageEvent):
+        """/挂机钓鱼 [编号] —— 让鱼竿开始挂机，不填编号则全部待机鱼竿一起挂机"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "挂机钓鱼")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        args = self._strip_command(event, "挂机钓鱼")
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            rods = (await session.execute(text(
+                "SELECT id, slot, status FROM fishing_rods WHERE user_id=:u ORDER BY slot"
+            ), {"u": user_id})).all()
+            if not rods:
+                raise _BizError("你还没有鱼竿，先 /买鱼竿 喵~")
+            # 选出目标鱼竿
+            if args:
+                try:
+                    slot = int(args.split()[0])
+                except ValueError:
+                    raise _BizError("鱼竿编号得是数字喵~")
+                matched = [r for r in rods if int(r[1]) == slot]
+                if not matched:
+                    raise _BizError(f"没有 {slot} 号鱼竿喵~ 发 /鱼竿列表 查看你的鱼竿")
+                rod = matched[0]
+                if rod[2] == "fishing":
+                    raise _BizError(f"{slot} 号鱼竿已经在挂机啦喵~")
+                if rod[2] == "broken":
+                    raise _BizError(f"{slot} 号鱼竿断了，先 /修鱼竿 {slot} 喵~")
+                targets = [rod]
+            else:
+                targets = [r for r in rods if r[2] == "idle"]
+                if not targets:
+                    raise _BizError("没有待机的鱼竿喵~（挂机中或损坏的竿不能用）")
+            bait = await self._fishing_bait_count(session, user_id)
+            if bait <= 0:
+                raise _BizError("没有鱼饵啦，先 /买鱼饵 再来钓鱼喵~")
+            # 鱼饵不足以全覆盖时只启动部分鱼竿（每次判定每竿消耗 1 个鱼饵）
+            start_n = min(len(targets), bait)
+            for rod in targets[:start_n]:
+                await session.execute(text(
+                    "UPDATE fishing_rods SET status='fishing', platform_id=:p, group_id=:g "
+                    "WHERE id=:i"
+                ), {"p": platform_id, "g": group_id, "i": rod[0]})
+            msg = (
+                f"🎣 {start_n} 根鱼竿开始挂机啦！每 {self.CHECK_INTERVAL} 分钟判定一次，"
+                f"每次每竿消耗 1 个鱼饵，钓到的鱼用 /收鱼 收取喵~"
+            )
+            if start_n < len(targets):
+                msg += f"\n（鱼饵只够 {start_n} 根竿，剩下的先补鱼饵喵~）"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("收鱼")
+    async def fishing_collect(self, event: AstrMessageEvent):
+        """/收鱼 —— 把 pending 里的鱼收进鱼篓，并记录图鉴/判定收集奖励"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "收鱼")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            pending = (await session.execute(text(
+                "SELECT fish_name, COUNT(*) FROM fishing_pending WHERE user_id=:u "
+                "GROUP BY fish_name"
+            ), {"u": user_id})).all()
+            if not pending:
+                raise _BizError("还没钓到鱼喵~ 挂机中的鱼竿每 30 分钟判定一次，等等再来")
+            total = 0
+            new_species: list[str] = []
+            details: list[str] = []
+            for name, cnt in pending:
+                name = str(name)
+                cnt = int(cnt)
+                total += cnt
+                price, rarity, _prob = FISH_POOL.get(name, (0, "未知", 0.0))
+                # 并入鱼篓
+                await session.execute(text(
+                    "INSERT INTO fishing_inventory(user_id, fish_name, count) "
+                    "VALUES(:u, :n, :c) "
+                    "ON CONFLICT(user_id, fish_name) DO UPDATE SET "
+                    "count=fishing_inventory.count+:c"
+                ), {"u": user_id, "n": name, "c": cnt})
+                # 记录图鉴（钓到过即收集，卖鱼不影响进度）
+                result = await session.execute(text(
+                    "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
+                    "VALUES(:u, :n, :t)"
+                ), {"u": user_id, "n": name, "t": time.time()})
+                if result.rowcount == 1:
+                    new_species.append(f"{name}（{rarity}·{price}积分）")
+                details.append(f"{name}×{cnt}")
+            await session.execute(
+                text("DELETE FROM fishing_pending WHERE user_id=:u"), {"u": user_id}
+            )
+            # 图鉴收集奖励判定（烛心/闲鱼/集齐）
+            collected = {str(r[0]) for r in (await session.execute(text(
+                "SELECT fish_name FROM fishing_collection WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            rewards = await self._fishing_grant_titles(session, user_id, collected)
+            msg = f"🐟 收鱼成功！本次进篓 {total} 条：{'、'.join(details)}喵~"
+            if new_species:
+                msg += f"\n✨ 图鉴新收录：{'、'.join(new_species)}"
+            for line in rewards:
+                msg += f"\n{line}"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("卖鱼")
+    async def fishing_sell(self, event: AstrMessageEvent):
+        """/卖鱼 —— 一键卖出鱼篓里所有鱼，按鱼类售价换算积分"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "卖鱼")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            rows = (await session.execute(text(
+                "SELECT fish_name, count FROM fishing_inventory WHERE user_id=:u"
+            ), {"u": user_id})).all()
+            if not rows:
+                raise _BizError("鱼篓里没有鱼可以卖喵~ 先 /挂机钓鱼 再来")
+            total = 0
+            fish_cnt = 0
+            details: list[str] = []
+            for name, cnt in rows:
+                name = str(name)
+                cnt = int(cnt or 0)
+                price = FISH_POOL.get(name, (0,))[0]
+                total += price * cnt
+                fish_cnt += cnt
+                details.append(f"{name}×{cnt}")
+            # 卖鱼收入进账并记录流水（operation='sell_fish'）
+            await self._add_points(session, user_id, total, "sell_fish", earned=total)
+            await session.execute(text(
+                "UPDATE fishing_stats SET total_income=total_income+:t WHERE user_id=:u"
+            ), {"u": user_id, "t": total})
+            await session.execute(
+                text("DELETE FROM fishing_inventory WHERE user_id=:u"), {"u": user_id}
+            )
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"💰 卖鱼成功！共卖出 {fish_cnt} 条：{'、'.join(details)}\n"
+                f"收入 {total} 积分，当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("鱼图鉴")
+    async def fishing_book(self, event: AstrMessageEvent):
+        """/鱼图鉴 —— 查看已收集鱼类种类与总进度（共 102 种）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "鱼图鉴")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            collected = {str(r[0]) for r in (await session.execute(text(
+                "SELECT fish_name FROM fishing_collection WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            lines = [f"📖 鱼图鉴：已收集 {len(collected)}/{len(FISH_POOL)} 种喵~"]
+            for rarity, (_total_prob, fishes) in FISH_TABLE.items():
+                names = {n for n, _p in fishes}
+                lines.append(f"{rarity}：{len(names & collected)}/{len(names)}")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("鱼竿列表")
+    async def fishing_rod_list(self, event: AstrMessageEvent):
+        """/鱼竿列表 —— 查看每根鱼竿的状态和鱼饵余量"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "鱼竿列表")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        status_text = {"idle": "待机", "fishing": "挂机中", "broken": "已损坏"}
+
+        async def fn(session):
+            rods = (await session.execute(text(
+                "SELECT slot, status FROM fishing_rods WHERE user_id=:u ORDER BY slot"
+            ), {"u": user_id})).all()
+            if not rods:
+                raise _BizError("你还没有鱼竿，先 /买鱼竿 喵~")
+            bait = await self._fishing_bait_count(session, user_id)
+            lines = [f"🎣 鱼竿列表（鱼饵余量：{bait} 个）"]
+            for slot, status in rods:
+                lines.append(f"{int(slot)} 号竿：{status_text.get(str(status), str(status))}")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("修鱼竿")
+    async def fishing_repair(self, event: AstrMessageEvent):
+        """/修鱼竿 [编号] —— 花费 50 积分修理损坏的鱼竿"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "修鱼竿")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        args = self._strip_command(event, "修鱼竿")
+        if not args:
+            yield event.plain_result("用法：/修鱼竿 编号 喵~ 发 /鱼竿列表 查看编号")
+            return
+        try:
+            slot = int(args.split()[0])
+        except ValueError:
+            yield event.plain_result("鱼竿编号得是数字喵~")
+            return
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            rod = (await session.execute(text(
+                "SELECT id, status FROM fishing_rods WHERE user_id=:u AND slot=:s"
+            ), {"u": user_id, "s": slot})).first()
+            if not rod:
+                raise _BizError(f"没有 {slot} 号鱼竿喵~ 发 /鱼竿列表 查看你的鱼竿")
+            if rod[1] != "broken":
+                raise _BizError(f"{slot} 号鱼竿没坏，不用修喵~")
+            bal = await self._balance(session, user_id)
+            if bal < self.REPAIR_COST:
+                raise _BizError(
+                    f"积分不足喵~ 修鱼竿需要 {self.REPAIR_COST} 积分，你只有 {bal} 积分"
+                )
+            await self._add_points(session, user_id, -self.REPAIR_COST, "repair_rod")
+            await session.execute(
+                text("UPDATE fishing_rods SET status='idle' WHERE id=:i"), {"i": rod[0]}
+            )
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🔧 {slot} 号鱼竿修好啦！花费 {self.REPAIR_COST} 积分，"
+                f"当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("钓鱼排行")
+    async def fishing_rank(self, event: AstrMessageEvent):
+        """/钓鱼排行 —— 显示累计卖鱼收入前十名"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "钓鱼排行")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+
+        async def fn(session):
+            rows = (await session.execute(text(
+                "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), s.total_income "
+                "FROM fishing_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                "WHERE s.total_income > 0 ORDER BY s.total_income DESC LIMIT :n"
+            ), {"n": self.FISHING_RANK_SIZE})).all()
+            if not rows:
+                raise _BizError("还没有人有卖鱼收入喵~ 快去 /挂机钓鱼 抢占榜首！")
+            medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, len(rows) + 1)]
+            lines = [f"🐟 钓鱼总收入排行 TOP{len(rows)}"]
+            for i, (uid, name, income) in enumerate(rows):
+                lines.append(f"{medals[i]} {name} —— {int(income)} 积分")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("钓鱼统计")
+    async def fishing_stats_cmd(self, event: AstrMessageEvent):
+        """/钓鱼统计 —— 查看今日次数、鱼饵消耗、累计收入、最高价值鱼与称号"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "钓鱼统计")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            row = (await session.execute(text(
+                "SELECT total_caught, total_income, total_baits_used, today_count, "
+                "lucky_day_expire FROM fishing_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            collected = {str(r[0]) for r in (await session.execute(text(
+                "SELECT fish_name FROM fishing_collection WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            # 最高价值鱼：从图鉴里按售价取最高
+            best_line = "暂无"
+            if collected:
+                best = max(collected, key=lambda n: FISH_POOL.get(n, (0,))[0])
+                best_line = f"{best}（{FISH_POOL[best][0]}积分）"
+            # 称号判定（烛心持有者 / 闲鱼之王 / 至高传说之主 / 万物之主）
+            titles: list[str] = []
+            if "烛心" in collected:
+                titles.append("烛心持有者")
+            if "闲鱼" in collected:
+                titles.append("闲鱼之王")
+            if {"烛心", "闲鱼"} <= collected:
+                rewarded = (await session.execute(text(
+                    "SELECT 1 FROM point_transactions WHERE user_id=:u "
+                    "AND operation='钓鱼至高奖励'"
+                ), {"u": user_id})).first()
+                if rewarded:
+                    titles.append("至高传说之主")
+            if len(collected) >= len(FISH_POOL):
+                rewarded = (await session.execute(text(
+                    "SELECT 1 FROM point_transactions WHERE user_id=:u "
+                    "AND operation='钓鱼集齐奖励'"
+                ), {"u": user_id})).first()
+                if rewarded:
+                    titles.append("万物之主")
+            lines = [
+                "📊 钓鱼统计",
+                f"今日钓鱼：{int(row[3] or 0)} 次",
+                f"累计钓鱼：{int(row[0] or 0)} 条（消耗鱼饵 {int(row[2] or 0)} 个）",
+                f"累计卖鱼收入：{int(row[1] or 0)} 积分",
+                f"最高价值鱼：{best_line}",
+                f"图鉴进度：{len(collected)}/{len(FISH_POOL)} 种",
+            ]
+            lucky_expire = float(row[4]) if row[4] else 0.0
+            if lucky_expire > time.time():
+                remain = int((lucky_expire - time.time()) / 60)
+                lines.append(f"🍀 幸运日 buff 剩余 {remain} 分钟（必定上钩）")
+            if titles:
+                lines.append(f"🎖 称号：{'、'.join(titles)}")
+            else:
+                lines.append("🎖 称号：暂无（钓到烛心/闲鱼或集齐图鉴可获得）")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
 
 
 # 依赖声明（AstrBot 插件规范：文件末尾声明额外依赖）

@@ -7,6 +7,7 @@
   "enable_bomb": {"description": "启用数字炸弹", "type": "bool", "default": true},
   "enable_math": {"description": "启用速算挑战", "type": "bool", "default": true},
   "enable_card": {"description": "启用抽卡系统", "type": "bool", "default": true},
+  "enable_fishing": {"description": "启用钓鱼系统", "type": "bool", "default": true},
   "enable_sign_in": {"description": "启用每日签到", "type": "bool", "default": true},
   "enable_ranking": {"description": "启用积分查询和排行榜", "type": "bool", "default": true},
   "group_mode": {
