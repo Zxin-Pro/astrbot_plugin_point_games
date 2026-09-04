@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.14.0
+作者：Zxin_Pro    版本：2.14.1
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -252,6 +252,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/修鱼竿 [编号]", "钓鱼系统：50积分修理损坏的鱼竿"),
     ("/钓鱼排行", "钓鱼系统：累计卖鱼收入前十名"),
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
+    ("/兑换礼品", "花费10000积分兑换小礼品一份（兑换后联系管理员领取）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
     ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
@@ -434,6 +435,7 @@ class PointGamesPlugin(Star):
         "修鱼竿": ("enable_fishing", "钓鱼系统"),
         "钓鱼排行": ("enable_fishing", "钓鱼系统"),
         "钓鱼统计": ("enable_fishing", "钓鱼系统"),
+        "兑换礼品": ("enable_ranking", "消费兑换"),
     }
 
     # ---------- 表结构定义 ----------
@@ -446,7 +448,8 @@ class PointGamesPlugin(Star):
             total_spent INTEGER DEFAULT 0,
             sign_in_date TEXT,
             sign_in_streak INTEGER DEFAULT 0,
-            reward_reminded INTEGER DEFAULT 0
+            reward_reminded INTEGER DEFAULT 0,
+            gift_redeemed INTEGER DEFAULT 0
         )""",
         """CREATE TABLE IF NOT EXISTS lottery (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -976,7 +979,7 @@ class PointGamesPlugin(Star):
         )
 
     async def _check_spend_reward(self, session, user_id: str, group_id: str = None):
-        """检查用户消费是否达标，并发送提醒（必须在事务内调用）"""
+        """检查用户累计消费是否达标，发送提醒（必须在事务内调用）"""
         row = (
             await session.execute(
                 text("SELECT total_spent, reward_reminded FROM users WHERE user_id=:u"),
@@ -1078,6 +1081,9 @@ class PointGamesPlugin(Star):
                     await session.execute(text("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''"))
                 if "reward_reminded" not in user_columns:
                     await session.execute(text("ALTER TABLE users ADD COLUMN reward_reminded INTEGER DEFAULT 0"))
+                if "gift_redeemed" not in user_columns:
+                    # 一次性消费兑换礼品：已兑换次数
+                    await session.execute(text("ALTER TABLE users ADD COLUMN gift_redeemed INTEGER DEFAULT 0"))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -1625,8 +1631,8 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"可联系管理员兑换小礼品一份！"
+                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -1860,8 +1866,8 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"可联系管理员兑换小礼品一份！"
+                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -2002,8 +2008,8 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"可联系管理员兑换小礼品一份！"
+                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -3269,8 +3275,8 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 恭喜累计消费积分达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"可联系管理员兑换小礼品一份！"
+                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -4138,6 +4144,42 @@ class PointGamesPlugin(Star):
         if not ok:
             return error_response(msg)
         return json_response(data)
+
+    @filter.command("兑换礼品")
+    async def redeem_gift(self, event: AstrMessageEvent):
+        """/兑换礼品 —— 花费 10000 积分兑换小礼品一份，兑换后联系管理员领取"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "兑换礼品")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._ensure_user(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            bal = await self._balance(session, user_id)
+            if bal < self.SPEND_REWARD_THRESHOLD:
+                raise _BizError(
+                    f"积分不足喵~ 兑换礼品需要 {self.SPEND_REWARD_THRESHOLD} 积分，"
+                    f"你只有 {bal} 积分"
+                )
+            # 扣积分并记录流水，同时累计兑换次数
+            await self._add_points(
+                session, user_id, -self.SPEND_REWARD_THRESHOLD, "兑换礼品"
+            )
+            await session.execute(text(
+                "UPDATE users SET gift_redeemed=gift_redeemed+1 WHERE user_id=:u"
+            ), {"u": user_id})
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🎁 兑换成功！已花费 {self.SPEND_REWARD_THRESHOLD} 积分，"
+                f"当前积分：{new_bal}\n请联系管理员领取小礼品喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
 
     # ============================================================
     #  钓鱼系统
