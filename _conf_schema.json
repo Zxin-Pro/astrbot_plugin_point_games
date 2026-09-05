@@ -119,5 +119,6 @@
   "red_packet_timeout": {"description": "【📁 每日红包】抢红包时限（分钟）", "type": "int", "default": 10, "hint": "超时未抢完的剩余积分自动回收"},
   "red_packet_window_start": {"description": "【📁 每日红包】随机窗口开始", "type": "string", "default": "08:00", "hint": "每日在此时间之后随机触发，格式 HH:MM"},
   "red_packet_window_end": {"description": "【📁 每日红包】随机窗口结束", "type": "string", "default": "23:00", "hint": "每日在此时间之前随机触发，格式 HH:MM"},
-  "red_packet_group": {"description": "【📁 每日红包】红包发送群聊", "type": "string", "default": "", "hint": "群聊ID；留空则不发送红包"}
+  "red_packet_group": {"description": "【📁 每日红包】红包发送群聊", "type": "string", "default": "", "hint": "群聊ID；留空则不发送红包"},
+  "red_packet_daily_times": {"description": "【📁 每日红包】每日发放次数", "type": "int", "default": 1, "hint": "每天在时间窗口内随机发几个红包，每次都是独立的红包（总额×次数）"}
 }

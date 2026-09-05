@@ -313,7 +313,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.19.0",
+    version="2.19.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -390,6 +390,7 @@ class PointGamesPlugin(Star):
     RED_PACKET_TIMEOUT = 10         # 抢红包有效时间（分钟），超时剩余回收
     RED_PACKET_WINDOW = (8, 0, 23, 0)  # 随机触发时间窗口 (起时,起分,止时,止分)
     RED_PACKET_GROUP = ""           # 红包发送群聊ID（空则不发送）
+    RED_PACKET_DAILY_TIMES = 1      # 每日红包发放次数（在窗口内随机多个时间点）
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -928,6 +929,8 @@ class PointGamesPlugin(Star):
         we = _parse_hhmm(config.get("red_packet_window_end", "23:00"), (23, 0))
         self.RED_PACKET_WINDOW = (ws[0], ws[1], we[0], we[1])
         self.RED_PACKET_GROUP = str(config.get("red_packet_group", "") or "").strip()
+        self.RED_PACKET_DAILY_TIMES = integer("red_packet_daily_times",
+                                              self.RED_PACKET_DAILY_TIMES, 1)
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -1817,7 +1820,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v2.19.0",
+            "🎮 积分游戏 2.19.1",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -3402,7 +3405,11 @@ class PointGamesPlugin(Star):
     #  功能：每日红包（拼手气）
     # ============================================================
     def _schedule_red_packet(self):
-        """为今天生成一个红包随机触发时间（在配置窗口内），窗口已过则跳过。"""
+        """为今天生成红包随机触发时间（在配置窗口内），按每日次数生成多个不重叠时间点。
+
+        时间点之间至少间隔 2 分钟（红包时限的一半不可重叠，避免多个红包同时进行），
+        窗口已过则跳过。
+        """
         if not self.feature_flags.get("enable_red_packet", True):
             return
         if not self.RED_PACKET_GROUP:
@@ -3420,18 +3427,37 @@ class PointGamesPlugin(Star):
         window_start = max(start, now)
         if window_start >= end:
             return  # 今日窗口已过
-        run_at = window_start + timedelta(seconds=random.uniform(0, (end - window_start).total_seconds()))
-        self._scheduler.add_job(
-            self._send_red_packet,
-            DateTrigger(run_date=run_at, timezone=TZ),
-            id=f"red_packet_send_{now.date().isoformat()}", replace_existing=True,
-        )
-        self.logger.info(f"今日红包已调度：{run_at.isoformat()}")
+        total_sec = (end - window_start).total_seconds()
+        times = self.RED_PACKET_DAILY_TIMES
+        # 每个红包至少占用 时限+2分钟 的窗口，超出则削减次数防止重叠
+        min_span = (self.RED_PACKET_TIMEOUT + 2) * 60
+        times = max(1, min(times, int(total_sec // min_span) or 1))
+        # 均分窗口成 times 段，每段内随机一个时间点；
+        # 段尾预留一个完整时限，保证相邻两场红包不会同时进行
+        seg = total_sec / times
+        today = now.date().isoformat()
+        for i in range(times):
+            seg_start = window_start + timedelta(seconds=seg * i)
+            seg_end = seg_start + timedelta(seconds=seg - self.RED_PACKET_TIMEOUT * 60)
+            if seg_end <= seg_start:
+                seg_end = seg_start + timedelta(seconds=30)
+            run_at = seg_start + timedelta(seconds=random.uniform(0, (seg_end - seg_start).total_seconds()))
+            self._scheduler.add_job(
+                self._send_red_packet,
+                DateTrigger(run_date=run_at, timezone=TZ),
+                id=f"red_packet_send_{today}_{i}", replace_existing=True,
+            )
+        self.logger.info(f"今日红包已调度：{times} 次（窗口 {start.strftime('%H:%M')}-{end.strftime('%H:%M')}）")
 
     async def _send_red_packet(self):
         """在指定群发送拼手气红包，并注册超时结算任务。"""
         if not self.RED_PACKET_GROUP:
             return
+        # 保险：上一场红包尚未结束时跳过本场（正常调度已保证不重叠）
+        async with self._red_packet_lock:
+            if self._red_packet and not self._red_packet["finished"]:
+                self.logger.warning("上一场红包尚未结束，本场红包跳过")
+                return
         total, count = self.RED_PACKET_TOTAL, self.RED_PACKET_COUNT
         packet_id = f"rp{int(time.time() * 1000)}"
         expire_ts = time.time() + self.RED_PACKET_TIMEOUT * 60
