@@ -33,7 +33,7 @@
 | `/查询` | 同上 |
 | `/查积分 @玩家` | 查询其他玩家的积分信息 |
 | `/排行` | 全服积分排行榜 |
-| `签到` / `jrzj` / `今日座驾` | 群内触发每日座驾并完成积分签到（连续7天有额外奖励） |
+| `签到` / `jrzj` / `今日座驾` | 群内触发每日座驾并完成积分签到（连续7天有额外奖励），签到成功后附带输出**今日运势海报** |
 | `群活跃奖励` | 每日22:00自动结算群内发言前三名，奖励 50/30/10 积分 |
 
 ### 🎡 玩法指令
@@ -269,6 +269,34 @@
 | `card_cost` | int | `10` | 每次抽卡消耗积分 |
 | `card_complete_reward` | int | `100` | 集齐所有稀有度奖励 |
 
+### 📁 今日运势
+
+签到成功后自动附带输出今日运势海报（融合自 [astrbot_plugin_jrys](https://github.com/NINIYOYYO/astrbot_plugin_jrys)，无独立指令）。同一用户当天运势固定；节假日自动提升大吉概率；图片生成失败时自动回退文字运势。
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `enable_fortune` | bool | `true` | 启用今日运势（功能开关分类内） |
+| `font_name` | string | `千图马克手写体.ttf` | 海报字体文件（插件 font/ 目录下） |
+| `img_width` | int | `1080` | 海报宽度（像素） |
+| `img_height` | int | `1920` | 海报高度（像素） |
+| `avatar_size` | list | `[150, 150]` | 头像尺寸 [宽,高] |
+| `avatar_position` | list | `[60, 1350]` | 头像位置 [x,y] |
+| `avatar_cache_expiration` | int | `86400` | 头像缓存时长（秒） |
+| `date_y_position` | int | `1300` | 日期文字Y坐标 |
+| `summary_y_position` | int | `1400` | 运势摘要Y坐标 |
+| `lucky_star_y_position` | int | `1500` | 幸运星Y坐标 |
+| `sign_text_y_position` | int | `1600` | 签文Y坐标 |
+| `unsign_text_y_position` | int | `1700` | 解签Y坐标 |
+| `warning_text_y_position` | int | `1850` | 免责声明Y坐标 |
+| `pre_cache_background_images` | bool | `false` | 预缓存背景图（出图更快） |
+| `pre_cache_concurrency` | int | `3` | 预缓存并发数 |
+| `cleanup_background_downloads` | bool | `true` | 清理按需下载的背景图 |
+| `fixed_daily_fortune` | bool | `true` | 每日固定运势（同人同天结果一致） |
+| `holiday_rates_enabled` | bool | `true` | 节假日运势高爆率 |
+| `holidays` | list | `01-01` 等5个 | 节假日日期列表（MM-DD） |
+| `normal_rates` | object | `40/40/20` | 日常爆率权重（大吉/中吉/凶运） |
+| `holiday_rates` | object | `85/15/0` | 节假日爆率权重（大吉/中吉/凶运） |
+
 ### 📁 赞助系统
 
 | 配置项 | 类型 | 默认值 | 说明 |
@@ -376,12 +404,19 @@
 请先升级到 v2.15.4 及以上版本（已修复转账闭包变量问题）。仍报错请附上日志提 Issue。
 </details>
 
+<details>
+<summary><b>8. 签到没有运势海报 / 只有文字运势？</b></summary>
+
+海报生成依赖 `Pillow`、`aiohttp`、`aiofiles`（见 requirements.txt），缺失或头像/背景图下载失败时自动回退**文字运势**，不影响签到积分。可在配置页开启「预缓存背景图」加快出图；确认 `enable_fortune` 开关已打开。
+</details>
+
 ## 六、更新日志
 
 完整日志见 [CHANGELOG.md](./CHANGELOG.md)，近期版本：
 
 | 版本 | 主要更新 |
 |---|---|
+| v2.19.0 | 融合今日运势插件（jrys）：签到附带运势海报，同日固定、节假日高爆率、失败回退文字 |
 | v2.18.6 | 银行流水报告：新表 bank_transactions 存储存取/利息/管理员收益流水，每晚定时发送银行流水报告 |
 | v2.18.5 | 修复新玩家（先玩过其他玩法）领不到首签送竿的问题 |
 | v2.18.4 | 钓鱼播报群可定向配置（fishing_broadcast_groups） |

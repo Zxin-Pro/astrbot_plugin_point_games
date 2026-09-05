@@ -33,6 +33,15 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+# ---------- 今日运势（融合自 astrbot_plugin_jrys，依赖缺失时自动回退文字运势） ----------
+try:
+    from .painter import FortunePainter
+    from .resources import ResourceManager
+    _FORTUNE_DEPS_OK = True
+except Exception as _fortune_dep_err:  # Pillow/aiohttp/aiofiles 未安装等
+    _FORTUNE_DEPS_OK = False
+    _FORTUNE_DEPS_ERR = _fortune_dep_err
+
 # 时区（北京时间）
 try:
     from zoneinfo import ZoneInfo
@@ -285,7 +294,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
     ("/赞助拒绝 [QQ] [理由]", "管理员拒绝申请"),
     ("/赞助列表", "查看待审核申请（管理员）"),
-    ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到"),
+    ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到，附带今日运势海报"),
     ("/查询", "查看自己的积分、收入、支出与签到信息"),
     ("/查积分 @玩家", "查询其他玩家的积分信息"),
     ("/排行", "全服积分排行榜"),
@@ -320,7 +329,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.20.5",
+    version="3.20.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -476,6 +485,7 @@ class PointGamesPlugin(Star):
         "enable_bank": True,
         "enable_red_packet": True,
         "enable_loan": True,
+        "enable_fortune": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -797,6 +807,10 @@ class PointGamesPlugin(Star):
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._uc_jobs: dict[str, Any] = {}      # group_id -> apscheduler Job（卧底计时器）
         self._daily_car_lock = asyncio.Lock()
+        # 今日运势：图片资源/绘制器延迟到 initialize() 创建
+        self._fortune_resources = None
+        self._fortune_painter = None
+        self._fortune_jrys_data: dict | None = None
         self._dice_lock = asyncio.Lock()
         self._activity_counts: dict[str, dict[str, dict[str, Any]]] = {}
         self._activity_lock = asyncio.Lock()
@@ -1530,6 +1544,19 @@ class PointGamesPlugin(Star):
         self._scheduler.start()
         # 3. 注册 WebUI
         self._register_web_apis()
+        # 4. 今日运势资源（背景/头像缓存目录、预缓存任务）
+        if _FORTUNE_DEPS_OK and self.feature_flags.get("enable_fortune", True):
+            try:
+                self._fortune_resources = ResourceManager(
+                    self.config, plugin_name="astrbot_plugin_point_games"
+                )
+                self._fortune_painter = FortunePainter(self.config)
+                await self._fortune_resources.initialize()
+                self.logger.info("今日运势模块已加载（签到时附带运势海报）")
+            except Exception:
+                self.logger.exception("今日运势模块初始化失败，签到将回退文字运势")
+                self._fortune_resources = None
+                self._fortune_painter = None
 
     async def terminate(self):
         """插件卸载时：停止定时任务"""
@@ -1540,6 +1567,22 @@ class PointGamesPlugin(Star):
                 pass
             self._scheduler = None
         self._uc_jobs.clear()
+        # 清理运势模块 HTTP 会话与预缓存任务
+        res = self._fortune_resources
+        if res:
+            try:
+                if res._precache_task and not res._precache_task.done():
+                    res._precache_task.cancel()
+                    try:
+                        await res._precache_task
+                    except asyncio.CancelledError:
+                        pass
+                if res._session:
+                    await res._session.close()
+            except Exception:
+                pass
+        self._fortune_resources = None
+        self._fortune_painter = None
 
     # ============================================================
     #  定时任务
@@ -1958,7 +2001,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.20.5",
+            "🎮 积分游戏 3.20.0",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -1971,7 +2014,7 @@ class PointGamesPlugin(Star):
             "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
             "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计",
             "兑换：/兑换礼品（花费10000积分）",
-            "签到：群发 签到 / jrzj / 今日座驾｜排行：/排行",
+            "签到：群发 签到 / jrzj / 今日座驾（附带今日运势）｜排行：/排行",
             "管理：/加积分 @玩家 数量｜/减积分 @玩家 数量",
             "　　　/清除数据 @玩家｜/初始化 @玩家",
             "群管理：/本群玩法 开|关｜/玩法模式 白名单|黑名单｜/本群状态",
@@ -5579,9 +5622,155 @@ class PointGamesPlugin(Star):
 
     async def sign_in(self, event: AstrMessageEvent):
         """兼容旧代码调用；实际群消息由 daily_car_checkin 统一处理。"""
-        yield event.plain_result(await self._sign_in_text(event))
+        ok, msg = await self._sign_in_text(event)
+        yield event.plain_result(msg)
+        if ok:
+            async for result in self._send_fortune_result(event):
+                yield result
 
-    async def _sign_in_text(self, event: AstrMessageEvent) -> str:
+    # ============================================================
+    #  今日运势（融合自 astrbot_plugin_jrys：签到时附带输出）
+    # ============================================================
+    def _fortune_enabled(self) -> bool:
+        return bool(self.feature_flags.get("enable_fortune", True))
+
+    def _load_jrys_data(self) -> dict:
+        """加载运势数据表（jrys.json，随插件分发）"""
+        if self._fortune_jrys_data is None:
+            try:
+                path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jrys.json")
+                with open(path, "r", encoding="utf-8") as f:
+                    self._fortune_jrys_data = json.load(f)
+            except Exception:
+                self.logger.exception("加载运势数据 jrys.json 失败")
+                self._fortune_jrys_data = {}
+        return self._fortune_jrys_data
+
+    def _fortune_rates(self) -> tuple[int, int, int]:
+        """当天适用的运势爆率权重：节假日启用且命中时用节假日权重"""
+        if self.config.get("holiday_rates_enabled", True):
+            holidays = self.config.get(
+                "holidays", ["01-01", "02-14", "05-01", "10-01", "12-25"]
+            )
+            if isinstance(holidays, str):
+                holidays = [x.strip() for x in holidays.replace("，", ",").split(",") if x.strip()]
+            today_md = datetime.now().strftime("%m-%d")
+            if today_md in {str(x).strip() for x in (holidays or [])}:
+                hr = self.config.get("holiday_rates", {}) or {}
+                return (
+                    int(hr.get("good", 85)),
+                    int(hr.get("normal", 15)),
+                    int(hr.get("bad", 0)),
+                )
+        nr = self.config.get("normal_rates", {}) or {}
+        return (
+            int(nr.get("good", 40)),
+            int(nr.get("normal", 40)),
+            int(nr.get("bad", 20)),
+        )
+
+    def _pick_fortune(self, user_id: str) -> dict | None:
+        """按 painter 同款算法抽取运势：用户ID+日期做种子，当天结果固定"""
+        data = self._load_jrys_data()
+        keys = [k for k in data.keys() if not k.startswith("_")]
+        if not keys:
+            return None
+        rng = random.Random()
+        if self.config.get("fixed_daily_fortune", True):
+            rng.seed(f"{user_id}-{datetime.now().strftime('%Y-%m-%d')}")
+        good = [k for k in keys if int(k) > 70]
+        normal = [k for k in keys if 56 <= int(k) <= 70]
+        bad = [k for k in keys if int(k) < 56]
+        r_good, r_normal, r_bad = self._fortune_rates()
+        weights = []
+        for k in keys:
+            val = int(k)
+            if val > 70:
+                weights.append(r_good / max(len(good), 1))
+            elif val >= 56:
+                weights.append(r_normal / max(len(normal), 1))
+            else:
+                weights.append(r_bad / max(len(bad), 1))
+        if sum(weights) <= 0:
+            weights = [1] * len(keys)
+        key_1 = rng.choices(keys, weights=weights, k=1)[0]
+        bucket = data.get(key_1) or []
+        if not bucket:
+            return None
+        fd = rng.choice(bucket)
+        # 部分条目缺 luckValue 字段，桶名即为分数
+        if isinstance(fd, dict) and "luckValue" not in fd:
+            try:
+                fd["luckValue"] = int(key_1)
+            except (TypeError, ValueError):
+                pass
+        return fd
+
+    def _fortune_text(self, user_id: str) -> str:
+        """文字版今日运势（海报生成失败时的兜底输出）"""
+        fd = self._pick_fortune(user_id)
+        if not fd:
+            return ""
+        lines = [
+            f"🔮 今日运势：{fd.get('fortuneSummary', '未知')} {fd.get('luckyStar', '')}（{fd.get('luckValue', '?')}分）",
+            f"📜 签文：{fd.get('signText', '')}",
+            "仅供娱乐 | 相信科学 | 请勿迷信",
+        ]
+        return "\n".join(lines)
+
+    async def _generate_fortune_image(self, user_id: str) -> Optional[str]:
+        """生成今日运势海报，返回临时图片路径；失败返回 None"""
+        if not (_FORTUNE_DEPS_OK and self._fortune_resources and self._fortune_painter):
+            return None
+        avatar_path, background_result = await asyncio.gather(
+            self._fortune_resources.get_avatar_img(user_id),
+            self._fortune_resources.get_background_image(),
+            return_exceptions=True,
+        )
+        if isinstance(background_result, Exception) or not background_result:
+            self.logger.warning(f"获取运势背景图失败：{background_result}")
+            return None
+        background_path, should_cleanup = background_result
+        cleanup = bool(should_cleanup)
+        try:
+            if isinstance(avatar_path, Exception) or not avatar_path:
+                self.logger.warning(f"获取用户头像失败：{avatar_path}")
+                return None
+            return await asyncio.to_thread(
+                self._fortune_painter.generate_image_sync,
+                user_id, avatar_path, background_path, self._load_jrys_data(),
+            )
+        finally:
+            if cleanup and background_path and os.path.exists(background_path):
+                try:
+                    os.remove(background_path)
+                except OSError:
+                    pass
+
+    async def _send_fortune_result(self, event: AstrMessageEvent):
+        """签到成功后输出今日运势：优先海报图片，失败回退文字运势"""
+        if not self._fortune_enabled():
+            return
+        user_id = event.get_sender_id()
+        temp_path = None
+        try:
+            temp_path = await self._generate_fortune_image(user_id)
+        except Exception:
+            self.logger.exception("生成今日运势海报异常")
+        if temp_path and os.path.exists(temp_path):
+            try:
+                yield event.image_result(temp_path)
+            finally:
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+            return
+        text = self._fortune_text(user_id)
+        if text:
+            yield event.plain_result(text)
+
+    async def _sign_in_text(self, event: AstrMessageEvent) -> tuple[bool, str]:
         """执行积分签到并返回结果，供座驾签到监听器合并输出。"""
         ok_gate, msg_gate = await self._check_group_gate(event, "签到")
         if not ok_gate:
@@ -5637,16 +5826,19 @@ class PointGamesPlugin(Star):
             msg += f"\n当前积分：{await self._balance(session, user_id)} 喵~"
             return True, msg, None
 
-        _, msg, _ = await self._tx(fn)
-        return msg
+        ok, msg, _ = await self._tx(fn)
+        return ok, msg
 
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
     @filter.regex(re.compile(r"(?i)^(?:签到|jrzj|今日座驾)\s*$"))
     async def daily_car_checkin(self, event: AstrMessageEvent):
         """群内发送 签到、jrzj 或 今日座驾，合并输出签到和座驾。"""
-        sign_text = await self._sign_in_text(event)
+        ok, sign_text = await self._sign_in_text(event)
         car_text = await self._daily_car_text(event)
         yield event.plain_result(f"{sign_text}\n\n{car_text}")
+        if ok:
+            async for result in self._send_fortune_result(event):
+                yield result
         event.stop_event()
 
     @filter.event_message_type(EventMessageType.GROUP_MESSAGE)

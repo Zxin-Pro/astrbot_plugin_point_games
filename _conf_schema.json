@@ -21,6 +21,7 @@
   "enable_transfer": {"description": "【📁 功能开关】启用积分转账", "type": "bool", "default": true},
   "enable_tax": {"description": "【📁 功能开关】启用每日自动收税（凌晨0点）", "type": "bool", "default": true},
   "enable_bank": {"description": "【📁 功能开关】启用银行系统", "type": "bool", "default": true},
+  "enable_fortune": {"description": "【📁 功能开关】启用今日运势（签到时附带运势海报）", "type": "bool", "default": true, "hint": "关闭后签到只输出积分，不生成运势；需要安装 Pillow/aiohttp/aiofiles，缺失时自动回退文字运势"},
 
   "spin_default_cost": {"description": "【📁 经济系统】转盘默认消耗积分", "type": "int", "default": 10},
   "spin_weight_0": {"description": "【📁 经济系统】转盘返还0倍的概率权重", "type": "int", "default": 40},
@@ -98,6 +99,35 @@
 
   "card_cost": {"description": "【📁 抽卡系统】抽卡每次消耗积分", "type": "int", "default": 10},
   "card_complete_reward": {"description": "【📁 抽卡系统】抽卡集齐奖励", "type": "int", "default": 100},
+
+  "font_name": {"description": "【📁 今日运势】运势海报字体文件名", "type": "string", "default": "千图马克手写体.ttf", "hint": "插件 font/ 目录下的字体文件；加载失败自动回退默认字体"},
+  "img_width": {"description": "【📁 今日运势】海报宽度（像素）", "type": "int", "default": 1080},
+  "img_height": {"description": "【📁 今日运势】海报高度（像素）", "type": "int", "default": 1920},
+  "avatar_size": {"description": "【📁 今日运势】头像尺寸 [宽,高]", "type": "list", "default": [150, 150]},
+  "avatar_position": {"description": "【📁 今日运势】头像位置 [x,y]", "type": "list", "default": [60, 1350]},
+  "avatar_cache_expiration": {"description": "【📁 今日运势】头像缓存时长（秒）", "type": "int", "default": 86400, "hint": "默认一天，缓存内不重复下载用户头像"},
+  "date_y_position": {"description": "【📁 今日运势】日期文字Y坐标", "type": "int", "default": 1300},
+  "summary_y_position": {"description": "【📁 今日运势】运势摘要文字Y坐标", "type": "int", "default": 1400},
+  "lucky_star_y_position": {"description": "【📁 今日运势】幸运星文字Y坐标", "type": "int", "default": 1500},
+  "sign_text_y_position": {"description": "【📁 今日运势】签文Y坐标", "type": "int", "default": 1600},
+  "unsign_text_y_position": {"description": "【📁 今日运势】解签Y坐标", "type": "int", "default": 1700},
+  "warning_text_y_position": {"description": "【📁 今日运势】免责声明Y坐标", "type": "int", "default": 1850},
+  "pre_cache_background_images": {"description": "【📁 今日运势】预缓存背景图", "type": "bool", "default": false, "hint": "启用后插件加载时后台下载背景图URL到本地缓存，签到出图更快"},
+  "pre_cache_concurrency": {"description": "【📁 今日运势】预缓存并发数", "type": "int", "default": 3},
+  "cleanup_background_downloads": {"description": "【📁 今日运势】清理按需下载的背景图", "type": "bool", "default": true, "hint": "未启用预缓存时，按需下载的背景图用完即删；关闭则持久化到本地缓存"},
+  "fixed_daily_fortune": {"description": "【📁 今日运势】每日固定运势", "type": "bool", "default": true, "hint": "开启后同一用户当天运势固定（重复签到结果一致）；关闭则每次随机"},
+  "holiday_rates_enabled": {"description": "【📁 今日运势】节假日运势高爆率", "type": "bool", "default": true, "hint": "启用后节假日（holidays 列表）使用 holiday_rates 权重，出大吉概率更高"},
+  "holidays": {"description": "【📁 今日运势】节假日日期列表（MM-DD）", "type": "list", "default": ["01-01", "02-14", "05-01", "10-01", "12-25"]},
+  "normal_rates": {"description": "【📁 今日运势】日常运势爆率权重", "type": "object", "default": {"good": 40, "normal": 40, "bad": 20}, "items": {
+      "good": {"description": "大吉（>70分）权重", "type": "int", "default": 40},
+      "normal": {"description": "中吉（56~70分）权重", "type": "int", "default": 40},
+      "bad": {"description": "凶运（<56分）权重", "type": "int", "default": 20}
+    }, "hint": "设置平时签到的运势抽取概率权重"},
+  "holiday_rates": {"description": "【📁 今日运势】节假日运势爆率权重", "type": "object", "default": {"good": 85, "normal": 15, "bad": 0}, "items": {
+      "good": {"description": "大吉（>70分）权重", "type": "int", "default": 85},
+      "normal": {"description": "中吉（56~70分）权重", "type": "int", "default": 15},
+      "bad": {"description": "凶运（<56分）权重", "type": "int", "default": 0}
+    }, "hint": "设置节假日签到时的运势抽取概率权重"},
 
   "sponsor_qrcode": {"description": "【📁 赞助系统】赞助收款码图片", "type": "file", "default": [], "file_types": ["jpg", "jpeg", "png", "webp"], "hint": "在此上传收款码图片。上传后点击保存配置；用户私聊 /赞助 时会直接收到该图片。"},
   "sponsor_rate": {"description": "【📁 赞助系统】赞助积分兑换率（1元=N积分）", "type": "int", "default": 100},
