@@ -8,6 +8,7 @@
   "enable_math": {"description": "启用速算挑战", "type": "bool", "default": true},
   "enable_card": {"description": "启用抽卡系统", "type": "bool", "default": true},
   "enable_fishing": {"description": "启用钓鱼系统", "type": "bool", "default": true},
+  "fishing_broadcast_groups": {"description": "钓鱼播报群号列表，多个用逗号分隔（留空则播报到挂机所在的群）", "type": "list", "default": []},
   "enable_activity": {"description": "启用群活跃奖励（每日22:00结算发言前三名）", "type": "bool", "default": true},
   "enable_transfer": {"description": "启用积分转账", "type": "bool", "default": true},
   "enable_tax": {"description": "启用每日自动收税（凌晨0点）", "type": "bool", "default": true},

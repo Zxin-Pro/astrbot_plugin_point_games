@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.18.3
+作者：Zxin_Pro    版本：2.18.4
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -403,6 +403,7 @@ class PointGamesPlugin(Star):
     FISHING_FULL_REWARD = 5000      # 集齐 102 种图鉴奖励
     FISHING_BOTH_LEGEND_REWARD = 1000  # 同时拥有烛心和闲鱼额外奖励
     FISHING_BROADCAST_PRICE = 1000  # 触发全群广播的鱼价阈值
+    FISHING_BROADCAST_GROUPS = []   # 钓鱼播报群列表（配置页填写，留空播报到挂机所在群）
     FISHING_RESET_HOUR = 0          # 今日统计重置小时
     FISHING_RESET_MINUTE = 0        # 今日统计重置分钟
     FISHING_RANK_SIZE = 10          # 钓鱼排行显示人数
@@ -772,6 +773,14 @@ class PointGamesPlugin(Star):
         self.BOMB_MAX = max(integer("bomb_max", self.BOMB_MAX, 2), self.BOMB_MIN + 1)
         self.BOMB_PENALTY = integer("bomb_penalty", self.BOMB_PENALTY, 0)
         self.BOMB_REWARD = integer("bomb_reward", self.BOMB_REWARD, 0)
+
+        # 钓鱼系统配置：播报群列表（支持逗号分隔字符串或列表）
+        raw_fbg = config.get("fishing_broadcast_groups", [])
+        if isinstance(raw_fbg, str):
+            raw_fbg = [x.strip() for x in raw_fbg.replace("，", ",").split(",") if x.strip()]
+        self.FISHING_BROADCAST_GROUPS = [
+            str(x).strip() for x in (raw_fbg or []) if str(x).strip()
+        ]
         
         # 速算挑战配置
         self.MATH_TIMEOUT = integer("math_timeout", self.MATH_TIMEOUT, 1)
@@ -4930,12 +4939,26 @@ class PointGamesPlugin(Star):
     async def _send_with_fallback(
         self, platform_id: str, group_id: str, chain: list, tag: str
     ) -> bool:
-        """多重路径发送：竿里存的平台ID → 当前所有平台实例 → 已开启玩法的群。
+        """多重路径发送播报。
 
-        插件更新/适配器改名后，rods 里存的 platform_id 可能已过期，
-        只按旧 ID 发会静默失败，这里保证播报尽量送达。
+        配置了 fishing_broadcast_groups 时只发配置的群（所有平台实例都试）；
+        否则按「竿里存的平台ID → 当前所有平台实例 → 已开启玩法的群」重试。
         """
         targets: list[tuple[str, str]] = []
+        if self.FISHING_BROADCAST_GROUPS:
+            # 配置了播报群：定向发送到配置的群
+            pids = await self._get_platform_ids() or [str(platform_id or "")]
+            for group in self.FISHING_BROADCAST_GROUPS:
+                for pid in pids:
+                    targets.append((pid, group))
+            for t_platform, t_group in targets:
+                try:
+                    await self._send_group_chain(t_platform, t_group, chain)
+                except Exception:
+                    self.logger.exception(
+                        f"{tag}发送到播报群失败（{t_platform}:{t_group}）"
+                    )
+            return True
         if group_id:
             targets.append((str(platform_id), str(group_id)))
             for pid in await self._get_platform_ids():
