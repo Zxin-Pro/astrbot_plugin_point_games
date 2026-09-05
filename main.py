@@ -367,6 +367,8 @@ class PointGamesPlugin(Star):
     # 银行系统
     CURRENT_INTEREST_RATE = 0.05    # 活期利率：5%/天（向下取整）
     ADMIN_EXTRA_RATE = 0.01         # 管理员额外收益：存款总额的 1%/天（独立发放）
+    BANK_REPORT_TIME = (21, 0)      # 每日流水报告时间 (时, 分)，可配置
+    BANK_REPORT_GROUP = []          # 流水报告发送群聊ID列表（空则不发送）
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -690,6 +692,13 @@ class PointGamesPlugin(Star):
             total_interest INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS bank_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            type TEXT,
+            amount INTEGER,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -855,6 +864,15 @@ class PointGamesPlugin(Star):
             self.ADMIN_EXTRA_RATE = extra if 0 <= extra <= 1 else self.ADMIN_EXTRA_RATE
         except (TypeError, ValueError):
             pass
+        # 银行流水报告时间与群聊
+        report_time = str(config.get("bank_report_time", "") or "").strip() or "21:00"
+        try:
+            h, m = report_time.split(":")
+            self.BANK_REPORT_TIME = (max(0, min(23, int(h))), max(0, min(59, int(m))))
+        except (ValueError, TypeError):
+            self.BANK_REPORT_TIME = (21, 0)
+        raw_groups = str(config.get("bank_report_group", "") or "").strip()
+        self.BANK_REPORT_GROUP = [g.strip() for g in raw_groups.replace("，", ",").split(",") if g.strip()]
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -1299,6 +1317,12 @@ class PointGamesPlugin(Star):
             self._daily_bank_settlement,
             CronTrigger(hour=0, minute=0, timezone=TZ),
             id="point_games_bank_settlement", replace_existing=True,
+        )
+        # 银行流水报告：每晚配置的时间发送当日银行+系统流水
+        self._scheduler.add_job(
+            self._daily_bank_report,
+            CronTrigger(hour=self.BANK_REPORT_TIME[0], minute=self.BANK_REPORT_TIME[1], timezone=TZ),
+            id="point_games_bank_report", replace_existing=True,
         )
         self._scheduler.start()
         # 3. 注册 WebUI
@@ -3035,6 +3059,11 @@ class PointGamesPlugin(Star):
             await session.execute(text(
                 "UPDATE bank_accounts SET current_balance=current_balance+:a WHERE user_id=:u"
             ), {"a": amount, "u": user_id})
+            # 银行流水：存款
+            await session.execute(text(
+                "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                "VALUES(:u, 'deposit', :a, :t)"
+            ), {"u": user_id, "a": amount, "t": time.time()})
             bank = await self._get_bank(session, user_id)
             estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
             return True, (
@@ -3078,6 +3107,11 @@ class PointGamesPlugin(Star):
                 raise _BizError(f"❌ 银行余额不足！当前活期余额：{bank[0]}积分")
             await self._add_points(session, user_id, amount, "bank_withdraw",
                                    earned=amount, spent=0)
+            # 银行流水：取款
+            await session.execute(text(
+                "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                "VALUES(:u, 'withdraw', :a, :t)"
+            ), {"u": user_id, "a": amount, "t": time.time()})
             bank = await self._get_bank(session, user_id)
             estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
             return True, (
@@ -3142,6 +3176,11 @@ class PointGamesPlugin(Star):
                         "UPDATE bank_accounts SET total_interest=total_interest+:i "
                         "WHERE user_id=:u"
                     ), {"i": interest, "u": str(uid)})
+                    # 银行流水：利息
+                    await session.execute(text(
+                        "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                        "VALUES(:u, 'interest', :a, :t)"
+                    ), {"u": str(uid), "a": interest, "t": time.time()})
                     total_interest += interest
                 # 管理员额外收益：独立发放，不影响玩家利息
                 admin_extra = int(int(balance) * extra_rate)
@@ -3151,6 +3190,11 @@ class PointGamesPlugin(Star):
             if total_admin_extra > 0 and receiver:
                 await self._add_points(session, receiver, total_admin_extra, "bank_admin_extra",
                                        earned=total_admin_extra, spent=0)
+                # 银行流水：管理员额外收益（总额一条）
+                await session.execute(text(
+                    "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                    "VALUES(:u, 'admin_extra', :a, :t)"
+                ), {"u": receiver, "a": total_admin_extra, "t": time.time()})
             return True, "ok", (total_interest, total_admin_extra if receiver else 0)
 
         ok, _, data = await self._tx(fn)
@@ -3187,6 +3231,110 @@ class PointGamesPlugin(Star):
                     await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
                 except Exception:
                     self.logger.exception(f"银行日结播报发送失败：{group_id}")
+
+    async def _daily_bank_report(self):
+        """每晚指定时间发送银行日结流水 + 系统总流水报告到配置的群聊。"""
+        if not self.feature_flags.get("enable_bank", True):
+            return
+        if not self.BANK_REPORT_GROUP:
+            return  # 未配置发送群聊则不发送
+        # 统计窗口：北京时间今日 0 点 ~ 明日 0 点（银行流水与积分流水均存时间戳）
+        day_start = datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+        day_end = day_start + timedelta(days=1)
+        t0, t1 = day_start.timestamp(), day_end.timestamp()
+        today = day_start.date().isoformat()
+
+        async def fn(session):
+            # ===== 银行流水（bank_transactions 按类型汇总今日记录）=====
+            bank_stats = {"deposit": (0, 0), "withdraw": (0, 0),
+                          "interest": (0, 0), "admin_extra": (0, 0)}
+            rows = (await session.execute(text(
+                "SELECT type, COUNT(*), COALESCE(SUM(amount),0) FROM bank_transactions "
+                "WHERE create_time >= :t0 AND create_time < :t1 GROUP BY type"
+            ), {"t0": t0, "t1": t1})).all()
+            for rtype, cnt, total in rows:
+                if rtype in bank_stats:
+                    bank_stats[rtype] = (int(cnt), int(total))
+            # 当前银行总存款与开户数
+            row = (await session.execute(text(
+                "SELECT COALESCE(SUM(current_balance),0), COUNT(*) FROM bank_accounts"
+            ))).first()
+            total_bank, total_users = int(row[0]), int(row[1])
+            # ===== 系统总流水（point_transactions 今日，剔除银行存取避免重复计入）=====
+            row = (await session.execute(text(
+                "SELECT COALESCE(SUM(amount),0) FROM point_transactions "
+                "WHERE amount > 0 AND create_time >= :t0 AND create_time < :t1 "
+                "AND operation != 'bank_withdraw'"
+            ), {"t0": t0, "t1": t1})).first()
+            total_income = int(row[0])
+            row = (await session.execute(text(
+                "SELECT COALESCE(SUM(-amount),0) FROM point_transactions "
+                "WHERE amount < 0 AND create_time >= :t0 AND create_time < :t1 "
+                "AND operation != 'bank_deposit'"
+            ), {"t0": t0, "t1": t1})).first()
+            total_expense = int(row[0])
+            # 今日转账手续费（管理员 fee_income 流水）
+            row = (await session.execute(text(
+                "SELECT COALESCE(SUM(amount),0) FROM point_transactions "
+                "WHERE operation='fee_income' AND create_time >= :t0 AND create_time < :t1"
+            ), {"t0": t0, "t1": t1})).first()
+            transfer_fee_total = int(row[0])
+            # 今日税收（用户 tax 流水）
+            row = (await session.execute(text(
+                "SELECT COALESCE(SUM(-amount),0) FROM point_transactions "
+                "WHERE operation='tax' AND create_time >= :t0 AND create_time < :t1"
+            ), {"t0": t0, "t1": t1})).first()
+            tax_total = int(row[0])
+            # 系统总积分池 = 所有用户钱包余额 + 银行存款总和
+            row = (await session.execute(text(
+                "SELECT COALESCE(SUM(balance),0) FROM users"
+            ))).first()
+            total_user_balance = int(row[0])
+            system_total_pool = total_user_balance + total_bank
+            return True, "ok", {
+                "deposit": bank_stats["deposit"], "withdraw": bank_stats["withdraw"],
+                "interest": bank_stats["interest"], "admin_extra": bank_stats["admin_extra"],
+                "total_bank": total_bank, "total_users": total_users,
+                "income": total_income, "expense": total_expense,
+                "fee": transfer_fee_total, "tax": tax_total,
+                "pool": system_total_pool,
+            }
+
+        ok, _, data = await self._tx(fn)
+        if not ok or not data:
+            return
+        dep_cnt, dep_total = data["deposit"]
+        wd_cnt, wd_total = data["withdraw"]
+        it_cnt, it_total = data["interest"]
+        ae_cnt, ae_total = data["admin_extra"]
+        net_flow = data["income"] - data["expense"]
+        msg = (
+            "📊 【银行日结流水】\n"
+            f"日期：{today}\n"
+            "─────────────\n"
+            f"💳 今日存款：{dep_total} 积分（{dep_cnt}笔）\n"
+            f"💸 今日取款：{wd_total} 积分（{wd_cnt}笔）\n"
+            f"📈 今日发放利息：{it_total} 积分\n"
+            f"💰 管理员额外收益：{ae_total} 积分\n"
+            "─────────────\n"
+            f"📊 当前银行总存款：{data['total_bank']} 积分\n"
+            f"👥 银行总用户数：{data['total_users']} 人\n\n"
+            "─────────────\n"
+            "💰 【系统总流水】\n"
+            f"📈 总收入：{data['income']} 积分（签到/闯关/速算/掷骰/活跃/炸弹等）\n"
+            f"💸 总支出：{data['expense']} 积分（转盘/BOSS/大乐透/卧底/抽卡/转账等）\n"
+            f"📊 净流通：{net_flow:+d} 积分\n"
+            f"💳 转账手续费：{data['fee']} 积分\n"
+            f"📊 税收：{data['tax']} 积分\n"
+            "─────────────\n"
+            f"📊 系统总积分池：{data['pool']} 积分"
+        )
+        broadcast_chain = [Plain(msg)]
+        for group_id in self.BANK_REPORT_GROUP:
+            try:
+                await self._send_group_chain("", str(group_id), broadcast_chain)
+            except Exception:
+                self.logger.exception(f"银行流水报告发送失败：{group_id}")
 
     # ============================================================
     #  功能七：群活跃奖励

@@ -15,6 +15,8 @@
   "enable_bank": {"description": "启用银行系统", "type": "bool", "default": true},
   "bank_interest_rate": {"description": "银行活期利率（每日）", "type": "float", "default": 0.05, "hint": "0.05=每日5%，向下取整，凌晨0点结算到钱包余额"},
   "bank_admin_extra_rate": {"description": "管理员额外收益比例", "type": "float", "default": 0.01, "hint": "0.01=按玩家存款总额的1%每日发放给fee_receiver账户，不影响玩家利息"},
+  "bank_report_time": {"description": "银行流水报告时间", "type": "string", "default": "21:00", "hint": "每天此时间发送当日银行+系统流水报告，格式 HH:MM"},
+  "bank_report_group": {"description": "流水报告发送群聊", "type": "string", "default": "", "hint": "群聊ID，逗号分隔可填多个；留空则不发送"},
   "tax_rate": {"description": "税率（余额百分比）", "type": "float", "default": 0.001, "hint": "0.001=余额的0.1%，向下取整；余额低于收税门槛不扣"},
   "tax_min_balance": {"description": "收税门槛（余额≥此值才扣税）", "type": "int", "default": 1000},
   "enable_sign_in": {"description": "启用每日签到", "type": "bool", "default": true},
