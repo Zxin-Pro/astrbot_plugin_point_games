@@ -129,7 +129,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -271,6 +271,9 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/存钱 [积分]", "银行系统：将钱包积分存入银行"),
     ("/取钱 [积分]", "银行系统：从银行取出积分到钱包"),
     ("/我的银行", "银行系统：查看活期余额与累计利息"),
+    ("/贷款 [积分]", "贷款系统：向银行申请贷款（利息5%/天，不可转账）"),
+    ("/还款", "贷款系统：一次性还清当前贷款本息"),
+    ("/我的贷款", "贷款系统：查看贷款详情、信用分与额度"),
     ("每日红包", "每日随机时间在指定群发拼手气红包，发送「抢」参与"),
     ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
@@ -313,7 +316,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.19.1",
+    version="2.20.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -391,6 +394,21 @@ class PointGamesPlugin(Star):
     RED_PACKET_WINDOW = (8, 0, 23, 0)  # 随机触发时间窗口 (起时,起分,止时,止分)
     RED_PACKET_GROUP = ""           # 红包发送群聊ID（空则不发送）
     RED_PACKET_DAILY_TIMES = 1      # 每日红包发放次数（在窗口内随机多个时间点）
+    # 贷款系统
+    LOAN_MIN = 100                  # 单次贷款最低积分
+    LOAN_MAX = 5000                 # 单次贷款最高积分
+    LOAN_DAYS = 7                   # 贷款期限（天）
+    LOAN_INTEREST_RATE = 0.05       # 日利率 5%，不足一天按一天算
+    LOAN_INITIAL_LIMIT = 1000       # 新用户初始额度
+    LOAN_MAX_LIMIT = 5000           # 最高额度上限
+    LOAN_LIMIT_UPGRADE_1 = 2000     # 按时还款1次后的额度
+    LOAN_LIMIT_UPGRADE_2 = 3000     # 按时还款3次后的额度
+    LOAN_LIMIT_UPGRADE_3 = 5000     # 按时还款5次后的额度
+    LOAN_CREDIT_PENALTY = -20       # 逾期信用分扣除
+    LOAN_CREDIT_REWARD = 10         # 按时还款信用分奖励
+    LOAN_CREDIT_THRESHOLD = -50     # 信用分贷款门槛（低于则禁止贷款）
+    LOAN_AUTO_REPAY_ENABLED = True  # 逾期后收入自动扣款还贷
+    LOAN_PREVENT_MULTIPLE = True    # 贷款期间禁止再次贷款
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -453,6 +471,7 @@ class PointGamesPlugin(Star):
         "enable_tax": True,
         "enable_bank": True,
         "enable_red_packet": True,
+        "enable_loan": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -490,6 +509,9 @@ class PointGamesPlugin(Star):
         "存钱": ("enable_bank", "银行系统"),
         "取钱": ("enable_bank", "银行系统"),
         "我的银行": ("enable_bank", "银行系统"),
+        "贷款": ("enable_loan", "贷款系统"),
+        "还款": ("enable_loan", "贷款系统"),
+        "我的贷款": ("enable_loan", "贷款系统"),
     }
 
     # ---------- 表结构定义 ----------
@@ -503,7 +525,8 @@ class PointGamesPlugin(Star):
             sign_in_date TEXT,
             sign_in_streak INTEGER DEFAULT 0,
             reward_reminded INTEGER DEFAULT 0,
-            gift_redeemed INTEGER DEFAULT 0
+            gift_redeemed INTEGER DEFAULT 0,
+            loan_balance INTEGER DEFAULT 0
         )""",
         """CREATE TABLE IF NOT EXISTS lottery (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -739,6 +762,26 @@ class PointGamesPlugin(Star):
             status TEXT,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS loans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            amount INTEGER,
+            interest INTEGER,
+            total_due INTEGER,
+            paid INTEGER DEFAULT 0,
+            days INTEGER DEFAULT 7,
+            loan_days_used INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'active',
+            start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            due_date TIMESTAMP,
+            closed_date TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS credit_scores (
+            user_id TEXT PRIMARY KEY,
+            score INTEGER DEFAULT 0,
+            total_loans INTEGER DEFAULT 0,
+            on_time_payments INTEGER DEFAULT 0
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -756,6 +799,7 @@ class PointGamesPlugin(Star):
         self._bomb_games: dict[str, dict] = {}  # group_id -> {target, min, max, participants[]}
         self._red_packet = None                 # 当前活跃红包 {packet_id, group_id, remain_count, remain_amount, claimed, expire, max, finished}
         self._red_packet_lock = asyncio.Lock()
+        self._pending_loan_notifies: list[tuple[str, str]] = []  # 贷款通知队列 (user_id, text)，事务提交后统一私聊发送
         self._math_sessions: dict[str, dict] = {}  # user_id -> {question, answer, difficulty, expire}
         # 兼容不同版本的数据库获取方式
         self._db = None
@@ -931,6 +975,30 @@ class PointGamesPlugin(Star):
         self.RED_PACKET_GROUP = str(config.get("red_packet_group", "") or "").strip()
         self.RED_PACKET_DAILY_TIMES = integer("red_packet_daily_times",
                                               self.RED_PACKET_DAILY_TIMES, 1)
+        # 贷款系统配置
+        self.LOAN_MIN = integer("loan_min", self.LOAN_MIN, 1)
+        self.LOAN_MAX = max(integer("loan_max", self.LOAN_MAX, 1), self.LOAN_MIN)
+        self.LOAN_DAYS = integer("loan_days", self.LOAN_DAYS, 1)
+        try:
+            rate = float(config.get("loan_interest_rate", self.LOAN_INTEREST_RATE))
+            self.LOAN_INTEREST_RATE = rate if 0 <= rate <= 1 else self.LOAN_INTEREST_RATE
+        except (TypeError, ValueError):
+            pass
+        self.LOAN_INITIAL_LIMIT = integer("loan_initial_limit", self.LOAN_INITIAL_LIMIT, 1)
+        self.LOAN_MAX_LIMIT = max(integer("loan_max_limit", self.LOAN_MAX_LIMIT, 1), self.LOAN_INITIAL_LIMIT)
+        self.LOAN_LIMIT_UPGRADE_1 = integer("loan_limit_upgrade_1", self.LOAN_LIMIT_UPGRADE_1, 1)
+        self.LOAN_LIMIT_UPGRADE_2 = integer("loan_limit_upgrade_2", self.LOAN_LIMIT_UPGRADE_2, 1)
+        self.LOAN_LIMIT_UPGRADE_3 = integer("loan_limit_upgrade_3", self.LOAN_LIMIT_UPGRADE_3, 1)
+        def signed_integer(key, default):
+            try:
+                return int(config.get(key, default))
+            except (TypeError, ValueError):
+                return default
+        self.LOAN_CREDIT_PENALTY = signed_integer("loan_credit_penalty", self.LOAN_CREDIT_PENALTY)
+        self.LOAN_CREDIT_REWARD = signed_integer("loan_credit_reward", self.LOAN_CREDIT_REWARD)
+        self.LOAN_CREDIT_THRESHOLD = signed_integer("loan_credit_threshold", self.LOAN_CREDIT_THRESHOLD)
+        self.LOAN_AUTO_REPAY_ENABLED = boolean("loan_auto_repay_enabled", self.LOAN_AUTO_REPAY_ENABLED)
+        self.LOAN_PREVENT_MULTIPLE = boolean("loan_prevent_multiple", self.LOAN_PREVENT_MULTIPLE)
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -1002,6 +1070,26 @@ class PointGamesPlugin(Star):
         except Exception as e:  # 数据库异常统一兜底
             self.logger.exception("积分游戏插件数据库操作失败")
             return (False, f"数据库开小差了喵~：{e}", None)
+        finally:
+            # 贷款通知（逾期自动还款/逾期提醒）：事务结束后统一私聊发送
+            if self._pending_loan_notifies:
+                notes, self._pending_loan_notifies = self._pending_loan_notifies, []
+                platform_ids = []
+                try:
+                    manager = getattr(self.context, "platform_manager", None)
+                    if manager and hasattr(manager, "get_insts"):
+                        platform_ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+                    elif manager and hasattr(manager, "platform_insts"):
+                        platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+                except Exception:
+                    platform_ids = []
+                for uid, text_msg in notes:
+                    for pid in platform_ids:
+                        try:
+                            await self._send_private(pid, uid, text_msg)
+                            break
+                        except Exception:
+                            self.logger.exception(f"贷款通知发送失败：{uid}")
 
     async def _save_daily_car_config(self, pool: list[str]) -> None:
         """将车池回写 AstrBot 插件配置页。"""
@@ -1052,7 +1140,7 @@ class PointGamesPlugin(Star):
     async def _ensure_user(self, session, user_id: str, user_name: str = ""):
         """确保用户存在，并在有新昵称时更新昵称。"""
         await session.execute(
-            text("INSERT OR IGNORE INTO users(user_id, user_name) VALUES(:u, :n)"),
+            text("INSERT OR IGNORE INTO users(user_id, user_name, loan_balance) VALUES(:u, :n, 0)"),
             {"u": user_id, "n": user_name or ""},
         )
         if user_name:
@@ -1100,12 +1188,14 @@ class PointGamesPlugin(Star):
         operation: str,
         earned: int | None = None,
         spent: int | None = None,
+        force_normal: bool = False,
     ):
         """原子变更积分并写流水，必须在事务内调用。
 
         ``amount`` 是余额净变化；``earned`` 和 ``spent`` 用于准确统计总收入/总支出。
         例如转盘消费 100、返还 120 时，余额变化是 +20，但收入应记 120、支出应记 100。
         负数变更使用带余额条件的 UPDATE，即使并发扣分也不会透支。
+        消费时优先使用贷款余额（loan_balance）；``force_normal=True``（转账）只扣普通余额。
         """
         if not user_id:
             raise _BizError("用户 ID 不能为空喵~")
@@ -1117,17 +1207,41 @@ class PointGamesPlugin(Star):
         earned = max(amount, 0) if earned is None else max(int(earned), 0)
         spent = max(-amount, 0) if spent is None else max(int(spent), 0)
         if amount < 0:
-            result = await session.execute(
-                text(
-                    "UPDATE users SET balance=balance+:a, total_earned=total_earned+:e, "
-                    "total_spent=total_spent+:s "
-                    "WHERE user_id=:u AND balance+:a >= 0"
-                ),
-                {"a": amount, "e": earned, "s": spent, "u": user_id},
-            )
-            if result.rowcount != 1:
-                raise _BizError(
-                    f"积分不足喵~ 当前积分：{await self._balance(session, user_id)}"
+            need = -amount
+            # 消费时优先使用贷款余额（转账 force_normal 只用普通余额，防止套现）；
+            # 原版普通余额逻辑不动：普通余额不够时才补扣，带条件防透支
+            from_loan = 0
+            if not force_normal:
+                lb = (await session.execute(text(
+                    "SELECT loan_balance FROM users WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                from_loan = min(int(lb[0] if lb else 0), need)
+                if from_loan > 0:
+                    await session.execute(text(
+                        "UPDATE users SET loan_balance=loan_balance-:l WHERE user_id=:u"
+                    ), {"l": from_loan, "u": user_id})
+            rest = need - from_loan
+            if rest > 0:
+                result = await session.execute(
+                    text(
+                        "UPDATE users SET balance=balance-:a, total_earned=total_earned+:e, "
+                        "total_spent=total_spent+:s "
+                        "WHERE user_id=:u AND balance-:a >= 0"
+                    ),
+                    {"a": rest, "e": earned, "s": spent, "u": user_id},
+                )
+                if result.rowcount != 1:
+                    raise _BizError(
+                        f"积分不足喵~ 当前积分：{await self._balance(session, user_id)}"
+                    )
+            else:
+                # 全部由贷款余额支付：仅更新收支统计
+                await session.execute(
+                    text(
+                        "UPDATE users SET total_earned=total_earned+:e, "
+                        "total_spent=total_spent+:s WHERE user_id=:u"
+                    ),
+                    {"e": earned, "s": spent, "u": user_id},
                 )
         else:
             await session.execute(
@@ -1255,6 +1369,9 @@ class PointGamesPlugin(Star):
                 if "gift_redeemed" not in user_columns:
                     # 一次性消费兑换礼品：已兑换次数
                     await session.execute(text("ALTER TABLE users ADD COLUMN gift_redeemed INTEGER DEFAULT 0"))
+                if "loan_balance" not in user_columns:
+                    # 贷款余额：贷款积分单独存放，不可转账
+                    await session.execute(text("ALTER TABLE users ADD COLUMN loan_balance INTEGER DEFAULT 0"))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -1387,6 +1504,12 @@ class PointGamesPlugin(Star):
             self._schedule_red_packet,
             CronTrigger(hour=0, minute=1, timezone=TZ),
             id="point_games_red_packet_schedule", replace_existing=True,
+        )
+        # 贷款系统：每天 0 点检查逾期贷款并通知
+        self._scheduler.add_job(
+            self._check_overdue_loans,
+            CronTrigger(hour=0, minute=0, timezone=TZ),
+            id="point_games_loan_overdue_check", replace_existing=True,
         )
         self._schedule_red_packet()
         self._scheduler.start()
@@ -1820,12 +1943,13 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.19.1",
+            "🎮 积分游戏 2.20.0",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
             "转账：/转账 @群友 [积分]（私聊用QQ号，手续费10%）",
             "银行：/开户｜/存钱 [积分]｜/取钱 [积分]｜/我的银行（活期5%/天）",
+            "贷款：/贷款 [积分]｜/还款｜/我的贷款（信用额度，逾期有惩罚）",
             "彩票：/买彩票 [积分]｜/彩票奖池",
             "卧底：/卧底开始 [人数]｜/加入卧底｜/投票 @玩家｜/卧底结束",
             "炸弹：/炸弹开始｜/猜 [数字]（余额需满30）",
@@ -2982,16 +3106,24 @@ class PointGamesPlugin(Star):
                 await self._ensure_user(session, target, target_name)
             else:
                 db_name = str(row[0] or "").strip()
-            # 余额校验：必须 >= 转账金额 + 手续费
-            balance = await self._balance(session, sender)
-            if balance < total:
+            # 余额校验：转账只能用普通余额（贷款余额不可转账，防止套现）
+            row = (await session.execute(text(
+                "SELECT balance, loan_balance FROM users WHERE user_id=:u"
+            ), {"u": sender})).first()
+            normal_balance = int(row[0]) if row else 0
+            loan_bal = int(row[1]) if row else 0
+            if normal_balance < total:
+                if loan_bal > 0:
+                    raise _BizError(
+                        f"❌ 普通余额不足！当前普通余额：{normal_balance}积分\n"
+                        f"贷款余额：{loan_bal}积分（不可转账）\n"
+                        "请先还清贷款或赚取普通积分后再转账")
                 raise _BizError(
                     f"❌ 积分不足！本次转账需扣除 {total} 积分"
-                    f"（转账{amount}+手续费{fee}），当前余额：{balance}积分"
-                )
-            # 转出方扣除 转账金额+手续费，收入记 0、支出记 total
+                    f"（转账{amount}+手续费{fee}），当前余额：{normal_balance}积分")
+            # 转出方扣除 转账金额+手续费（force_normal 只扣普通余额）
             await self._add_points(session, sender, -total, "transfer_out",
-                                   earned=0, spent=total)
+                                   earned=0, spent=total, force_normal=True)
             # 接收方到账 转账金额
             await self._add_points(session, target, amount, "transfer_in",
                                    earned=amount, spent=0)
@@ -3590,6 +3722,350 @@ class PointGamesPlugin(Star):
             self.logger.exception("红包结算播报发送失败")
 
     # ============================================================
+    #  功能：贷款系统
+    # ============================================================
+    def _calc_loan_interest(self, amount: int, start_ts: float, now_ts: float = None):
+        """计算贷款利息，不足一天按一天算，返回 (利息, 已计天数)。"""
+        now_ts = now_ts or time.time()
+        delta = max(0.0, now_ts - float(start_ts))
+        days = int(delta // 86400) + (1 if delta % 86400 > 1e-6 else 0)
+        days = max(1, days)
+        return int(amount * self.LOAN_INTEREST_RATE * days), days
+
+    async def _ensure_credit(self, session, user_id: str):
+        """确保信用记录存在，返回 (score, total_loans, on_time_payments)。"""
+        await session.execute(text(
+            "INSERT OR IGNORE INTO credit_scores(user_id, score, total_loans, on_time_payments) "
+            "VALUES(:u, 0, 0, 0)"
+        ), {"u": user_id})
+        row = (await session.execute(text(
+            "SELECT score, total_loans, on_time_payments FROM credit_scores WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        return (int(row[0]), int(row[1]), int(row[2])) if row else (0, 0, 0)
+
+    async def _loan_settle_credit(self, session, user_id: str, overdue: bool):
+        """贷款结清时的信用处理：按时 +奖励/次数+1；逾期 +惩罚/次数归零。"""
+        await self._ensure_credit(session, user_id)
+        if overdue:
+            await session.execute(text(
+                "UPDATE credit_scores SET score=score+:d, on_time_payments=0 "
+                "WHERE user_id=:u"
+            ), {"d": self.LOAN_CREDIT_PENALTY, "u": user_id})
+        else:
+            await session.execute(text(
+                "UPDATE credit_scores SET score=score+:d, "
+                "total_loans=total_loans+1, on_time_payments=on_time_payments+1 "
+                "WHERE user_id=:u"
+            ), {"d": self.LOAN_CREDIT_REWARD, "u": user_id})
+
+    async def _get_active_loan(self, session, user_id: str):
+        """查询用户当前未结清贷款（active 或 overdue），返回行或 None。"""
+        return (await session.execute(text(
+            "SELECT id, user_id, amount, interest, total_due, paid, days, "
+            "loan_days_used, status, start_date, due_date FROM loans "
+            "WHERE user_id=:u AND status IN ('active','overdue') ORDER BY id LIMIT 1"
+        ), {"u": user_id})).first()
+
+    def _credit_limit(self, on_time: int) -> int:
+        """根据按时还款次数计算信用额度。"""
+        if on_time >= 5:
+            return min(self.LOAN_LIMIT_UPGRADE_3, self.LOAN_MAX_LIMIT)
+        if on_time >= 3:
+            return min(self.LOAN_LIMIT_UPGRADE_2, self.LOAN_MAX_LIMIT)
+        if on_time >= 1:
+            return min(self.LOAN_LIMIT_UPGRADE_1, self.LOAN_MAX_LIMIT)
+        return min(self.LOAN_INITIAL_LIMIT, self.LOAN_MAX_LIMIT)
+
+    @filter.command("贷款")
+    async def loan_apply(self, event: AstrMessageEvent):
+        """/贷款 [积分] —— 向银行申请贷款，利息即刻开始计算"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "贷款")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+        args = self._strip_command(event, "贷款").split()
+        amount = int(args[0]) if args and args[0].isdigit() else None
+        if amount is None or amount < self.LOAN_MIN:
+            yield event.plain_result(f"❌ 单次贷款最低 {self.LOAN_MIN} 积分，如：/贷款 500")
+            return
+
+        async def fn(session):
+            await self._enforce_cooldown(session, user_id)
+            await self._ensure_user(session, user_id)
+            score, _, on_time = await self._ensure_credit(session, user_id)
+            if score < self.LOAN_CREDIT_THRESHOLD:
+                raise _BizError("❌ 信用分过低，无法申请贷款（发送 /我的贷款 查看信用）")
+            credit_limit = self._credit_limit(on_time)
+            if amount > self.LOAN_MAX:
+                raise _BizError(f"❌ 单次贷款最高 {self.LOAN_MAX} 积分")
+            if amount > credit_limit:
+                raise _BizError(f"❌ 超出信用额度！当前额度：{credit_limit}积分")
+            loan = await self._get_active_loan(session, user_id)
+            if loan and self.LOAN_PREVENT_MULTIPLE:
+                raise _BizError(
+                    f"❌ 您已有未还清的贷款，{self.LOAN_DAYS}天内不可再次贷款")
+            # 利息即刻开始计算（不足一天按一天算）
+            now_ts = time.time()
+            interest, days_used = self._calc_loan_interest(amount, now_ts, now_ts)
+            total_due = amount + interest
+            due_ts = now_ts + self.LOAN_DAYS * 86400
+            await session.execute(text(
+                "INSERT INTO loans(user_id, amount, interest, total_due, paid, days, "
+                "loan_days_used, status, start_date, due_date) "
+                "VALUES(:u, :a, :i, :t, 0, :d, :du, 'active', :s, :e)"
+            ), {"u": user_id, "a": amount, "i": interest, "t": total_due,
+                "d": self.LOAN_DAYS, "du": days_used, "s": now_ts, "e": due_ts})
+            # 贷款积分存入贷款余额（不可转账），消费时优先使用
+            await session.execute(text(
+                "UPDATE users SET loan_balance=loan_balance+:a WHERE user_id=:u"
+            ), {"a": amount, "u": user_id})
+            await session.execute(text(
+                "INSERT INTO point_transactions("
+                "user_id, amount, operation, earned, spent, balance_after, create_time) "
+                "VALUES(:u, 0, 'loan_apply', :a, 0, :b, :t)"
+            ), {"u": user_id, "a": amount,
+                "b": await self._balance(session, user_id), "t": time.time()})
+            due_str = datetime.fromtimestamp(due_ts, TZ).strftime("%Y-%m-%d %H:%M")
+            return True, (
+                "🏦 贷款申请成功！\n"
+                f"贷款金额：{amount}积分（已存入贷款余额）\n"
+                "⚠️ 注意：贷款积分不可转账！\n"
+                f"当前额度：{credit_limit}积分\n"
+                f"期限：{self.LOAN_DAYS}天\n"
+                f"利率：{self.LOAN_INTEREST_RATE:.0%}/天\n"
+                "即刻开始计息，不足一天按一天算\n"
+                f"当前利息：{interest}积分（已计{days_used}天）\n"
+                f"到期应还：{total_due}积分（本金{amount}+利息{interest}）\n"
+                f"到期日：{due_str}"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("还款")
+    async def loan_repay(self, event: AstrMessageEvent):
+        """/还款 —— 一次性还清当前贷款（优先普通余额，不足用贷款余额抵扣）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "还款")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+
+        async def fn(session):
+            await self._enforce_cooldown(session, user_id)
+            await self._ensure_user(session, user_id)
+            loan = await self._get_active_loan(session, user_id)
+            if not loan:
+                raise _BizError("❌ 您当前没有未还的贷款")
+            loan_id, _, principal, _, _, paid, _, _, status, start_ts, _ = loan
+            # 重新计算利息（不足一天按一天算）
+            current_interest, days_used = self._calc_loan_interest(
+                int(principal), float(start_ts))
+            total_now = int(principal) + current_interest
+            remaining = max(0, total_now - int(paid))
+            # 余额：优先普通余额，不足用贷款余额抵扣
+            row = (await session.execute(text(
+                "SELECT balance, loan_balance FROM users WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            normal, loan_bal = int(row[0]), int(row[1])
+            if normal + loan_bal < remaining:
+                raise _BizError(
+                    f"❌ 余额不足！需要 {remaining} 积分\n"
+                    f"普通余额：{normal}，贷款余额：{loan_bal}")
+            from_normal = min(normal, remaining)
+            from_loanbal = remaining - from_normal
+            if from_normal > 0:
+                await session.execute(text(
+                    "UPDATE users SET balance=balance-:a, "
+                    "total_spent=total_spent+:a WHERE user_id=:u AND balance-:a >= 0"
+                ), {"a": from_normal, "u": user_id})
+            if from_loanbal > 0:
+                await session.execute(text(
+                    "UPDATE users SET loan_balance=loan_balance-:a, "
+                    "total_spent=total_spent+:a WHERE user_id=:u"
+                ), {"a": from_loanbal, "u": user_id})
+            # 还款流水
+            await session.execute(text(
+                "INSERT INTO point_transactions("
+                "user_id, amount, operation, earned, spent, balance_after, create_time) "
+                "VALUES(:u, :a, 'loan_repay', 0, :s, :b, :t)"
+            ), {"u": user_id, "a": -remaining, "s": remaining,
+                "b": await self._balance(session, user_id), "t": time.time()})
+            # 利息转入管理员账户（与收税/转账手续费同源）
+            interest_income = max(0, remaining + int(paid) - int(principal))
+            if interest_income > 0 and self.FEE_RECEIVER:
+                await self._add_points(session, self.FEE_RECEIVER, interest_income,
+                                       "loan_interest_income",
+                                       earned=interest_income, spent=0)
+            # 更新贷款状态
+            await session.execute(text(
+                "UPDATE loans SET status='paid', paid=:p, interest=:i2, total_due=:t2, "
+                "loan_days_used=:du, closed_date=:c WHERE id=:i"
+            ), {"p": total_now, "i2": current_interest, "t2": total_now,
+                "du": days_used, "c": time.time(), "i": loan_id})
+            overdue = status == "overdue"
+            await self._loan_settle_credit(session, user_id, overdue=overdue)
+            score, _, on_time = await self._ensure_credit(session, user_id)
+            new_limit = self._credit_limit(on_time)
+            credit_line = (f"信用分 {self.LOAN_CREDIT_PENALTY}，当前信用分：{score}\n"
+                           f"额度已重置，当前信用额度：{new_limit}积分"
+                           if overdue else
+                           f"信用分 +{self.LOAN_CREDIT_REWARD}，当前信用分：{score}\n"
+                           f"当前信用额度：{new_limit}积分")
+            return True, (
+                "✅ 还款成功！已还清贷款！\n"
+                f"实际使用 {days_used} 天，利息 {current_interest} 积分已转入管理员账户\n"
+                f"{'⚠️ 逾期还款：' if overdue else ''}{credit_line}"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("我的贷款")
+    async def my_loan(self, event: AstrMessageEvent):
+        """/我的贷款 —— 查看贷款详情、信用分与额度"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "我的贷款")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+
+        async def fn(session):
+            await self._enforce_cooldown(session, user_id)
+            await self._ensure_user(session, user_id)
+            score, total_loans, on_time = await self._ensure_credit(session, user_id)
+            credit_limit = self._credit_limit(on_time)
+            row = (await session.execute(text(
+                "SELECT loan_balance FROM users WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            loan_bal = int(row[0]) if row else 0
+            # 额度升级提示
+            if credit_limit >= min(self.LOAN_LIMIT_UPGRADE_3, self.LOAN_MAX_LIMIT):
+                upgrade_hint = "额度已满级！"
+            elif on_time >= 3:
+                upgrade_hint = (f"再按时还款 {max(1, 5 - on_time)} 次可升至"
+                                f"{min(self.LOAN_LIMIT_UPGRADE_3, self.LOAN_MAX_LIMIT)}积分")
+            elif on_time >= 1:
+                upgrade_hint = (f"再按时还款 {max(1, 3 - on_time)} 次可升至"
+                                f"{min(self.LOAN_LIMIT_UPGRADE_2, self.LOAN_MAX_LIMIT)}积分")
+            else:
+                upgrade_hint = (f"按时还款 1 次可升至"
+                                f"{min(self.LOAN_LIMIT_UPGRADE_1, self.LOAN_MAX_LIMIT)}积分")
+            loan = await self._get_active_loan(session, user_id)
+            if not loan:
+                return True, (
+                    "📭 您当前没有未还的贷款\n"
+                    f"贷款余额：{loan_bal}积分（不可转账）\n"
+                    f"当前信用额度：{credit_limit}积分\n"
+                    f"信用分：{score}｜已按时还款 {on_time} 次\n"
+                    f"💡 {upgrade_hint}"
+                ), None
+            _, _, principal, _, _, paid, _, _, status, start_ts, due_ts = loan
+            current_interest, days_used = self._calc_loan_interest(
+                int(principal), float(start_ts))
+            total_now = int(principal) + current_interest
+            remaining = max(0, total_now - int(paid))
+            days_left = int((float(due_ts) - time.time()) // 86400)
+            status_map = {"active": "正常", "overdue": "逾期"}
+            msg = (
+                "🏦 贷款信息\n"
+                f"状态：{status_map.get(status, '未知')}\n"
+                f"贷款金额：{principal}积分\n"
+                f"已还：{paid}积分\n"
+                f"已计息天数：{days_used}天\n"
+                f"当前利息：{current_interest}积分\n"
+                f"剩余应还：{remaining}积分\n"
+                f"剩余天数：{max(0, days_left)}天\n"
+                f"贷款余额：{loan_bal}积分（不可转账）\n"
+                f"信用分：{score}｜已按时还款 {on_time} 次\n"
+                f"当前信用额度：{credit_limit}积分\n"
+                f"💡 {upgrade_hint}"
+            )
+            if status == "overdue":
+                msg += "\n⚠️ 已逾期！所有收入将自动用于还款"
+            return True, msg, None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _check_overdue_loans(self):
+        """每日凌晨 0 点：标记逾期贷款、自动从普通余额扣款还贷、私聊通知用户。
+
+        逾期后利息继续按日累计；开启自动扣款时每天把逾期用户普通余额中
+        能扣的部分扣走还贷，直到本息还清为止。
+        """
+        if not self.feature_flags.get("enable_loan", True):
+            return
+        now_ts = time.time()
+
+        async def fn(session):
+            rows = (await session.execute(text(
+                "SELECT l.id, l.user_id, l.amount, l.paid, l.start_date, u.balance "
+                "FROM loans l LEFT JOIN users u ON u.user_id=l.user_id "
+                "WHERE (l.status='active' AND l.due_date < :t) OR "
+                "(l.status='overdue' AND l.paid < l.amount + l.interest)"
+            ), {"t": now_ts})).all()
+            count = 0
+            for loan_id, uid, principal, paid, start_ts, balance in rows:
+                uid = str(uid)
+                current_interest, _ = self._calc_loan_interest(
+                    int(principal), float(start_ts), now_ts)
+                total_now = int(principal) + current_interest
+                remaining = max(0, total_now - int(paid))
+                was_active = (await session.execute(text(
+                    "SELECT status FROM loans WHERE id=:i"
+                ), {"i": loan_id})).first()[0] == "active"
+                await session.execute(text(
+                    "UPDATE loans SET status='overdue', interest=:i2, total_due=:t2 "
+                    "WHERE id=:i AND status='active'"
+                ), {"i2": current_interest, "t2": total_now, "i": loan_id})
+                balance = int(balance or 0)
+                # 自动扣款：从普通余额扣走能扣的部分（贷款余额不可用于还款之外的自动扣）
+                auto_text = ""
+                if self.LOAN_AUTO_REPAY_ENABLED and balance > 0 and remaining > 0:
+                    deduct = min(balance, remaining)
+                    new_paid = int(paid) + deduct
+                    await session.execute(text(
+                        "UPDATE users SET balance=balance-:d, "
+                        "total_spent=total_spent+:d WHERE user_id=:u"
+                    ), {"d": deduct, "u": uid})
+                    await session.execute(text(
+                        "UPDATE loans SET paid=:p WHERE id=:i"
+                    ), {"p": new_paid, "i": loan_id})
+                    await session.execute(text(
+                        "INSERT INTO point_transactions("
+                        "user_id, amount, operation, earned, spent, balance_after, create_time) "
+                        "VALUES(:u, :a, 'loan_auto_repay', 0, :s, :b, :t)"
+                    ), {"u": uid, "a": -deduct, "s": deduct,
+                        "b": balance - deduct, "t": time.time()})
+                    remaining -= deduct
+                    if remaining <= 0:
+                        # 逾期还清：信用分惩罚、按时次数归零、额度自动重置
+                        await session.execute(text(
+                            "UPDATE loans SET status='paid', closed_date=:c WHERE id=:i"
+                        ), {"c": time.time(), "i": loan_id})
+                        await self._loan_settle_credit(session, uid, overdue=True)
+                        self._pending_loan_notifies.append(
+                            (uid, "✅ 逾期贷款已全部还清！"
+                             f"信用分 {self.LOAN_CREDIT_PENALTY}，"
+                             f"额度已重置为 {self.LOAN_INITIAL_LIMIT} 积分"))
+                        count += 1
+                        continue
+                    auto_text = (f"已自动从余额扣除 {deduct} 积分用于还款，"
+                                 f"剩余应还：{remaining} 积分")
+                else:
+                    auto_text = f"剩余应还：{remaining} 积分"
+                if was_active:
+                    self._pending_loan_notifies.append(
+                        (uid, f"⚠️ 贷款已逾期！{auto_text}\n"
+                         "利息继续按日计算，收入将在每日结算时自动用于还款"))
+                count += 1
+            return True, "ok", count
+
+        await self._tx(fn)
+
+    # ============================================================
     #  功能七：群活跃奖励
     # ============================================================
     async def _load_activity_counts(self):
@@ -3821,6 +4297,23 @@ class PointGamesPlugin(Star):
             if bank:
                 estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
                 msg += f"\n💳 银行存款：{bank[0]}积分\n📈 今日活期收益：{estimate}积分"
+            # 附带贷款余额与贷款状态
+            loan_bal_row = (await session.execute(text(
+                "SELECT loan_balance FROM users WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if loan_bal_row and int(loan_bal_row[0]) > 0:
+                msg += f"\n🧾 贷款余额：{int(loan_bal_row[0])}积分（不可转账）"
+            loan = await self._get_active_loan(session, user_id)
+            if loan:
+                _, _, principal, _, _, paid, _, _, status, start_ts, due_ts = loan
+                current_interest, _ = self._calc_loan_interest(int(principal), float(start_ts))
+                remaining = max(0, int(principal) + current_interest - int(paid))
+                if status == "overdue":
+                    msg += (f"\n⚠️ 贷款已逾期！剩余应还：{remaining}积分\n"
+                            "所有收入将自动用于还款！")
+                else:
+                    days_left = max(0, int((float(due_ts) - time.time()) // 86400))
+                    msg += f"\n🏦 贷款信息：剩余应还 {remaining} 积分，剩余 {days_left} 天"
             return True, msg, None
 
         ok, msg, _ = await self._tx(fn)

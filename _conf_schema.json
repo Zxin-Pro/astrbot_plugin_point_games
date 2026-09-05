@@ -120,5 +120,21 @@
   "red_packet_window_start": {"description": "【📁 每日红包】随机窗口开始", "type": "string", "default": "08:00", "hint": "每日在此时间之后随机触发，格式 HH:MM"},
   "red_packet_window_end": {"description": "【📁 每日红包】随机窗口结束", "type": "string", "default": "23:00", "hint": "每日在此时间之前随机触发，格式 HH:MM"},
   "red_packet_group": {"description": "【📁 每日红包】红包发送群聊", "type": "string", "default": "", "hint": "群聊ID；留空则不发送红包"},
-  "red_packet_daily_times": {"description": "【📁 每日红包】每日发放次数", "type": "int", "default": 1, "hint": "每天在时间窗口内随机发几个红包，每次都是独立的红包（总额×次数）"}
+  "red_packet_daily_times": {"description": "【📁 每日红包】每日发放次数", "type": "int", "default": 1, "hint": "每天在时间窗口内随机发几个红包，每次都是独立的红包（总额×次数）"},
+
+  "enable_loan": {"description": "【📁 贷款系统】启用贷款系统", "type": "bool", "default": true},
+  "loan_min": {"description": "【📁 贷款系统】单次贷款最低", "type": "int", "default": 100},
+  "loan_max": {"description": "【📁 贷款系统】单次贷款最高", "type": "int", "default": 5000},
+  "loan_days": {"description": "【📁 贷款系统】贷款期限（天）", "type": "int", "default": 7},
+  "loan_interest_rate": {"description": "【📁 贷款系统】日利率", "type": "float", "default": 0.05, "hint": "0.05=每日5%，利息即刻开始计算，不足一天按一天算，全部进入管理员账户"},
+  "loan_initial_limit": {"description": "【📁 贷款系统】新用户初始额度", "type": "int", "default": 1000},
+  "loan_max_limit": {"description": "【📁 贷款系统】最高额度上限", "type": "int", "default": 5000},
+  "loan_limit_upgrade_1": {"description": "【📁 贷款系统】还款1次升级额度", "type": "int", "default": 2000},
+  "loan_limit_upgrade_2": {"description": "【📁 贷款系统】还款3次升级额度", "type": "int", "default": 3000},
+  "loan_limit_upgrade_3": {"description": "【📁 贷款系统】还款5次升级额度", "type": "int", "default": 5000},
+  "loan_credit_penalty": {"description": "【📁 贷款系统】逾期信用分扣除", "type": "int", "default": -20, "hint": "可为负数，如 -20"},
+  "loan_credit_reward": {"description": "【📁 贷款系统】按时还款信用分奖励", "type": "int", "default": 10},
+  "loan_credit_threshold": {"description": "【📁 贷款系统】信用分贷款门槛", "type": "int", "default": -50, "hint": "信用分低于该值永久禁止贷款，可为负数"},
+  "loan_auto_repay_enabled": {"description": "【📁 贷款系统】逾期自动扣款", "type": "bool", "default": true, "hint": "开启后逾期用户的所有收入自动用于还款，且无法消耗积分"},
+  "loan_prevent_multiple": {"description": "【📁 贷款系统】贷款期间禁止再次贷款", "type": "bool", "default": true}
 }
