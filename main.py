@@ -316,7 +316,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.20.2",
+    version="2.20.3",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1954,7 +1954,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.20.2",
+            "🎮 积分游戏 2.20.3",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -3261,9 +3261,19 @@ class PointGamesPlugin(Star):
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             if not await self._get_bank(session, user_id):
                 raise _BizError("🏦 你还没有银行账户，先发送 /开户 开通喵~")
-            # 钱包原子扣款（余额条件防透支），存入银行
+            # 存银行只能用普通余额（贷款积分不可存银行）
+            row = (await session.execute(text(
+                "SELECT balance, loan_balance FROM users WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            normal, loan_bal = int(row[0]), int(row[1])
+            if normal < amount:
+                hint = (f"\n（贷款余额 {loan_bal} 积分不可用于存银行）"
+                        if loan_bal > 0 else "")
+                raise _BizError(
+                    f"❌ 积分不足！需要 {amount} 积分，当前普通余额：{normal}积分{hint}")
+            # 钱包原子扣款（只用普通余额），存入银行
             await self._add_points(session, user_id, -amount, "bank_deposit",
-                                   earned=0, spent=amount)
+                                   earned=0, spent=amount, force_normal=True)
             await session.execute(text(
                 "UPDATE bank_accounts SET current_balance=current_balance+:a WHERE user_id=:u"
             ), {"a": amount, "u": user_id})

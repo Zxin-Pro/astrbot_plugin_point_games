@@ -1,6 +1,6 @@
 name: point_games
 display_name: 积分游戏
 description: 积分游戏：积分系统、幸运转盘、闯关答题、BOSS战、大乐透、谁是卧底，支持全群互通、WebUI面板和群黑白名单
-version: 2.20.2
+version: 2.20.3
 author: Zxin-Pro
 repo: https://github.com/Zxin-Pro/astrbot_plugin_point_games
