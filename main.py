@@ -316,7 +316,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.20.1",
+    version="2.20.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1954,7 +1954,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.20.1",
+            "🎮 积分游戏 2.20.2",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -5757,15 +5757,23 @@ class PointGamesPlugin(Star):
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
-            bal = await self._total_balance(session, user_id)
+            # 兑换礼品只能用普通余额（贷款积分不可用于兑换）
+            bal = await self._balance(session, user_id)
             if bal < self.SPEND_REWARD_THRESHOLD:
+                loan_row = (await session.execute(text(
+                    "SELECT loan_balance FROM users WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                loan_bal = int(loan_row[0]) if loan_row else 0
+                hint = (f"\n（贷款余额 {loan_bal} 积分不可用于兑换礼品）"
+                        if loan_bal > 0 else "")
                 raise _BizError(
                     f"积分不足喵~ 兑换礼品需要 {self.SPEND_REWARD_THRESHOLD} 积分，"
-                    f"你只有 {bal} 积分"
+                    f"你只有 {bal} 积分{hint}"
                 )
-            # 扣积分并记录流水，同时累计兑换次数
+            # 扣积分并记录流水（只用普通余额），同时累计兑换次数
             await self._add_points(
-                session, user_id, -self.SPEND_REWARD_THRESHOLD, "兑换礼品"
+                session, user_id, -self.SPEND_REWARD_THRESHOLD, "兑换礼品",
+                force_normal=True,
             )
             await session.execute(text(
                 "UPDATE users SET gift_redeemed=gift_redeemed+1 WHERE user_id=:u"
