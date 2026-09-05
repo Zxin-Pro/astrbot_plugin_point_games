@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.18.1
+作者：Zxin_Pro    版本：2.18.2
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -4899,6 +4899,44 @@ class PointGamesPlugin(Star):
         )).first()
         return int(row[0] or 0) if row else 0
 
+    async def _get_broadcast_groups(self) -> list[tuple[str, str]]:
+        """获取已开启玩法的群列表（group_settings 优先，platform_manager 全平台兜底）"""
+        try:
+            async with self._session() as session:
+                rows = (await session.execute(text(
+                    "SELECT group_id, platform_id FROM group_settings WHERE enabled=1"
+                ))).all()
+            groups = [(str(p or ""), str(g)) for g, p in rows]
+            if not groups:
+                self.logger.warning("没有已开启玩法的群（group_settings 为空），无法兜底播报")
+            return groups
+        except Exception:
+            self.logger.exception("获取播报群列表失败")
+            return []
+
+    async def _send_with_fallback(
+        self, platform_id: str, group_id: str, chain: list, tag: str
+    ) -> bool:
+        """优先发到指定群，失败或群号为空时回退到所有已开启玩法的群。"""
+        if group_id:
+            try:
+                await self._send_group_chain(platform_id, group_id, chain)
+                return True
+            except Exception:
+                self.logger.exception(f"{tag}发送失败（{platform_id}:{group_id}），尝试兜底群")
+        sent = False
+        for fb_platform, fb_group in await self._get_broadcast_groups():
+            if fb_group == group_id:
+                continue
+            try:
+                await self._send_group_chain(fb_platform, fb_group, chain)
+                sent = True
+            except Exception:
+                self.logger.exception(f"{tag}兜底发送失败（{fb_platform}:{fb_group}）")
+        if not sent:
+            self.logger.warning(f"{tag}无可用发送目标（群号：{group_id or '空'}）")
+        return sent
+
     async def _fishing_check(self):
         """定时任务：每 30 分钟判定一次所有挂机中的鱼竿。
 
@@ -5019,23 +5057,21 @@ class PointGamesPlugin(Star):
 
         ok, msg, data = await self._tx(fn)
         if not ok or not data:
+            self.logger.warning(f"钓鱼判定未执行：{msg}")
             return
         broadcasts, notices = data
+        self.logger.info(f"钓鱼判定完成：播报 {len(notices)} 条事件，{len(broadcasts)} 条高价广播")
         # 事务外发送全群广播，避免阻塞数据库
         for platform_id, group_id, chain in broadcasts:
-            try:
-                await self._send_group_chain(platform_id, group_id, chain)
-            except Exception:
-                self.logger.exception("钓鱼系统全群广播发送失败")
-        # 事件播报（不艾特）：按群合并成一条消息发送
+            await self._send_with_fallback(platform_id, group_id, chain, "钓鱼高价广播")
+        # 事件播报（不艾特）：按群合并成一条消息发送，发送失败自动兜底
         grouped: dict[tuple[str, str], list[str]] = {}
         for platform_id, group_id, text_line in notices:
             grouped.setdefault((platform_id, group_id), []).append(text_line)
         for (platform_id, group_id), lines in grouped.items():
-            try:
-                await self._send_group_chain(platform_id, group_id, [Plain("\n".join(lines))])
-            except Exception:
-                self.logger.exception("钓鱼事件播报发送失败")
+            await self._send_with_fallback(
+                platform_id, group_id, [Plain("\n".join(lines))], "钓鱼事件播报"
+            )
 
     async def _fishing_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
