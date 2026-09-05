@@ -129,7 +129,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -277,6 +277,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/银行信息/加款/扣款/清空 @玩家", "管理指定玩家的银行账户（仅管理员）"),
     ("/贷款信息/贷款清账/额度重置 @玩家", "管理指定玩家的贷款（仅管理员）"),
     ("/信用加分 @玩家 分数", "调整玩家信用分，负数扣分（仅管理员）"),
+    ("/冷却重置 @玩家", "豁免玩家贷款冷却期，可立即再贷（仅管理员）"),
     ("每日红包", "每日随机时间在指定群发拼手气红包，发送「抢」参与"),
     ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
@@ -319,7 +320,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.20.4",
+    version="2.20.5",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1957,7 +1958,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.20.4",
+            "🎮 积分游戏 2.20.5",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -3836,12 +3837,17 @@ class PointGamesPlugin(Star):
             if last and last[0] is not None:
                 cooldown_end = float(last[0]) + self.LOAN_DAYS * 86400
                 if time.time() < cooldown_end:
-                    remain_sec = cooldown_end - time.time()
-                    remain_days = int(remain_sec // 86400) + 1
-                    remain_h = int((remain_sec % 86400) // 3600)
-                    raise _BizError(
-                        f"❌ 贷款冷却中！上一笔贷款 {self.LOAN_DAYS} 天期限结束前"
-                        f"（约剩 {remain_days} 天 {remain_h} 小时）不能再申请")
+                    # 管理员豁免标记：/冷却重置 写入的终点 ≥ 当前冷却终点则视为已过
+                    reset_ts = await self._get_config_value(
+                        session, f"loan_cd_reset_{user_id}", "")
+                    if not (reset_ts and reset_ts.replace(".", "", 1).isdigit()
+                            and float(reset_ts) >= cooldown_end):
+                        remain_sec = cooldown_end - time.time()
+                        remain_days = int(remain_sec // 86400) + 1
+                        remain_h = int((remain_sec % 86400) // 3600)
+                        raise _BizError(
+                            f"❌ 贷款冷却中！上一笔贷款 {self.LOAN_DAYS} 天期限结束前"
+                            f"（约剩 {remain_days} 天 {remain_h} 小时）不能再申请")
             # 利息即刻开始计算（不足一天按一天算）
             now_ts = time.time()
             interest, days_used = self._calc_loan_interest(amount, now_ts, now_ts)
@@ -4545,6 +4551,46 @@ class PointGamesPlugin(Star):
     async def loan_admin_reset(self, event: AstrMessageEvent):
         """/额度重置 @玩家 —— 管理员重置玩家还款次数与额度"""
         async for result in self._loan_admin_reset_limit(event):
+            yield result
+
+    async def _loan_admin_reset_cooldown(self, event: AstrMessageEvent):
+        """管理员重置指定玩家的贷款冷却期，立即允许再次申请贷款。"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
+        target = self._extract_at(event)
+        if not target:
+            yield event.plain_result("用法：/冷却重置 @玩家 喵~")
+            return
+
+        async def fn(session):
+            await self._ensure_user(session, target)
+            last = (await session.execute(text(
+                "SELECT MAX(start_date) FROM loans WHERE user_id=:u"
+            ), {"u": target})).first()
+            if not last or last[0] is None:
+                raise _BizError("该玩家没有贷款记录，无需重置冷却喵~")
+            cooldown_end = float(last[0]) + self.LOAN_DAYS * 86400
+            if time.time() >= cooldown_end:
+                raise _BizError("该玩家的冷却期已经结束，无需重置喵~")
+            # 豁免标记：把冷却终点写入配置表，申请时读到该标记即视为冷却已过；
+            # 玩家再次贷款后冷却终点更新，旧标记自动失效
+            await self._set_config_value(
+                session, f"loan_cd_reset_{target}", str(cooldown_end))
+            remain_days = int((cooldown_end - time.time()) // 86400) + 1
+            return True, (
+                f"✅ 已重置玩家 {target} 的贷款冷却期\n"
+                f"（原冷却还剩约 {remain_days} 天），现在可以立即 /贷款 了"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("冷却重置")
+    async def loan_admin_cooldown(self, event: AstrMessageEvent):
+        """/冷却重置 @玩家 —— 管理员豁免玩家贷款冷却期"""
+        async for result in self._loan_admin_reset_cooldown(event):
             yield result
 
     @filter.command("减积分", alias={"扣积分"})
