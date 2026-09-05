@@ -10,6 +10,9 @@
   "enable_fishing": {"description": "启用钓鱼系统", "type": "bool", "default": true},
   "enable_activity": {"description": "启用群活跃奖励（每日22:00结算发言前三名）", "type": "bool", "default": true},
   "enable_transfer": {"description": "启用积分转账", "type": "bool", "default": true},
+  "enable_tax": {"description": "启用每日自动收税（凌晨0点）", "type": "bool", "default": true},
+  "tax_rate": {"description": "税率（余额百分比）", "type": "float", "default": 0.001, "hint": "0.001=余额的0.1%，向下取整；余额低于收税门槛不扣"},
+  "tax_min_balance": {"description": "收税门槛（余额≥此值才扣税）", "type": "int", "default": 1000},
   "enable_sign_in": {"description": "启用每日签到", "type": "bool", "default": true},
   "enable_ranking": {"description": "启用积分查询和排行榜", "type": "bool", "default": true},
   "group_mode": {

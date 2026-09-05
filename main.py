@@ -253,6 +253,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
     ("/兑换礼品", "花费10000积分兑换小礼品一份（兑换后联系管理员领取）"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
+    ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
     ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
@@ -356,6 +357,9 @@ class PointGamesPlugin(Star):
     TRANSFER_DAILY_LIMIT = 10       # 每日转账次数上限
     TRANSFER_COOLDOWN = 10          # 转账冷却（秒）
     FEE_RECEIVER = ""               # 手续费接收账户QQ（配置页 fee_receiver，默认第一个管理员）
+    # 每日自动收税
+    TAX_RATE = 0.001                # 税率：余额的 0.1%（向下取整）
+    TAX_MIN_BALANCE = 1000          # 余额达到该值才触发扣税
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -414,6 +418,7 @@ class PointGamesPlugin(Star):
         "enable_fishing": True,
         "enable_transfer": True,
         "enable_activity": True,
+        "enable_tax": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -659,6 +664,13 @@ class PointGamesPlugin(Star):
             total INTEGER,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS tax_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            amount INTEGER,
+            date TEXT,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -798,6 +810,13 @@ class PointGamesPlugin(Star):
         # 积分转账手续费接收账户：优先配置页 fee_receiver，缺省回落到第一个管理员
         fee_receiver = str(config.get("fee_receiver", "") or "").strip()
         self.FEE_RECEIVER = fee_receiver or first_admin
+        # 每日收税参数
+        try:
+            tax_rate = float(config.get("tax_rate", self.TAX_RATE))
+            self.TAX_RATE = tax_rate if 0 < tax_rate <= 1 else self.TAX_RATE
+        except (TypeError, ValueError):
+            pass
+        self.TAX_MIN_BALANCE = integer("tax_min_balance", self.TAX_MIN_BALANCE, 1)
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -1231,6 +1250,12 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=self.FISHING_RESET_HOUR, minute=self.FISHING_RESET_MINUTE, timezone=TZ),
             id="fishing_daily_reset", replace_existing=True,
         )
+        # 每日自动收税：凌晨 0 点对余额达标的用户扣 0.1%，流入手续费接收账户
+        self._scheduler.add_job(
+            self._daily_tax,
+            CronTrigger(hour=0, minute=0, timezone=TZ),
+            id="point_games_daily_tax", replace_existing=True,
+        )
         self._scheduler.start()
         # 3. 注册 WebUI
         self._register_web_apis()
@@ -1413,6 +1438,81 @@ class PointGamesPlugin(Star):
             targets = [str(platform_id)] if platform_id else platform_ids
             for target_platform in targets:
                 await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
+
+    async def _daily_tax(self):
+        """每日凌晨 0 点自动收税：余额≥门槛的用户扣余额的 0.1%（向下取整），转入 fee_receiver。
+
+        无需任何指令；fee_receiver 未配置时跳过并记录日志。收税完成后向所有
+        已开启玩法的群发送汇总消息。
+        """
+        if not self.feature_flags.get("enable_tax", True):
+            return
+        if not self.FEE_RECEIVER:
+            self.logger.warning("每日收税未执行：请在插件配置页设置 fee_receiver（或填写管理员QQ列表）")
+            return
+        tax_date = date.today().isoformat()
+
+        async def fn(session):
+            # 只捞余额达标的用户；逐个原子扣税（余额条件防并发透支）
+            rows = (await session.execute(text(
+                "SELECT user_id, balance FROM users WHERE balance >= :m"
+            ), {"m": self.TAX_MIN_BALANCE})).all()
+            total_tax = 0
+            tax_count = 0
+            for uid, balance in rows:
+                tax = int(int(balance) * self.TAX_RATE)  # 税率向下取整；余额≥1000时必≥1
+                if tax < 1:
+                    continue
+                # 扣税 + 流水（operation='tax'）
+                await self._add_points(session, str(uid), -tax, "tax",
+                                       earned=0, spent=tax)
+                # 税款流入手续费接收账户（复用转账的 fee_receiver）
+                await self._add_points(session, self.FEE_RECEIVER, tax, "tax_income",
+                                       earned=tax, spent=0)
+                # 税收记录
+                await session.execute(text(
+                    "INSERT INTO tax_records(user_id, amount, date) VALUES(:u, :a, :d)"
+                ), {"u": str(uid), "a": tax, "d": tax_date})
+                total_tax += tax
+                tax_count += 1
+            return True, "ok", (total_tax, tax_count)
+
+        ok, _, data = await self._tx(fn)
+        if not ok or not data or data[0] <= 0:
+            return
+        total_tax, tax_count = data
+        broadcast_chain = [Plain(
+            "📊 今日税收汇总\n"
+            f"共收取 {total_tax} 积分\n"
+            f"共 {tax_count} 人纳税\n"
+            "已转入管理员账户"
+        )]
+        # 广播到所有已开启玩法的群（与排行榜播报同一群来源）
+        try:
+            async with self._session() as session:
+                groups = (await session.execute(text(
+                    "SELECT group_id, platform_id FROM group_settings WHERE enabled=1"
+                ))).all()
+        except Exception:
+            groups = []
+        platform_ids = []
+        try:
+            manager = getattr(self.context, "platform_manager", None)
+            if manager and hasattr(manager, "get_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+            elif manager and hasattr(manager, "platform_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+        except Exception:
+            platform_ids = []
+        for group_id, platform_id in groups:
+            if not group_id:
+                continue
+            targets = [str(platform_id)] if platform_id else platform_ids
+            for target_platform in targets:
+                try:
+                    await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
+                except Exception:
+                    self.logger.exception(f"收税汇总发送失败：{group_id}")
 
     async def _maintenance(self):
         """每分钟维护：清理超时闯关会话、超时卧底游戏、超时速算会话"""
@@ -3958,13 +4058,15 @@ class PointGamesPlugin(Star):
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
-            await self._ensure_user(session, user_id)
+            # 先查后建：is_new 用于判断首次签到（users 表此前无该用户记录）
             row = (
                 await session.execute(
                     text("SELECT sign_in_date, sign_in_streak FROM users WHERE user_id=:u"),
                     {"u": user_id},
                 )
             ).first()
+            is_new = row is None
+            await self._ensure_user(session, user_id)
             if row and row[0] == today:
                 raise _BizError("今天已经签到过啦，明天再来喵~")
             streak = 1
@@ -3980,6 +4082,19 @@ class PointGamesPlugin(Star):
             msg = f"📝 签到成功！+{reward} 积分，已连续签到 {streak} 天"
             if bonus:
                 msg += f"\n🎉 连续签到 {streak} 天额外 +{bonus} 积分！"
+            if is_new:
+                # 首次签到：免费赠送 1 号鱼竿（已拥有鱼竿则不重复赠送）
+                has_rod = (await session.execute(text(
+                    "SELECT 1 FROM fishing_rods WHERE user_id=:u LIMIT 1"
+                ), {"u": user_id})).first()
+                if not has_rod:
+                    await session.execute(text(
+                        "INSERT INTO fishing_rods(user_id, slot, status, created_at) "
+                        "VALUES(:u, :s, 'idle', :t)"
+                    ), {"u": user_id, "s": 1, "t": time.time()})
+                    msg = (f"🎣 签到成功！获得 {reward} 积分！\n"
+                           f"🎁 首次签到奖励：免费领取一根鱼竿！\n"
+                           f"发送 /挂机钓鱼 即可开始挂机赚钱")
             msg += f"\n当前积分：{await self._balance(session, user_id)} 喵~"
             return True, msg, None
 
