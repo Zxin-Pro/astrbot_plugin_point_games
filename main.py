@@ -128,7 +128,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -253,6 +253,10 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
     ("/兑换礼品", "花费10000积分兑换小礼品一份（兑换后联系管理员领取）"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
+    ("/开户", "银行系统：开通银行账户（免费，享每日5%活期利息）"),
+    ("/存钱 [积分]", "银行系统：将钱包积分存入银行"),
+    ("/取钱 [积分]", "银行系统：从银行取出积分到钱包"),
+    ("/我的银行", "银行系统：查看活期余额与累计利息"),
     ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
@@ -360,6 +364,9 @@ class PointGamesPlugin(Star):
     # 每日自动收税
     TAX_RATE = 0.001                # 税率：余额的 0.1%（向下取整）
     TAX_MIN_BALANCE = 1000          # 余额达到该值才触发扣税
+    # 银行系统
+    CURRENT_INTEREST_RATE = 0.05    # 活期利率：5%/天（向下取整）
+    ADMIN_EXTRA_RATE = 0.01         # 管理员额外收益：存款总额的 1%/天（独立发放）
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -419,6 +426,7 @@ class PointGamesPlugin(Star):
         "enable_transfer": True,
         "enable_activity": True,
         "enable_tax": True,
+        "enable_bank": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -452,6 +460,10 @@ class PointGamesPlugin(Star):
         "钓鱼统计": ("enable_fishing", "钓鱼系统"),
         "兑换礼品": ("enable_ranking", "消费兑换"),
         "转账": ("enable_transfer", "积分转账"),
+        "开户": ("enable_bank", "银行系统"),
+        "存钱": ("enable_bank", "银行系统"),
+        "取钱": ("enable_bank", "银行系统"),
+        "我的银行": ("enable_bank", "银行系统"),
     }
 
     # ---------- 表结构定义 ----------
@@ -671,6 +683,12 @@ class PointGamesPlugin(Star):
             date TEXT,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS bank_accounts (
+            user_id TEXT PRIMARY KEY,
+            current_balance INTEGER DEFAULT 0,
+            total_interest INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -817,6 +835,17 @@ class PointGamesPlugin(Star):
         except (TypeError, ValueError):
             pass
         self.TAX_MIN_BALANCE = integer("tax_min_balance", self.TAX_MIN_BALANCE, 1)
+        # 银行利率参数
+        try:
+            rate = float(config.get("bank_interest_rate", self.CURRENT_INTEREST_RATE))
+            self.CURRENT_INTEREST_RATE = rate if 0 <= rate <= 1 else self.CURRENT_INTEREST_RATE
+        except (TypeError, ValueError):
+            pass
+        try:
+            extra = float(config.get("bank_admin_extra_rate", self.ADMIN_EXTRA_RATE))
+            self.ADMIN_EXTRA_RATE = extra if 0 <= extra <= 1 else self.ADMIN_EXTRA_RATE
+        except (TypeError, ValueError):
+            pass
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -1256,6 +1285,12 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=0, minute=0, timezone=TZ),
             id="point_games_daily_tax", replace_existing=True,
         )
+        # 银行日结：凌晨 0 点发放活期利息 + 管理员额外收益
+        self._scheduler.add_job(
+            self._daily_bank_settlement,
+            CronTrigger(hour=0, minute=0, timezone=TZ),
+            id="point_games_bank_settlement", replace_existing=True,
+        )
         self._scheduler.start()
         # 3. 注册 WebUI
         self._register_web_apis()
@@ -1692,6 +1727,7 @@ class PointGamesPlugin(Star):
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
             "转账：/转账 @群友 [积分]（私聊用QQ号，手续费10%）",
+            "银行：/开户｜/存钱 [积分]｜/取钱 [积分]｜/我的银行（活期5%/天）",
             "彩票：/买彩票 [积分]｜/彩票奖池",
             "卧底：/卧底开始 [人数]｜/加入卧底｜/投票 @玩家｜/卧底结束",
             "炸弹：/炸弹开始｜/猜 [数字]（余额需满30）",
@@ -2921,6 +2957,229 @@ class PointGamesPlugin(Star):
                 pass
 
     # ============================================================
+    #  功能：银行系统
+    # ============================================================
+    async def _get_bank(self, session, user_id: str):
+        """查询银行账户（事务内调用），返回 (活期余额, 累计利息) 或 None。"""
+        row = (await session.execute(text(
+            "SELECT current_balance, total_interest FROM bank_accounts WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        return row
+
+    @filter.command("开户")
+    async def bank_open(self, event: AstrMessageEvent):
+        """/开户 —— 开通银行账户（免费），享受每日活期利息"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "开户")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+
+        async def fn(session):
+            await self._enforce_cooldown(session, user_id)
+            await self._ensure_user(session, user_id)
+            if await self._get_bank(session, user_id):
+                raise _BizError("🏦 你已经开过户啦，直接 /存钱 就行喵~")
+            await session.execute(text(
+                "INSERT INTO bank_accounts(user_id, current_balance, total_interest) "
+                "VALUES(:u, 0, 0)"
+            ), {"u": user_id})
+            return True, (
+                "🏦 银行开户成功！\n"
+                f"活期利率：{self.CURRENT_INTEREST_RATE:.0%}/天\n"
+                "每日结算自动到账"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    def _parse_bank_amount(self, args: list) -> Optional[int]:
+        """解析存/取金额：取第一个纯数字参数，无效返回 None。"""
+        for tok in args:
+            if tok.isdigit():
+                return int(tok)
+        return None
+
+    @filter.command("存钱")
+    async def bank_deposit(self, event: AstrMessageEvent):
+        """/存钱 [积分] —— 将钱包积分存入银行活期账户"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "存钱")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+        args = self._strip_command(event, "存钱").split()
+        amount = self._parse_bank_amount(args)
+        if amount is None or amount <= 0:
+            yield event.plain_result("❌ 请输入有效的存入金额，如：/存钱 100")
+            return
+
+        async def fn(session):
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            if not await self._get_bank(session, user_id):
+                raise _BizError("🏦 你还没有银行账户，先发送 /开户 开通喵~")
+            # 钱包原子扣款（余额条件防透支），存入银行
+            await self._add_points(session, user_id, -amount, "bank_deposit",
+                                   earned=0, spent=amount)
+            await session.execute(text(
+                "UPDATE bank_accounts SET current_balance=current_balance+:a WHERE user_id=:u"
+            ), {"a": amount, "u": user_id})
+            bank = await self._get_bank(session, user_id)
+            estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
+            return True, (
+                f"💰 存入 {amount} 积分到活期账户成功！\n"
+                f"当前活期余额：{bank[0]}积分\n"
+                f"预计每日收益：{estimate}积分"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("取钱")
+    async def bank_withdraw(self, event: AstrMessageEvent):
+        """/取钱 [积分] —— 从银行活期账户取出积分到钱包"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "取钱")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+        args = self._strip_command(event, "取钱").split()
+        amount = self._parse_bank_amount(args)
+        if amount is None or amount <= 0:
+            yield event.plain_result("❌ 请输入有效的取出金额，如：/取钱 100")
+            return
+
+        async def fn(session):
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            bank = await self._get_bank(session, user_id)
+            if not bank:
+                raise _BizError("🏦 你还没有银行账户，先发送 /开户 开通喵~")
+            if bank[0] < amount:
+                raise _BizError(f"❌ 银行余额不足！当前活期余额：{bank[0]}积分")
+            # 银行扣款（余额条件防并发超取），转入钱包
+            result = await session.execute(text(
+                "UPDATE bank_accounts SET current_balance=current_balance-:a "
+                "WHERE user_id=:u AND current_balance-:a >= 0"
+            ), {"a": amount, "u": user_id})
+            if result.rowcount != 1:
+                raise _BizError(f"❌ 银行余额不足！当前活期余额：{bank[0]}积分")
+            await self._add_points(session, user_id, amount, "bank_withdraw",
+                                   earned=amount, spent=0)
+            bank = await self._get_bank(session, user_id)
+            estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
+            return True, (
+                f"💵 取出 {amount} 积分到钱包成功！\n"
+                f"当前活期余额：{bank[0]}积分\n"
+                f"预计每日收益：{estimate}积分"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("我的银行")
+    async def bank_overview(self, event: AstrMessageEvent):
+        """/我的银行 —— 查看银行账户总览"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "我的银行")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+
+        async def fn(session):
+            await self._enforce_cooldown(session, user_id)
+            bank = await self._get_bank(session, user_id)
+            if not bank:
+                raise _BizError("🏦 你还没有银行账户，先发送 /开户 开通喵~")
+            estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
+            return True, (
+                "🏦 银行账户总览\n"
+                f"💳 活期余额：{bank[0]}积分\n"
+                f"📈 今日活期收益：{estimate}积分\n"
+                f"💰 累计利息：{bank[1]}积分"
+            ), None
+
+        _, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _daily_bank_settlement(self):
+        """每日凌晨 0 点银行结算：玩家活期利息 + 管理员额外收益（独立发放）。
+
+        - 玩家利息 = 活期余额 × CURRENT_INTEREST_RATE（向下取整，全额到账钱包）
+        - 管理员额外收益 = 每个账户活期余额 × ADMIN_EXTRA_RATE 的总和，流入 fee_receiver
+        """
+        if not self.feature_flags.get("enable_bank", True):
+            return
+        rate = self.CURRENT_INTEREST_RATE
+        extra_rate = self.ADMIN_EXTRA_RATE
+        receiver = self.FEE_RECEIVER
+
+        async def fn(session):
+            rows = (await session.execute(text(
+                "SELECT user_id, current_balance FROM bank_accounts WHERE current_balance > 0"
+            ))).all()
+            total_interest = 0
+            total_admin_extra = 0
+            for uid, balance in rows:
+                # 玩家利息：全额到账钱包，累计进 total_interest
+                interest = int(int(balance) * rate)
+                if interest > 0:
+                    await self._add_points(session, str(uid), interest, "bank_interest",
+                                           earned=interest, spent=0)
+                    await session.execute(text(
+                        "UPDATE bank_accounts SET total_interest=total_interest+:i "
+                        "WHERE user_id=:u"
+                    ), {"i": interest, "u": str(uid)})
+                    total_interest += interest
+                # 管理员额外收益：独立发放，不影响玩家利息
+                admin_extra = int(int(balance) * extra_rate)
+                if admin_extra > 0:
+                    total_admin_extra += admin_extra
+            # 汇总一次性发放给手续费接收账户（与收税同源，缺省第一个管理员）
+            if total_admin_extra > 0 and receiver:
+                await self._add_points(session, receiver, total_admin_extra, "bank_admin_extra",
+                                       earned=total_admin_extra, spent=0)
+            return True, "ok", (total_interest, total_admin_extra if receiver else 0)
+
+        ok, _, data = await self._tx(fn)
+        if not ok or not data or (data[0] <= 0 and data[1] <= 0):
+            return
+        broadcast_chain = [Plain(
+            "🏦 银行日结完成！\n"
+            f"共发放玩家利息：{data[0]} 积分\n"
+            f"管理员额外收益：{data[1]} 积分"
+        )]
+        # 广播到所有已开启玩法的群（与排行榜播报同一群来源）
+        try:
+            async with self._session() as session:
+                groups = (await session.execute(text(
+                    "SELECT group_id, platform_id FROM group_settings WHERE enabled=1"
+                ))).all()
+        except Exception:
+            groups = []
+        platform_ids = []
+        try:
+            manager = getattr(self.context, "platform_manager", None)
+            if manager and hasattr(manager, "get_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+            elif manager and hasattr(manager, "platform_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+        except Exception:
+            platform_ids = []
+        for group_id, platform_id in groups:
+            if not group_id:
+                continue
+            targets = [str(platform_id)] if platform_id else platform_ids
+            for target_platform in targets:
+                try:
+                    await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
+                except Exception:
+                    self.logger.exception(f"银行日结播报发送失败：{group_id}")
+
+    # ============================================================
     #  功能七：群活跃奖励
     # ============================================================
     async def _load_activity_counts(self):
@@ -3140,13 +3399,19 @@ class PointGamesPlugin(Star):
                 "FROM users WHERE user_id=:u"
             ), {"u": user_id})).first()
             name = row[0] or "未知玩家"
-            return True, (
+            msg = (
                 f"💰 玩家：{name}\n"
                 f"当前积分：{int(row[1])}\n"
                 f"累计收入：{int(row[2])}\n"
                 f"累计支出：{int(row[3])}\n"
                 f"连续签到：{int(row[4])} 天"
-            ), None
+            )
+            # 附带银行账户信息（未开户不显示）
+            bank = await self._get_bank(session, user_id)
+            if bank:
+                estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
+                msg += f"\n💳 银行存款：{bank[0]}积分\n📈 今日活期收益：{estimate}积分"
+            return True, msg, None
 
         ok, msg, _ = await self._tx(fn)
         return event.plain_result(msg)
