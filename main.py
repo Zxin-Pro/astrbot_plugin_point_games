@@ -129,7 +129,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -274,6 +274,9 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/贷款 [积分]", "贷款系统：向银行申请贷款（利息5%/天，不可转账）"),
     ("/还款", "贷款系统：一次性还清当前贷款本息"),
     ("/我的贷款", "贷款系统：查看贷款详情、信用分与额度"),
+    ("/银行信息/加款/扣款/清空 @玩家", "管理指定玩家的银行账户（仅管理员）"),
+    ("/贷款信息/贷款清账/额度重置 @玩家", "管理指定玩家的贷款（仅管理员）"),
+    ("/信用加分 @玩家 分数", "调整玩家信用分，负数扣分（仅管理员）"),
     ("每日红包", "每日随机时间在指定群发拼手气红包，发送「抢」参与"),
     ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
@@ -316,7 +319,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.20.3",
+    version="2.20.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1954,7 +1957,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.20.3",
+            "🎮 积分游戏 2.20.4",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -4257,6 +4260,291 @@ class PointGamesPlugin(Star):
     @filter.command("加积分")
     async def grant_add(self, event: AstrMessageEvent):
         async for result in self._grant_points(event, negative=False):
+            yield result
+
+    # ============================================================
+    #  管理指令：银行管理（仅管理员）
+    # ============================================================
+    async def _bank_admin(self, event: AstrMessageEvent, action: str):
+        """管理员管理指定玩家的银行账户：查看/加款/扣款/清空。"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
+        target = self._extract_at(event)
+        if not target:
+            if action == "info":
+                yield event.plain_result("用法：/银行信息 @玩家 喵~")
+            else:
+                yield event.plain_result(f"用法：/银行{action} @玩家 积分 喵~")
+            return
+        args = self._strip_command(event, f"银行{action}").split()
+        amount = None
+        if action in ("加款", "扣款"):
+            nums = [a for a in args if a.isdigit()]
+            amount = int(nums[0]) if nums else None
+            if amount is None or amount <= 0:
+                yield event.plain_result(f"❌ 请输入有效金额，如：/银行{action} @玩家 100")
+                return
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT user_name FROM users WHERE user_id=:u"
+            ), {"u": target})).first()
+            if not row:
+                raise _BizError("这个玩家还没有积分数据喵~")
+            name = str(row[0]).strip() or target
+            bank = (await session.execute(text(
+                "SELECT current_balance, total_interest, created_at FROM bank_accounts "
+                "WHERE user_id=:u"
+            ), {"u": target})).first()
+            if action == "info":
+                if not bank:
+                    return True, (f"🏦 玩家 {name} 还没有开通银行账户喵~"), None
+                estimate = int(int(bank[0]) * self.CURRENT_INTEREST_RATE)
+                return True, (
+                    f"🏦 玩家 {name} 的银行账户\n"
+                    f"💳 活期余额：{bank[0]}积分\n"
+                    f"📈 预计每日收益：{estimate}积分\n"
+                    f"💰 累计利息：{bank[1]}积分"
+                ), None
+            if not bank:
+                raise _BizError(f"玩家 {name} 还没有开通银行账户，无法{action}喵~")
+            cur = int(bank[0])
+            if action == "加款":
+                new_bal = cur + amount
+                await session.execute(text(
+                    "UPDATE bank_accounts SET current_balance=:b WHERE user_id=:u"
+                ), {"b": new_bal, "u": target})
+                # 银行流水：管理员加款（不进存款/取款统计，避免重复计入）
+                await session.execute(text(
+                    "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                    "VALUES(:u, 'admin_add', :a, :t)"
+                ), {"u": target, "a": amount, "t": time.time()})
+                return True, (
+                    f"✅ 已为玩家 {name} 的银行账户加款 {amount} 积分\n"
+                    f"当前活期余额：{new_bal}积分"
+                ), None
+            if action == "扣款":
+                deduct = min(cur, amount)
+                new_bal = cur - deduct
+                await session.execute(text(
+                    "UPDATE bank_accounts SET current_balance=:b WHERE user_id=:u"
+                ), {"b": new_bal, "u": target})
+                await session.execute(text(
+                    "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                    "VALUES(:u, 'admin_deduct', :a, :t)"
+                ), {"u": target, "a": deduct, "t": time.time()})
+                note = f"（账户余额不足，实际扣除 {deduct} 积分）" if deduct < amount else ""
+                return True, (
+                    f"✅ 已从玩家 {name} 的银行账户扣除 {deduct} 积分{note}\n"
+                    f"当前活期余额：{new_bal}积分"
+                ), None
+            # 清空
+            await session.execute(text(
+                "UPDATE bank_accounts SET current_balance=0 WHERE user_id=:u"
+            ), {"u": target})
+            await session.execute(text(
+                "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
+                "VALUES(:u, 'admin_deduct', :a, :t)"
+            ), {"u": target, "a": cur, "t": time.time()})
+            return True, (
+                f"✅ 已清空玩家 {name} 的银行账户\n"
+                f"清除活期余额：{cur}积分"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("银行信息")
+    async def bank_admin_info(self, event: AstrMessageEvent):
+        """/银行信息 @玩家 —— 管理员查看指定玩家的银行账户"""
+        async for result in self._bank_admin(event, "info"):
+            yield result
+
+    @filter.command("银行加款")
+    async def bank_admin_add(self, event: AstrMessageEvent):
+        """/银行加款 @玩家 积分 —— 管理员为玩家银行账户充值"""
+        async for result in self._bank_admin(event, "加款"):
+            yield result
+
+    @filter.command("银行扣款")
+    async def bank_admin_deduct(self, event: AstrMessageEvent):
+        """/银行扣款 @玩家 积分 —— 管理员扣除玩家银行余额（不足扣到0）"""
+        async for result in self._bank_admin(event, "扣款"):
+            yield result
+
+    @filter.command("银行清空")
+    async def bank_admin_clear(self, event: AstrMessageEvent):
+        """/银行清空 @玩家 —— 管理员清空玩家银行余额（累计利息保留）"""
+        async for result in self._bank_admin(event, "清空"):
+            yield result
+
+    # ============================================================
+    #  管理指令：贷款管理（仅管理员）
+    # ============================================================
+    async def _loan_admin_info(self, event: AstrMessageEvent):
+        """管理员查看指定玩家的贷款与信用信息。"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
+        target = self._extract_at(event)
+        if not target:
+            yield event.plain_result("用法：/贷款信息 @玩家 喵~")
+            return
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT user_name FROM users WHERE user_id=:u"
+            ), {"u": target})).first()
+            if not row:
+                raise _BizError("这个玩家还没有积分数据喵~")
+            name = str(row[0]).strip() or target
+            score, total_loans, on_time = await self._ensure_credit(session, target)
+            credit_limit = self._credit_limit(on_time)
+            lb_row = (await session.execute(text(
+                "SELECT loan_balance FROM users WHERE user_id=:u"
+            ), {"u": target})).first()
+            loan_bal = int(lb_row[0]) if lb_row else 0
+            loan = await self._get_active_loan(session, target)
+            msg = (f"🏦 玩家 {name} 的贷款信息\n"
+                   f"贷款余额：{loan_bal}积分（不可转账）\n"
+                   f"信用分：{score}｜累计贷款 {total_loans} 次｜按时还款 {on_time} 次\n"
+                   f"当前信用额度：{credit_limit}积分")
+            if loan:
+                _, _, principal, _, _, paid, _, _, status, start_ts, _ = loan
+                current_interest, days_used = self._calc_loan_interest(
+                    int(principal), float(start_ts))
+                remaining = max(0, int(principal) + current_interest - int(paid))
+                status_map = {"active": "正常", "overdue": "逾期"}
+                msg += (f"\n─────\n状态：{status_map.get(status, '未知')}\n"
+                        f"贷款金额：{principal}积分｜已还：{paid}积分\n"
+                        f"已计息 {days_used} 天，当前利息 {current_interest} 积分\n"
+                        f"剩余应还：{remaining}积分")
+            else:
+                msg += "\n─────\n当前没有未还的贷款"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _loan_admin_close(self, event: AstrMessageEvent):
+        """管理员强制结清指定玩家的当前贷款（不计入按时还款、不动信用分）。"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
+        target = self._extract_at(event)
+        if not target:
+            yield event.plain_result("用法：/贷款清账 @玩家 喵~")
+            return
+
+        async def fn(session):
+            loan = await self._get_active_loan(session, target)
+            if not loan:
+                raise _BizError("该玩家当前没有未还的贷款喵~")
+            _, _, principal, _, _, paid, _, _, status, start_ts, _ = loan
+            current_interest, _ = self._calc_loan_interest(
+                int(principal), float(start_ts))
+            total_now = int(principal) + current_interest
+            await session.execute(text(
+                "UPDATE loans SET status='paid', paid=:p, interest=:i2, "
+                "total_due=:t2, closed_date=:c WHERE id=:i"
+            ), {"p": total_now, "i2": current_interest, "t2": total_now,
+                "c": time.time(), "i": loan[0]})
+            status_map = {"active": "正常结清", "overdue": "逾期强制结清"}
+            return True, (
+                f"✅ 已强制结清玩家 {target} 的贷款\n"
+                f"本金 {principal} + 利息 {current_interest} = {total_now} 积分"
+                f"（{status_map.get(status, '结清')}，不计入按时还款、不影响信用分）\n"
+                "注意：冷却期内该玩家仍不能再次申请贷款"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _loan_admin_credit(self, event: AstrMessageEvent, delta: int | None):
+        """管理员调整指定玩家的信用分（delta 可为负）。"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
+        target = self._extract_at(event)
+        if not target:
+            yield event.plain_result("用法：/信用加分 @玩家 分数（可为负数）喵~")
+            return
+        args = self._strip_command(event, "信用加分").split()
+        if delta is None:
+            nums = [a for a in args if re.fullmatch(r"[+-]?\d+", a)]
+            delta = int(nums[0]) if nums else None
+        if delta is None or delta == 0:
+            yield event.plain_result("❌ 请输入有效分数，如：/信用加分 @玩家 10（扣分用负数）")
+            return
+
+        async def fn(session):
+            await self._ensure_user(session, target)
+            score, _, _ = await self._ensure_credit(session, target)
+            new_score = score + delta
+            await session.execute(text(
+                "UPDATE credit_scores SET score=:s WHERE user_id=:u"
+            ), {"s": new_score, "u": target})
+            banned = "（已低于贷款门槛，将无法申请贷款）" if new_score < self.LOAN_CREDIT_THRESHOLD else ""
+            return True, (
+                f"✅ 已调整玩家 {target} 的信用分 {delta:+d}\n"
+                f"当前信用分：{new_score}{banned}"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _loan_admin_reset_limit(self, event: AstrMessageEvent):
+        """管理员重置指定玩家的按时还款次数，额度回到初始值。"""
+        sender = str(event.get_sender_id())
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("仅配置的管理员可使用该指令喵~ 请在插件配置页「管理员QQ」中添加")
+            return
+        target = self._extract_at(event)
+        if not target:
+            yield event.plain_result("用法：/额度重置 @玩家 喵~")
+            return
+
+        async def fn(session):
+            await self._ensure_user(session, target)
+            await self._ensure_credit(session, target)
+            await session.execute(text(
+                "UPDATE credit_scores SET on_time_payments=0 WHERE user_id=:u"
+            ), {"u": target})
+            return True, (
+                f"✅ 已重置玩家 {target} 的按时还款次数\n"
+                f"当前信用额度：{self._credit_limit(0)}积分"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("贷款信息")
+    async def loan_admin_info(self, event: AstrMessageEvent):
+        """/贷款信息 @玩家 —— 管理员查看玩家贷款与信用"""
+        async for result in self._loan_admin_info(event):
+            yield result
+
+    @filter.command("贷款清账")
+    async def loan_admin_close(self, event: AstrMessageEvent):
+        """/贷款清账 @玩家 —— 管理员强制结清玩家贷款（不影响信用）"""
+        async for result in self._loan_admin_close(event):
+            yield result
+
+    @filter.command("信用加分")
+    async def loan_admin_credit(self, event: AstrMessageEvent):
+        """/信用加分 @玩家 分数 —— 管理员调整信用分（负数扣分）"""
+        async for result in self._loan_admin_credit(event, None):
+            yield result
+
+    @filter.command("额度重置")
+    async def loan_admin_reset(self, event: AstrMessageEvent):
+        """/额度重置 @玩家 —— 管理员重置玩家还款次数与额度"""
+        async for result in self._loan_admin_reset_limit(event):
             yield result
 
     @filter.command("减积分", alias={"扣积分"})
