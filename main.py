@@ -316,7 +316,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.20.0",
+    version="2.20.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1180,6 +1180,17 @@ class PointGamesPlugin(Star):
         ).first()
         return int(row[0]) if row else 0
 
+    async def _total_balance(self, session, user_id: str) -> int:
+        """总可用资金 = 普通余额 + 贷款余额（贷款积分除转账外均可消费）。"""
+        await self._ensure_user(session, user_id)
+        row = (
+            await session.execute(
+                text("SELECT balance, loan_balance FROM users WHERE user_id=:u"),
+                {"u": user_id},
+            )
+        ).first()
+        return (int(row[0]) + int(row[1])) if row else 0
+
     async def _add_points(
         self,
         session,
@@ -1943,7 +1954,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 2.20.0",
+            "🎮 积分游戏 2.20.1",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -1989,7 +2000,7 @@ class PointGamesPlugin(Star):
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < cost:
                 raise _BizError(f"积分不足喵~ 需要 {cost} 积分，你只有 {bal} 积分")
             # 默认配置严格按 1-100 区间抽取；自定义权重使用加权抽取。
@@ -2202,7 +2213,7 @@ class PointGamesPlugin(Star):
                 left = round(self.ATTACK_COOLDOWN - (now - float(last_row[0])), 1)
                 raise _BizError(f"攻击冷却中，请 {left} 秒后再试喵~")
             # 检查余额
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < self.ATTACK_COST:
                 raise _BizError(f"积分不足喵~ 攻击需要 {self.ATTACK_COST} 积分，你只有 {bal} 积分")
             # 惰性重置过期 BOSS
@@ -2382,7 +2393,7 @@ class PointGamesPlugin(Star):
             ).first()
             if int(cnt[0]) >= self.LOTTERY_LIMIT_PER_DAY:
                 raise _BizError(f"每人每期限购 {self.LOTTERY_LIMIT_PER_DAY} 注喵~")
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < cost:
                 raise _BizError(f"积分不足喵~ 需要 {cost} 积分，你只有 {bal} 积分")
             numbers = sorted(random.sample(range(1, 101), 5))
@@ -3805,6 +3816,19 @@ class PointGamesPlugin(Star):
             if loan and self.LOAN_PREVENT_MULTIPLE:
                 raise _BizError(
                     f"❌ 您已有未还清的贷款，{self.LOAN_DAYS}天内不可再次贷款")
+            # 冷却期：最近一次放款后的贷款期限内不能再贷，就算提前还清也一样
+            last = (await session.execute(text(
+                "SELECT MAX(start_date) FROM loans WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if last and last[0] is not None:
+                cooldown_end = float(last[0]) + self.LOAN_DAYS * 86400
+                if time.time() < cooldown_end:
+                    remain_sec = cooldown_end - time.time()
+                    remain_days = int(remain_sec // 86400) + 1
+                    remain_h = int((remain_sec % 86400) // 3600)
+                    raise _BizError(
+                        f"❌ 贷款冷却中！上一笔贷款 {self.LOAN_DAYS} 天期限结束前"
+                        f"（约剩 {remain_days} 天 {remain_h} 小时）不能再申请")
             # 利息即刻开始计算（不足一天按一天算）
             now_ts = time.time()
             interest, days_used = self._calc_loan_interest(amount, now_ts, now_ts)
@@ -4415,7 +4439,7 @@ class PointGamesPlugin(Star):
         # 积分门槛：低于 BOMB_MIN_BALANCE 不给玩（踩雷扣分可能为负）
         user_id = event.get_sender_id()
         async with self._session() as session:
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
         if bal < self.BOMB_MIN_BALANCE:
             yield event.plain_result(
                 f"积分不足 {self.BOMB_MIN_BALANCE}，不能玩炸弹喵~（当前积分：{bal}）"
@@ -4467,7 +4491,7 @@ class PointGamesPlugin(Star):
 
         # 积分门槛：低于 BOMB_MIN_BALANCE 不给猜（踩雷会扣分）
         async with self._session() as session:
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
         if bal < self.BOMB_MIN_BALANCE:
             yield event.plain_result(
                 f"积分不足 {self.BOMB_MIN_BALANCE}，不能玩炸弹喵~（当前积分：{bal}）"
@@ -4744,7 +4768,7 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             
-            balance = await self._balance(session, user_id)
+            balance = await self._total_balance(session, user_id)
             if balance < self.CARD_COST:
                 raise _BizError(f"积分不足喵~ 抽卡需要 {self.CARD_COST} 积分")
             
@@ -5733,7 +5757,7 @@ class PointGamesPlugin(Star):
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < self.SPEND_REWARD_THRESHOLD:
                 raise _BizError(
                     f"积分不足喵~ 兑换礼品需要 {self.SPEND_REWARD_THRESHOLD} 积分，"
@@ -6113,7 +6137,7 @@ class PointGamesPlugin(Star):
                 "SELECT slot FROM fishing_rods WHERE user_id=:u"
             ), {"u": user_id})).all()}
             slot = next(i for i in range(1, self.MAX_RODS + 1) if i not in slots)
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < self.ROD_COST:
                 raise _BizError(
                     f"积分不足喵~ 买鱼竿需要 {self.ROD_COST} 积分，你只有 {bal} 积分"
@@ -6157,7 +6181,7 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             cost = count * self.BAIT_COST
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < cost:
                 raise _BizError(
                     f"积分不足喵~ 买 {count} 个鱼饵需要 {cost} 积分，你只有 {bal} 积分"
@@ -6423,7 +6447,7 @@ class PointGamesPlugin(Star):
                 raise _BizError(f"没有 {slot} 号鱼竿喵~ 发 /鱼竿列表 查看你的鱼竿")
             if rod[1] != "broken":
                 raise _BizError(f"{slot} 号鱼竿没坏，不用修喵~")
-            bal = await self._balance(session, user_id)
+            bal = await self._total_balance(session, user_id)
             if bal < self.REPAIR_COST:
                 raise _BizError(
                     f"积分不足喵~ 修鱼竿需要 {self.REPAIR_COST} 积分，你只有 {bal} 积分"
