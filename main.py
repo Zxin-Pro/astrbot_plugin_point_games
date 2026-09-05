@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.20.1
+作者：Zxin_Pro    版本：3.20.2
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -222,13 +222,6 @@ FISHING_EVENTS: list[tuple[str, float]] = [
     ("渔政罚款", 1.0),    # 无证捕捞 -100 积分
     ("撞上暗礁", 0.7),    # 船体受损 -150 积分
 ]
-
-# 扣分事件罚金（积分）
-FISHING_FINE_MAINTAIN = 30    # 钓具保养
-FISHING_FINE_DEVICE = 40      # 设备进水
-FISHING_FINE_POLICE = 100     # 渔政罚款
-FISHING_FINE_REEF = 150       # 撞上暗礁
-FISHING_CRAB_BAITS = 3        # 螃蟹夹走鱼饵数上限
 
 # 长期期望说明（v2.15.1 调参后）：上钩 67.5% + 双鱼 5% ≈ 每次判定期望卖鱼 13.0 积分，
 # 扣鱼饵 10 积分、断竿摊销 2 积分（4% × 修理费 50），宝箱（50~100）期望回补约 0.53，
@@ -459,6 +452,12 @@ class PointGamesPlugin(Star):
     FISHING_BOTH_LEGEND_REWARD = 1000  # 同时拥有烛心和闲鱼额外奖励
     FISHING_BROADCAST_PRICE = 1000  # 触发全群广播的鱼价阈值
     FISHING_BROADCAST_GROUPS = []   # 钓鱼播报群列表（配置页填写，留空播报到挂机所在群）
+    # 扣分事件罚金（积分）
+    FISHING_FINE_MAINTAIN = 30      # 钓具保养
+    FISHING_FINE_DEVICE = 40        # 设备进水
+    FISHING_FINE_POLICE = 100       # 渔政罚款
+    FISHING_FINE_REEF = 150         # 撞上暗礁
+    FISHING_CRAB_BAITS = 3          # 螃蟹夹走鱼饵数上限
     FISHING_RESET_HOUR = 0          # 今日统计重置小时
     FISHING_RESET_MINUTE = 0        # 今日统计重置分钟
     FISHING_RANK_SIZE = 10          # 钓鱼排行显示人数
