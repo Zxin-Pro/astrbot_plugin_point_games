@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.18.4
+作者：Zxin_Pro    版本：2.18.5
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -4340,6 +4340,9 @@ class PointGamesPlugin(Star):
                 )
             ).first()
             is_new = row is None
+            # 首次签到判定：users 无记录，或存在记录但从未签到过（sign_in_date 为空）
+            # 避免玩家先玩过其他玩法导致"永远不算新人"而领不到送竿
+            first_sign_in = row is None or row[0] is None
             await self._ensure_user(session, user_id)
             if row and row[0] == today:
                 raise _BizError("今天已经签到过啦，明天再来喵~")
@@ -4356,7 +4359,7 @@ class PointGamesPlugin(Star):
             msg = f"📝 签到成功！+{reward} 积分，已连续签到 {streak} 天"
             if bonus:
                 msg += f"\n🎉 连续签到 {streak} 天额外 +{bonus} 积分！"
-            if is_new:
+            if first_sign_in:
                 # 首次签到：免费赠送 1 号鱼竿（已拥有鱼竿则不重复赠送）
                 has_rod = (await session.execute(text(
                     "SELECT 1 FROM fishing_rods WHERE user_id=:u LIMIT 1"
