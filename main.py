@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：2.18.2
+作者：Zxin_Pro    版本：2.18.3
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -4914,28 +4914,46 @@ class PointGamesPlugin(Star):
             self.logger.exception("获取播报群列表失败")
             return []
 
+    async def _get_platform_ids(self) -> list[str]:
+        """获取当前所有平台实例 ID（AstrBot 兼容写法）"""
+        ids: list[str] = []
+        try:
+            manager = getattr(self.context, "platform_manager", None)
+            if manager and hasattr(manager, "get_insts"):
+                ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+            elif manager and hasattr(manager, "platform_insts"):
+                ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+        except Exception:
+            pass
+        return ids
+
     async def _send_with_fallback(
         self, platform_id: str, group_id: str, chain: list, tag: str
     ) -> bool:
-        """优先发到指定群，失败或群号为空时回退到所有已开启玩法的群。"""
+        """多重路径发送：竿里存的平台ID → 当前所有平台实例 → 已开启玩法的群。
+
+        插件更新/适配器改名后，rods 里存的 platform_id 可能已过期，
+        只按旧 ID 发会静默失败，这里保证播报尽量送达。
+        """
+        targets: list[tuple[str, str]] = []
         if group_id:
+            targets.append((str(platform_id), str(group_id)))
+            for pid in await self._get_platform_ids():
+                if pid and (pid, str(group_id)) not in targets:
+                    targets.append((pid, str(group_id)))
+        for fb_platform, fb_group in await self._get_broadcast_groups():
+            if (fb_platform, fb_group) not in targets:
+                targets.append((fb_platform, fb_group))
+        for t_platform, t_group in targets:
             try:
-                await self._send_group_chain(platform_id, group_id, chain)
+                await self._send_group_chain(t_platform, t_group, chain)
+                if (t_platform, t_group) != (str(platform_id), str(group_id)):
+                    self.logger.info(f"{tag}已通过兜底路径送达（{t_platform}:{t_group}）")
                 return True
             except Exception:
-                self.logger.exception(f"{tag}发送失败（{platform_id}:{group_id}），尝试兜底群")
-        sent = False
-        for fb_platform, fb_group in await self._get_broadcast_groups():
-            if fb_group == group_id:
-                continue
-            try:
-                await self._send_group_chain(fb_platform, fb_group, chain)
-                sent = True
-            except Exception:
-                self.logger.exception(f"{tag}兜底发送失败（{fb_platform}:{fb_group}）")
-        if not sent:
-            self.logger.warning(f"{tag}无可用发送目标（群号：{group_id or '空'}）")
-        return sent
+                self.logger.exception(f"{tag}发送失败（{t_platform}:{t_group}）")
+        self.logger.warning(f"{tag}所有发送路径均失败（群号：{group_id or '空'}）")
+        return False
 
     async def _fishing_check(self):
         """定时任务：每 30 分钟判定一次所有挂机中的鱼竿。
