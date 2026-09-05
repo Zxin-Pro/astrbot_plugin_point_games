@@ -30,6 +30,7 @@ from astrbot.api.star import Context, Star, register
 # ---------- 定时任务 ----------
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 # 时区（北京时间）
@@ -128,7 +129,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -270,6 +271,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/存钱 [积分]", "银行系统：将钱包积分存入银行"),
     ("/取钱 [积分]", "银行系统：从银行取出积分到钱包"),
     ("/我的银行", "银行系统：查看活期余额与累计利息"),
+    ("每日红包", "每日随机时间在指定群发拼手气红包，发送「抢」参与"),
     ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
@@ -311,7 +313,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="2.18.7",
+    version="2.19.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -382,6 +384,12 @@ class PointGamesPlugin(Star):
     ADMIN_EXTRA_RATE = 0.01         # 管理员额外收益：存款总额的 1%/天（独立发放）
     BANK_REPORT_TIME = (21, 0)      # 每日流水报告时间 (时, 分)，可配置
     BANK_REPORT_GROUP = []          # 流水报告发送群聊ID列表（空则不发送）
+    # 红包系统
+    RED_PACKET_TOTAL = 500          # 每日红包总额
+    RED_PACKET_COUNT = 20           # 每日红包份数
+    RED_PACKET_TIMEOUT = 10         # 抢红包有效时间（分钟），超时剩余回收
+    RED_PACKET_WINDOW = (8, 0, 23, 0)  # 随机触发时间窗口 (起时,起分,止时,止分)
+    RED_PACKET_GROUP = ""           # 红包发送群聊ID（空则不发送）
     UC_SPEECH_SECONDS = 120         # 每轮发言限时（秒）
     UC_VOTE_SECONDS = 60            # 投票限时（秒）
     UC_LOBBY_SECONDS = 120          # 报名等待（秒）
@@ -443,6 +451,7 @@ class PointGamesPlugin(Star):
         "enable_activity": True,
         "enable_tax": True,
         "enable_bank": True,
+        "enable_red_packet": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -712,6 +721,23 @@ class PointGamesPlugin(Star):
             amount INTEGER,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS red_packet_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            packet_id TEXT,
+            user_id TEXT,
+            amount INTEGER,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS red_packet_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            packet_id TEXT,
+            total_amount INTEGER,
+            total_count INTEGER,
+            remain_count INTEGER,
+            remain_amount INTEGER,
+            status TEXT,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -727,6 +753,8 @@ class PointGamesPlugin(Star):
         self._activity_counts: dict[str, dict[str, dict[str, Any]]] = {}
         self._activity_lock = asyncio.Lock()
         self._bomb_games: dict[str, dict] = {}  # group_id -> {target, min, max, participants[]}
+        self._red_packet = None                 # 当前活跃红包 {packet_id, group_id, remain_count, remain_amount, claimed, expire, max, finished}
+        self._red_packet_lock = asyncio.Lock()
         self._math_sessions: dict[str, dict] = {}  # user_id -> {question, answer, difficulty, expire}
         # 兼容不同版本的数据库获取方式
         self._db = None
@@ -886,6 +914,20 @@ class PointGamesPlugin(Star):
             self.BANK_REPORT_TIME = (21, 0)
         raw_groups = str(config.get("bank_report_group", "") or "").strip()
         self.BANK_REPORT_GROUP = [g.strip() for g in raw_groups.replace("，", ",").split(",") if g.strip()]
+        # 红包系统配置
+        self.RED_PACKET_TOTAL = integer("red_packet_total", self.RED_PACKET_TOTAL, 1)
+        self.RED_PACKET_COUNT = integer("red_packet_count", self.RED_PACKET_COUNT, 1)
+        self.RED_PACKET_TIMEOUT = integer("red_packet_timeout", self.RED_PACKET_TIMEOUT, 1)
+        def _parse_hhmm(value, default):
+            try:
+                h, m = str(value).strip().split(":")
+                return (max(0, min(23, int(h))), max(0, min(59, int(m))))
+            except (ValueError, TypeError):
+                return default
+        ws = _parse_hhmm(config.get("red_packet_window_start", "08:00"), (8, 0))
+        we = _parse_hhmm(config.get("red_packet_window_end", "23:00"), (23, 0))
+        self.RED_PACKET_WINDOW = (ws[0], ws[1], we[0], we[1])
+        self.RED_PACKET_GROUP = str(config.get("red_packet_group", "") or "").strip()
         
         # 赞助系统配置
         self.SPONSOR_RATE = integer("sponsor_rate", self.SPONSOR_RATE, 1)
@@ -1337,6 +1379,13 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=self.BANK_REPORT_TIME[0], minute=self.BANK_REPORT_TIME[1], timezone=TZ),
             id="point_games_bank_report", replace_existing=True,
         )
+        # 红包系统：每天 00:01 为当天生成随机触发时间 + 启动时补调度当日剩余窗口
+        self._scheduler.add_job(
+            self._schedule_red_packet,
+            CronTrigger(hour=0, minute=1, timezone=TZ),
+            id="point_games_red_packet_schedule", replace_existing=True,
+        )
+        self._schedule_red_packet()
         self._scheduler.start()
         # 3. 注册 WebUI
         self._register_web_apis()
@@ -1768,7 +1817,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v2.18.7",
+            "🎮 积分游戏 v2.19.0",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -3348,6 +3397,171 @@ class PointGamesPlugin(Star):
                 await self._send_group_chain("", str(group_id), broadcast_chain)
             except Exception:
                 self.logger.exception(f"银行流水报告发送失败：{group_id}")
+
+    # ============================================================
+    #  功能：每日红包（拼手气）
+    # ============================================================
+    def _schedule_red_packet(self):
+        """为今天生成一个红包随机触发时间（在配置窗口内），窗口已过则跳过。"""
+        if not self.feature_flags.get("enable_red_packet", True):
+            return
+        if not self.RED_PACKET_GROUP:
+            return
+        if self.RED_PACKET_COUNT < 1 or self.RED_PACKET_TOTAL < self.RED_PACKET_COUNT:
+            self.logger.warning("红包配置无效：总额需≥份数（每份至少1积分），今日红包跳过")
+            return
+        sh, sm, eh, em = self.RED_PACKET_WINDOW
+        now = datetime.now(TZ)
+        start = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+        end = now.replace(hour=eh, minute=em, second=0, microsecond=0)
+        if end <= start:
+            self.logger.warning("红包时间窗口配置异常（结束早于开始），今日红包跳过")
+            return
+        window_start = max(start, now)
+        if window_start >= end:
+            return  # 今日窗口已过
+        run_at = window_start + timedelta(seconds=random.uniform(0, (end - window_start).total_seconds()))
+        self._scheduler.add_job(
+            self._send_red_packet,
+            DateTrigger(run_date=run_at, timezone=TZ),
+            id=f"red_packet_send_{now.date().isoformat()}", replace_existing=True,
+        )
+        self.logger.info(f"今日红包已调度：{run_at.isoformat()}")
+
+    async def _send_red_packet(self):
+        """在指定群发送拼手气红包，并注册超时结算任务。"""
+        if not self.RED_PACKET_GROUP:
+            return
+        total, count = self.RED_PACKET_TOTAL, self.RED_PACKET_COUNT
+        packet_id = f"rp{int(time.time() * 1000)}"
+        expire_ts = time.time() + self.RED_PACKET_TIMEOUT * 60
+        async def fn(session):
+            await session.execute(text(
+                "INSERT INTO red_packet_log(packet_id, total_amount, total_count, "
+                "remain_count, remain_amount, status, create_time) "
+                "VALUES(:p, :t, :c, :c, :t, 'active', :time)"
+            ), {"p": packet_id, "t": total, "c": count, "time": time.time()})
+            return True, "ok", None
+        await self._tx(fn)
+        async with self._red_packet_lock:
+            self._red_packet = {
+                "packet_id": packet_id, "group_id": str(self.RED_PACKET_GROUP),
+                "total_count": count, "remain_count": count,
+                "remain_amount": total, "claimed": {}, "max": (None, 0),
+                "expire": expire_ts, "finished": False,
+            }
+        chain = [Plain(
+            f"🧧 红包来啦！总额{total}积分，共{count}份，拼手气！\n"
+            "发送 抢 参与！\n\n"
+            f"💡 剩余：{count}份 | 已抢：0份"
+        )]
+        try:
+            await self._send_group_chain("", str(self.RED_PACKET_GROUP), chain)
+        except Exception:
+            self.logger.exception("红包消息发送失败")
+            async with self._red_packet_lock:
+                self._red_packet = None
+            return
+        # 注册超时结算（到点回收剩余积分）
+        self._scheduler.add_job(
+            self._finish_red_packet,
+            DateTrigger(run_date=datetime.fromtimestamp(expire_ts, TZ), timezone=TZ),
+            id=f"red_packet_end_{packet_id}", replace_existing=True,
+        )
+
+    @filter.event_message_type(EventMessageType.GROUP_MESSAGE)
+    @filter.regex(re.compile(r"^抢\s*$"))
+    async def grab_red_packet(self, event: AstrMessageEvent):
+        """群内发送「抢」参与红包：每人限抢一次，拼手气随机分配。"""
+        packet_id = None
+        state = None
+        user_id = ""
+        amount = None
+        is_last = False
+        hint = ""
+        async with self._red_packet_lock:
+            rp = self._red_packet
+            if not rp or rp["finished"]:
+                return
+            if str(event.get_group_id() or "") != rp["group_id"]:
+                return
+            if time.time() >= rp["expire"] or rp["remain_count"] <= 0:
+                return
+            user_id = str(event.get_sender_id() or "").strip()
+            if not user_id:
+                return
+            if user_id in rp["claimed"]:
+                # 已抢过：直接提示，不参与分配
+                yield event.plain_result("你已经抢过这个红包啦喵~")
+                return
+            # 拼手气二倍均值法：金额在 [1, 剩余均值×2) 内随机，保证总额不超
+            if rp["remain_count"] == 1:
+                amount = rp["remain_amount"]  # 最后一份拿走剩余全部
+            else:
+                avg2 = rp["remain_amount"] * 2 // rp["remain_count"]
+                amount = random.randint(1, max(1, avg2 - 1))
+            rp["remain_count"] -= 1
+            rp["remain_amount"] -= amount
+            rp["claimed"][user_id] = amount
+            if amount > rp["max"][1]:
+                rp["max"] = (user_id, amount)
+            is_last = rp["remain_count"] <= 0
+            # 复制事务所需快照（锁外使用，避免引用被置 None 的 rp）
+            packet_id = rp["packet_id"]
+            state = (rp["remain_count"], rp["remain_amount"])
+            hint = f"💡 剩余：{rp['remain_count']}份 | 已抢：{len(rp['claimed'])}份"
+        # 锁外落库与回复
+        async def fn(session):
+            await session.execute(text(
+                "INSERT INTO red_packet_records(packet_id, user_id, amount, create_time) "
+                "VALUES(:p, :u, :a, :time)"
+            ), {"p": packet_id, "u": user_id, "a": amount, "time": time.time()})
+            await session.execute(text(
+                "UPDATE red_packet_log SET remain_count=:rc, remain_amount=:ra "
+                "WHERE packet_id=:p"
+            ), {"rc": state[0], "ra": state[1], "p": packet_id})
+            # 积分到账（系统发放，进钱包）
+            await self._add_points(session, user_id, amount, "red_packet",
+                                   earned=amount, spent=0)
+            return True, "ok", None
+        ok, _, _ = await self._tx(fn)
+        yield event.chain_result([Plain("🎉 恭喜 "), At(qq=user_id),
+                                  Plain(f" 抢到 {amount} 积分！\n{hint}")])
+        if ok and is_last:
+            await self._finish_red_packet()
+
+    async def _finish_red_packet(self):
+        """结束红包：更新状态、结算剩余积分回收并播报手气王。"""
+        async with self._red_packet_lock:
+            rp = self._red_packet
+            if not rp or rp["finished"]:
+                return
+            rp["finished"] = True
+            self._red_packet = None
+        async def fn(session):
+            await session.execute(text(
+                "UPDATE red_packet_log SET status='ended', remain_count=:rc, remain_amount=:ra "
+                "WHERE packet_id=:p"
+            ), {"rc": rp["remain_count"], "ra": rp["remain_amount"], "p": rp["packet_id"]})
+            return True, "ok", None
+        await self._tx(fn)
+        try:
+            self._scheduler.remove_job(f"red_packet_end_{rp['packet_id']}")
+        except Exception:
+            pass
+        sent = len(rp["claimed"])
+        recycled = rp["remain_amount"]
+        head = (f"🧧 红包已结束！\n共发出 {sent} 份，"
+                + (f"剩余 {recycled} 积分已回收" if recycled > 0 else "红包全部抢完！"))
+        chain = [Plain(head)]
+        king_id, king_amt = rp["max"]
+        if king_id:
+            chain.extend([Plain("\n手气王："), At(qq=str(king_id)),
+                          Plain(f" 获得 {king_amt} 积分！")])
+        try:
+            await self._send_group_chain("", rp["group_id"], chain)
+        except Exception:
+            self.logger.exception("红包结算播报发送失败")
 
     # ============================================================
     #  功能七：群活跃奖励

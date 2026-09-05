@@ -1,5 +1,18 @@
 # 更新日志
 
+## [2.19.0] - 2026-09-05
+
+### 新增
+- 每日红包系统（自动定时发放，无需指令触发）：
+  - 每日在指定群聊随机时间发送拼手气红包（默认总额500积分、20份）
+  - 随机触发时间在配置窗口内（默认 08:00-23:00），每日仅1次，插件重启自动补调度
+  - 用户发送「抢」参与，每人限抢1次，拼手气二倍均值法随机分配（每份至少1积分）
+  - 抢红包时限10分钟（可配置），超时未抢完的剩余积分自动回收
+  - 全部抢完立即结算；结束时播报发出份数、回收积分与手气王（At组件）
+  - 新增 `red_packet_records`（领取明细）与 `red_packet_log`（红包状态）表
+  - 积分流水 operation='red_packet'
+  - 配置页新增 `enable_red_packet`、`red_packet_total`、`red_packet_count`、`red_packet_timeout`、`red_packet_window_start`、`red_packet_window_end`、`red_packet_group`
+
 ## [2.18.9] - 2026-09-05
 
 ### 调整
