@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.3
+作者：Zxin_Pro    版本：4.22.4
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -357,7 +357,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.3",
+    version="4.22.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -7439,7 +7439,14 @@ class PointGamesPlugin(Star):
         每根竿消耗 1 个鱼饵后随机判定事件：
         上钩的鱼先进 fishing_pending，等玩家 /收鱼 进鱼篓；
         高价值鱼 / 至高传说直接全群广播（真实 At 组件）。
+
+        休息时间：北京时间 0:00-7:00 不进行判定（鱼儿也要休息喵~）
         """
+        # 0点到7点为休息时间，不判定
+        bj_hour = datetime.now(self._beijing_tz).hour
+        if 0 <= bj_hour < 7:
+            return
+
         async def fn(session):
             rods = (await session.execute(text(
                 "SELECT r.id, r.user_id, r.slot, r.platform_id, r.group_id, "
