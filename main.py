@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.23.0
+作者：Zxin_Pro    版本：3.23.2
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.23.0",
+    version="3.23.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -2047,7 +2047,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v3.23.0",
+            "🎮 积分游戏 v3.23.2",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -5653,25 +5653,25 @@ class PointGamesPlugin(Star):
             total_win = 0
             
             for _ in range(count):
-                roll = random.randint(1, 100)
+                roll = random.randint(1, 10000)
                 
-                if roll <= 1:  # 1%：头奖1000积分
+                if roll <= 30:  # 0.3%：头奖1000积分
                     reward = 1000
                     emoji = "👑"
                     label = "头奖"
-                elif roll <= 5:  # 4%：大奖200积分
+                elif roll <= 180:  # 1.5%：大奖200积分
                     reward = 200
                     emoji = "🎉"
                     label = "大奖"
-                elif roll <= 15:  # 10%：中奖80积分
+                elif roll <= 680:  # 5%：中奖80积分
                     reward = 80
                     emoji = "😄"
                     label = "中奖"
-                elif roll <= 40:  # 25%：小奖30积分
+                elif roll <= 2180:  # 15%：小奖30积分
                     reward = 30
                     emoji = "🙂"
                     label = "小奖"
-                else:  # 60%：谢谢参与
+                else:  # 78.2%：谢谢参与
                     reward = 0
                     emoji = "💀"
                     label = "谢谢参与"
