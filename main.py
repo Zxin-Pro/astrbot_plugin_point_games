@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.24.2
+作者：Zxin_Pro    版本：3.24.3
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -138,7 +138,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.24.2",
+    version="3.24.3",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -484,6 +484,12 @@ class PointGamesPlugin(Star):
     GUESS_MAX = 500                 # 最高下注
     GUESS_BIG_SMALL_MULTIPLIER = 1.8  # 猜大小的倍数
     GUESS_EXACT_MULTIPLIER = 10     # 猜具体数字的倍数
+    # 十连抽卡系统
+    CARD_DRAW_COST = 100            # 每次抽卡消耗
+    CARD_DRAW_COUNT = 10            # 每次抽卡张数
+    CARD_DRAW_BONUS_800 = 2.0       # 总分≥800倍数
+    CARD_DRAW_BONUS_900 = 3.0       # 总分≥900倍数
+    CARD_DRAW_BASE_RATE = 0.18      # 基础奖励倍率（期望 -10/次）
     # 钓鱼系统
     MAX_RODS = 10                   # 每人最多鱼竿数
     ROD_COST = 200                  # 鱼竿价格
@@ -535,6 +541,7 @@ class PointGamesPlugin(Star):
         "enable_fruit_machine": True,
         "enable_scratch_card": True,
         "enable_guess_number": True,
+        "enable_card_draw": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -578,6 +585,7 @@ class PointGamesPlugin(Star):
         "水果机": ("enable_fruit_machine", "水果机"),
         "刮刮乐": ("enable_scratch_card", "刮刮乐"),
         "猜数字": ("enable_guess_number", "猜数字"),
+        "十连": ("enable_card_draw", "十连抽卡"),
     }
 
     # ---------- 表结构定义 ----------
@@ -2150,7 +2158,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v3.24.2",
+            "🎮 积分游戏 v3.24.3",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -2163,6 +2171,7 @@ class PointGamesPlugin(Star):
             "水果机：/水果机 [积分]（下注5-500，拼运气赚积分）",
             "刮刮乐：/刮刮乐 [张数]（20积分/张，即时开奖1-10张）",
             "猜数字：/猜数字 [积分] [大/小/数字]（猜大小翻1.8倍，猜具体翻10倍）",
+            "十连：/十连（100积分抽10张卡，总分高有翻倍奖励）",
             "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
             "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计",
             "兑换：/兑换礼品（花费10000积分）",
@@ -5937,6 +5946,100 @@ class PointGamesPlugin(Star):
         ok, msg, should_remind = await self._tx(fn)
         yield event.plain_result(msg)
         
+        # 事务外发送提醒
+        if ok and should_remind:
+            group_id = event.get_group_id()
+            if group_id:
+                try:
+                    yield event.plain_result(
+                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
+                    )
+                except Exception:
+                    pass
+
+    # ============================================================
+    #  功能25：十连抽卡（抽卡大作战，期望为负）
+    # ============================================================
+    @filter.command("十连")
+    async def card_draw(self, event: AstrMessageEvent):
+        """/十连 —— 100积分抽10张卡，总分高有翻倍奖励"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "十连")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        cost = self.CARD_DRAW_COST
+
+        async def fn(session):
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            bal = await self._total_balance(session, user_id)
+            if bal < cost:
+                raise _BizError(f"积分不足喵~ 十连需要 {cost} 积分，你只有 {bal} 积分")
+
+            # 抽10张卡（按稀有度分段加权：普通60% 1-60分/稀有25% 61-80分/史诗10% 81-90分/传说5% 91-100分）
+            def _draw_card():
+                r = random.random()
+                if r < 0.60:
+                    return random.randint(1, 60)
+                elif r < 0.85:
+                    return random.randint(61, 80)
+                elif r < 0.95:
+                    return random.randint(81, 90)
+                else:
+                    return random.randint(91, 100)
+
+            cards = []
+            total = 0
+            legendaries = []
+            for _ in range(self.CARD_DRAW_COUNT):
+                card = _draw_card()
+                cards.append(card)
+                total += card
+                if card >= 91:
+                    legendaries.append(card)
+
+            # 计算奖励（保底 = 总分 × 0.6）
+            reward = int(total * self.CARD_DRAW_BASE_RATE)
+            bonus_msg = ""
+            if total >= 900:
+                reward = int(reward * self.CARD_DRAW_BONUS_900)
+                bonus_msg = f"🌟 总分超过900！奖励三倍！"
+            elif total >= 800:
+                reward = int(reward * self.CARD_DRAW_BONUS_800)
+                bonus_msg = f"🌟 总分超过800！奖励翻倍！"
+
+            net = reward - cost
+
+            # 记账（净变化，收入/支出分别统计）
+            await self._add_points(
+                session, user_id, net, "十连抽卡",
+                earned=reward, spent=cost,
+            )
+
+            new_bal = await self._balance(session, user_id)
+            should_remind = await self._check_spend_reward(session, user_id, event.get_group_id())
+
+            # 组装消息
+            card_str = " ".join(f"[{c}]" for c in cards)
+            lines = ["🃏 【十连抽】", card_str, f"总分：{total}"]
+            if bonus_msg:
+                lines.append(bonus_msg)
+            if net >= 0:
+                lines.append(f"奖励：{reward}积分（净赚+{net}）")
+            else:
+                lines.append(f"奖励：{reward}积分（亏损{abs(net)}）")
+            if legendaries:
+                lines.append(f"🎉 [CQ:at,qq={user_id}] 抽到传说卡（{'、'.join(str(c) for c in legendaries)}分，共{len(legendaries)}张）！")
+            lines.append(f"当前余额：{new_bal}积分")
+
+            return True, "\n".join(lines), should_remind
+
+        ok, msg, should_remind = await self._tx(fn)
+        yield event.plain_result(msg)
+
         # 事务外发送提醒
         if ok and should_remind:
             group_id = event.get_group_id()
