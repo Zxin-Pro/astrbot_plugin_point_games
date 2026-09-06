@@ -489,7 +489,7 @@ class PointGamesPlugin(Star):
     CARD_DRAW_COUNT = 10            # 每次抽卡张数
     CARD_DRAW_BONUS_800 = 2.0       # 总分≥800倍数
     CARD_DRAW_BONUS_900 = 3.0       # 总分≥900倍数
-    CARD_DRAW_BASE_RATE = 0.18      # 基础奖励倍率（期望 -10/次）
+    CARD_DRAW_BASE_RATE = 0.205     # 基础奖励倍率（期望 +0.42/次）
     # 钓鱼系统
     MAX_RODS = 10                   # 每人最多鱼竿数
     ROD_COST = 200                  # 鱼竿价格
