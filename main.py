@@ -880,6 +880,7 @@ class PointGamesPlugin(Star):
         self._red_packet_lock = asyncio.Lock()
         self._pending_loan_notifies: list[tuple[str, str]] = []  # 贷款通知队列 (user_id, text)，事务提交后统一私聊发送
         self._math_sessions: dict[str, dict] = {}  # user_id -> {question, answer, difficulty, expire}
+        self._beijing_tz = TZ  # 北京时区
         # 兼容不同版本的数据库获取方式
         self._db = None
         ctx = self.context
