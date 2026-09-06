@@ -154,6 +154,11 @@
   "red_packet_window_end": {"description": "【📁 每日红包】随机窗口结束", "type": "string", "default": "23:00", "hint": "每日在此时间之前随机触发，格式 HH:MM"},
   "red_packet_group": {"description": "【📁 每日红包】红包发送群聊", "type": "string", "default": "", "hint": "群聊ID；留空则不发送红包"},
   "red_packet_daily_times": {"description": "【📁 每日红包】每日发放次数", "type": "int", "default": 1, "hint": "每天在时间窗口内随机发几个红包，每次都是独立的红包（总额×次数）"},
+  
+  "enable_user_red_packet": {"description": "【📁 群友红包】启用群友发红包", "type": "bool", "default": true},
+  "user_red_packet_min": {"description": "【📁 群友红包】最低红包总额", "type": "int", "default": 10, "hint": "发红包最少需要多少积分"},
+  "user_red_packet_max": {"description": "【📁 群友红包】最高红包总额", "type": "int", "default": 10000, "hint": "发红包最多允许多少积分"},
+  "user_red_packet_timeout": {"description": "【📁 群友红包】超时时间（秒）", "type": "int", "default": 60, "hint": "超时未抢完的剩余积分退回发送者"},
 
   "enable_loan": {"description": "【📁 贷款系统】启用贷款系统", "type": "bool", "default": true},
   "loan_min": {"description": "【📁 贷款系统】单次贷款最低", "type": "int", "default": 100},
