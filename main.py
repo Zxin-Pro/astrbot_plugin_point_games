@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.21.0
+作者：Zxin_Pro    版本：3.22.0
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -138,7 +138,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|查询|查积分|排行|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -324,7 +324,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("签到 / jrzj / 今日座驾", "群内触发每日座驾并完成积分签到，附带今日运势海报"),
     ("/查询", "查看自己的积分、收入、支出与签到信息"),
     ("/查积分 @玩家", "查询其他玩家的积分信息"),
-    ("/排行", "全服积分排行榜"),
+    ("/排行", "全服总资产排行榜（含银行存款与贷款）"),
     ("/加积分 /减积分", "调整积分（仅配置页管理员QQ）"),
     ("/清除数据 @玩家", "清除指定玩家账户和流水（仅管理员）"),
     ("/初始化 @玩家", "清除指定玩家账户和流水（仅管理员）"),
@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.21.0",
+    version="3.22.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -859,6 +859,7 @@ class PointGamesPlugin(Star):
         self._red_packet_lock = asyncio.Lock()
         self._pending_loan_notifies: list[tuple[str, str]] = []  # 贷款通知队列 (user_id, text)，事务提交后统一私聊发送
         self._math_sessions: dict[str, dict] = {}  # user_id -> {question, answer, difficulty, expire}
+        self._richest_cache: dict | None = None  # 富豪榜缓存 {data: str, time: float}
         # 兼容不同版本的数据库获取方式
         self._db = None
         ctx = self.context
@@ -2041,7 +2042,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v3.21.0",
+            "🎮 积分游戏 v3.22.0",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -2055,7 +2056,8 @@ class PointGamesPlugin(Star):
             "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
             "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计",
             "兑换：/兑换礼品（花费10000积分）",
-            "签到：群发 签到 / jrzj / 今日座驾（附带今日运势）｜排行：/排行",
+            "签到：群发 签到 / jrzj / 今日座驾（附带今日运势）",
+            "排行：/排行 或 /富豪榜（总资产TOP10，含银行存款与贷款）",
             "管理：/加积分 @玩家 数量｜/减积分 @玩家 数量",
             "　　　/清除数据 @玩家｜/初始化 @玩家",
             "群管理：/本群玩法 开|关｜/玩法模式 白名单|黑名单｜/本群状态",
@@ -4866,33 +4868,85 @@ class PointGamesPlugin(Star):
         async for result in self._query_user_points(event):
             yield result
 
-    @filter.command("排行")
+    @filter.command("排行", "富豪榜")
     async def rank(self, event: AstrMessageEvent):
-        """/排行 —— 全服积分排行榜 TOP10"""
+        """/排行 或 /富豪榜 —— 全服总资产排行榜 TOP10（每小时更新缓存）"""
         ok_gate, msg_gate = await self._check_group_gate(event, "排行")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
         user_id = event.get_sender_id()
 
+        # 检查缓存（1小时有效期）
+        now = time.time()
+        if self._richest_cache and (now - self._richest_cache.get('time', 0)) < 3600:
+            yield event.plain_result(self._richest_cache['data'])
+            return
+
         async def fn(session):
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            
+            # 获取所有用户基础数据
             rows = (
                 await session.execute(
-                    text("SELECT user_id, user_name, balance FROM users ORDER BY balance DESC LIMIT 10")
+                    text("SELECT user_id, user_name, balance, loan_balance FROM users")
                 )
             ).all()
+            
             if not rows:
                 return True, "排行榜还空着呢，快去赚积分喵~", None
-            lines = ["🏆 全服积分排行榜 TOP10"]
-            medals = ["🥇", "🥈", "🥉"]
-            for i, r in enumerate(rows, 1):
-                prefix = medals[i - 1] if i <= 3 else f"{i}."
-                name = r[1] or "未知玩家"
-                lines.append(f"{prefix} {name} —— {int(r[2])} 积分")
-            return True, "\n".join(lines), None
+            
+            rankings = []
+            for row in rows:
+                uid, uname, balance, loan_balance = row[0], row[1], int(row[2] or 0), int(row[3] or 0)
+                
+                # 获取银行存款
+                bank_row = (
+                    await session.execute(
+                        text("SELECT current_balance FROM bank_accounts WHERE user_id = :uid"),
+                        {"uid": uid}
+                    )
+                ).first()
+                bank_balance = int(bank_row[0]) if bank_row else 0
+                
+                # 获取贷款负债（仅active/overdue状态）
+                loan_row = (
+                    await session.execute(
+                        text("""
+                            SELECT SUM(total_due - paid) FROM loans 
+                            WHERE user_id = :uid AND status IN ('active', 'overdue')
+                        """),
+                        {"uid": uid}
+                    )
+                ).first()
+                loan_debt = int(loan_row[0]) if loan_row and loan_row[0] else 0
+                
+                # 总资产 = 普通余额 + 贷款余额 + 银行存款 - 贷款负债
+                total_assets = balance + loan_balance + bank_balance - loan_debt
+                rankings.append((uid, uname or "未知玩家", total_assets))
+            
+            # 排序取前10
+            rankings.sort(key=lambda x: x[2], reverse=True)
+            top10 = rankings[:10]
+            
+            # 构建排行榜文本
+            lines = ["🏆 【富豪榜】"]
+            medals = ["👑", "🥈", "🥉"]
+            for i, (uid, uname, total) in enumerate(top10):
+                if i < 3:
+                    prefix = medals[i]
+                else:
+                    prefix = f"{i+1}."
+                lines.append(f"{prefix} {uname}：{total}积分")
+            
+            msg = "\n".join(lines)
+            
+            # 更新缓存
+            self._richest_cache = {'data': msg, 'time': now}
+            
+            return True, msg, None
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
