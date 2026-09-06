@@ -6563,7 +6563,7 @@ class PointGamesPlugin(Star):
             if bonus:
                 msg += f"\n🎉 连续签到 {streak} 天额外 +{bonus} 积分！"
             if first_sign_in:
-                # 首次签到：免费赠送 1 号鱼竿（已拥有鱼竿则不重复赠送）
+                # 首次签到：免费赠送 1 号鱼竿 + 5 个鱼饵（已拥有鱼竿则不重复赠送）
                 has_rod = (await session.execute(text(
                     "SELECT 1 FROM fishing_rods WHERE user_id=:u LIMIT 1"
                 ), {"u": user_id})).first()
@@ -6572,8 +6572,13 @@ class PointGamesPlugin(Star):
                         "INSERT INTO fishing_rods(user_id, slot, status, created_at) "
                         "VALUES(:u, :s, 'idle', :t)"
                     ), {"u": user_id, "s": 1, "t": time.time()})
+                    # 送 5 个鱼饵
+                    await session.execute(text(
+                        "INSERT INTO fishing_baits(user_id, count) VALUES(:u, 5) "
+                        "ON CONFLICT(user_id) DO UPDATE SET count=count+5"
+                    ), {"u": user_id})
                     msg = (f"🎣 签到成功！获得 {reward} 积分！\n"
-                           f"🎁 首次签到奖励：免费领取一根鱼竿！\n"
+                           f"🎁 首次签到奖励：免费领取一根鱼竿 + 5 个鱼饵！\n"
                            f"发送 /挂机钓鱼 即可开始挂机赚钱")
             msg += f"\n当前积分：{await self._balance(session, user_id)} 喵~"
             return True, msg, None
