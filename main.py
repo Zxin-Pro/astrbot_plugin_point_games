@@ -5744,7 +5744,7 @@ class PointGamesPlugin(Star):
     #  功能24：猜数字系统（博彩）
     # ============================================================
     @filter.command("猜数字")
-    async def guess_number(self, event: AstrMessageEvent, args: MessageChain = CommandArg()):
+    async def guess_number(self, event: AstrMessageEvent):
         """/猜数字 [积分] [大/小/数字] —— 博彩小游戏"""
         ok_gate, msg_gate = await self._check_group_gate(event, "猜数字")
         if not ok_gate:
@@ -5752,7 +5752,7 @@ class PointGamesPlugin(Star):
             return
         
         user_id = event.get_sender_id()
-        text = args.extract_plain_text().strip()
+        text = self._strip_command(event, "猜数字").strip()
         
         if not text:
             yield event.plain_result("❌ 格式：/猜数字 [积分] [大/小/数字]\n例：/猜数字 50 大")
