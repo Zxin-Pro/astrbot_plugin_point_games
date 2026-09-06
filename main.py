@@ -490,6 +490,7 @@ class PointGamesPlugin(Star):
     CARD_DRAW_BONUS_800 = 2.0       # 总分≥800倍数
     CARD_DRAW_BONUS_900 = 3.0       # 总分≥900倍数
     CARD_DRAW_BASE_RATE = 0.205     # 基础奖励倍率（期望 +0.42/次）
+    CARD_DRAW_DAILY_LIMIT = 10      # 每日次数限制
     # 钓鱼系统
     MAX_RODS = 10                   # 每人最多鱼竿数
     ROD_COST = 200                  # 鱼竿价格
@@ -5975,6 +5976,19 @@ class PointGamesPlugin(Star):
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            
+            # 检查每日次数限制
+            limit = self.config.get("card_draw_daily_limit", self.CARD_DRAW_DAILY_LIMIT)
+            if limit > 0:
+                today = datetime.now(self._beijing_tz).strftime("%Y-%m-%d")
+                count_row = session.execute(
+                    text("SELECT COUNT(*) FROM points_log WHERE user_id=:uid AND operation='十连抽卡' AND DATE(datetime(time, 'unixepoch', 'localtime'))=:today"),
+                    {"uid": user_id, "today": today}
+                ).fetchone()
+                today_count = count_row[0] if count_row else 0
+                if today_count >= limit:
+                    raise _BizError(f"今日十连次数已用完喵~ 每日限制 {limit} 次，明天再来吧")
+            
             bal = await self._total_balance(session, user_id)
             if bal < cost:
                 raise _BizError(f"积分不足喵~ 十连需要 {cost} 积分，你只有 {bal} 积分")
@@ -6033,14 +6047,15 @@ class PointGamesPlugin(Star):
                 lines.append(f"奖励：{reward}积分（亏损{abs(net)}）")
             lines.append(f"当前余额：{new_bal}积分")
 
-            return True, "\n".join(lines), should_remind, legendaries
+            return True, "\n".join(lines), {"should_remind": should_remind, "legendaries": legendaries}
 
-        ok, msg, should_remind, legendaries = await self._tx(fn)
+        ok, msg, data = await self._tx(fn)
         yield event.plain_result(msg)
 
         # 传说卡广播（单独发送，艾特玩家）
-        if ok and legendaries:
+        if ok and data and data.get("legendaries"):
             try:
+                legendaries = data["legendaries"]
                 yield event.plain_result(
                     f"🎉 [CQ:at,qq={user_id}] 抽到传说卡（{'、'.join(str(c) for c in legendaries)}分，共{len(legendaries)}张）！"
                 )
@@ -6048,7 +6063,7 @@ class PointGamesPlugin(Star):
                 pass
 
         # 事务外发送提醒
-        if ok and should_remind:
+        if ok and data and data.get("should_remind"):
             group_id = event.get_group_id()
             if group_id:
                 try:
