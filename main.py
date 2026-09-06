@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.24.4
+作者：Zxin_Pro    版本：3.24.8
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.24.7",
+    version="3.24.8",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -5978,15 +5978,19 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             
-            # 检查每日次数限制
+            # 检查每日次数限制：查询真实流水表 point_transactions，按北京时间计算当天范围
             limit = self.config.get("card_draw_daily_limit", self.CARD_DRAW_DAILY_LIMIT)
             if limit > 0:
-                today = datetime.now(self._beijing_tz).strftime("%Y-%m-%d")
+                bj_now = datetime.now(self._beijing_tz)
+                bj_start = bj_now.replace(hour=0, minute=0, second=0, microsecond=0)
+                bj_end = bj_start + timedelta(days=1)
                 count_row = (await session.execute(
-                    text("SELECT COUNT(*) FROM points_log WHERE user_id=:uid AND operation='十连抽卡' AND DATE(datetime(time, 'unixepoch', 'localtime'))=:today"),
-                    {"uid": user_id, "today": today}
-                )).fetchone()
-                today_count = count_row[0] if count_row else 0
+                    text("SELECT COUNT(*) FROM point_transactions "
+                         "WHERE user_id=:uid AND operation='十连抽卡' "
+                         "AND create_time >= :start_time AND create_time < :end_time"),
+                    {"uid": user_id, "start_time": bj_start.timestamp(), "end_time": bj_end.timestamp()}
+                )).first()
+                today_count = int(count_row[0] or 0) if count_row else 0
                 if today_count >= limit:
                     raise _BizError(f"今日十连次数已用完喵~ 每日限制 {limit} 次，明天再来吧")
             
