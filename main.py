@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.1
+作者：Zxin_Pro    版本：4.22.2
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -357,7 +357,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.1",
+    version="4.22.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -2896,7 +2896,7 @@ class PointGamesPlugin(Star):
                         platform_id, _MessageType.GROUP_MESSAGE, group_id,
                         MessageChain([
                             Plain(f"🎤 第 {current_round} 轮发言，轮到："),
-                            At(qq=speaker),
+                            At(qq=str(speaker)),
                             Plain(f"（限时 {self.UC_SPEECH_SECONDS} 秒）"),
                         ]),
                     )
@@ -3243,13 +3243,13 @@ class PointGamesPlugin(Star):
                 second = random.randint(1, 6)
                 await self._increase_dice_count(session, challenger, today)
                 await self._increase_dice_count(session, target, today)
-                chain = [Plain(f"🎲 你掷出了 {first}，"), At(qq=target), Plain(f" {target_name} 掷出了 {second}\n")]
+                chain = [Plain(f"🎲 你掷出了 {first}，"), At(qq=str(target)), Plain(f" {target_name} 掷出了 {second}\n")]
                 if first > second:
                     await self._add_points(session, challenger, 10, "掷骰获胜")
                     chain.append(Plain("🎉 你赢了！获得10积分！"))
                 elif first < second:
                     await self._add_points(session, target, 10, "掷骰获胜")
-                    chain.extend([At(qq=target), Plain(f" 赢了！获得10积分！")])
+                    chain.extend([At(qq=str(target)), Plain(f" 赢了！获得10积分！")])
                 else:
                     await self._add_points(session, challenger, 5, "掷骰平局")
                     await self._add_points(session, target, 5, "掷骰平局")
@@ -3406,7 +3406,7 @@ class PointGamesPlugin(Star):
                        f"你实际扣除：{total}积分\n"
                        f"当前余额：{new_balance}积分\n"
                        f"今日剩余转账次数：{remaining}次")
-                chain = [Plain("✅ 转账成功！"), At(qq=target),
+                chain = [Plain("✅ 转账成功！"), At(qq=str(target)),
                          Plain(f" 收到 {amount}积分\n{fee_note}"
                                f"你实际扣除：{total}积分\n"
                                f"当前余额：{new_balance}积分\n"
@@ -4028,7 +4028,7 @@ class PointGamesPlugin(Star):
         )
         
         yield event.chain_result([
-            Plain("🧧 "), At(qq=user_id),
+            Plain("🧧 "), At(qq=str(user_id)),
             Plain(f" 发了 {total} 积分红包，共 {count} 份！\n💬 发送「抢」参与！\n⏱️ {self.USER_RED_PACKET_TIMEOUT}秒后超时回收")
         ])
 
@@ -4088,7 +4088,7 @@ class PointGamesPlugin(Star):
                         return True, "ok", None
                     
                     ok, _, _ = await self._tx(fn)
-                    yield event.chain_result([Plain("🎉 恭喜 "), At(qq=user_id),
+                    yield event.chain_result([Plain("🎉 恭喜 "), At(qq=str(user_id)),
                                               Plain(f" 抢到 {amount} 积分！\n{hint}")])
                     
                     if ok and is_last:
@@ -4143,7 +4143,7 @@ class PointGamesPlugin(Star):
             return True, "ok", None
         
         ok, _, _ = await self._tx(fn)
-        yield event.chain_result([Plain("🎉 恭喜 "), At(qq=user_id),
+        yield event.chain_result([Plain("🎉 恭喜 "), At(qq=str(user_id)),
                                   Plain(f" 抢到 {amount} 积分！\n{hint}")])
         if ok and is_last:
             await self._finish_red_packet()
