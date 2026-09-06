@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.20.0",
+    version="3.20.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1575,7 +1575,7 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=0, minute=0, timezone=TZ),
             id="point_games_loan_overdue_check", replace_existing=True,
         )
-        self._schedule_red_packet()
+        await self._schedule_red_packet()
         self._scheduler.start()
         # 3. 注册 WebUI
         self._register_web_apis()
@@ -2036,7 +2036,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 3.20.0",
+            "🎮 积分游戏 v3.20.4",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -3639,18 +3639,54 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能：每日红包（拼手气）
     # ============================================================
-    def _schedule_red_packet(self):
+    def _get_platform_ids(self) -> list[str]:
+        """获取当前所有平台实例 ID（主动发消息兜底用）。"""
+        try:
+            manager = getattr(self.context, "platform_manager", None)
+            if manager and hasattr(manager, "get_insts"):
+                return [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+            if manager and hasattr(manager, "platform_insts"):
+                return [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+        except Exception:
+            pass
+        return []
+
+    async def _broadcast_to_group(self, group_id: str, chain):
+        """向指定群广播消息：platform_id 为空时自动向所有平台实例 fan-out。"""
+        targets = self._get_platform_ids() or [""]
+        for target_platform in targets:
+            try:
+                await self._send_group_chain(target_platform, str(group_id), chain)
+                return True
+            except Exception:
+                self.logger.exception(f"群消息发送失败（平台 {target_platform}）：{group_id}")
+        return False
+
+    async def _notify_admins(self, text: str):
+        """私聊通知所有配置的管理员QQ。"""
+        for admin_qq in self.ADMIN_QQ:
+            for target_platform in (self._get_platform_ids() or [""]):
+                try:
+                    await self._send_private(target_platform, str(admin_qq), text)
+                    break
+                except Exception:
+                    self.logger.exception(f"管理员通知发送失败：{admin_qq}")
+
+    async def _schedule_red_packet(self):
         """为今天生成红包随机触发时间（在配置窗口内），按每日次数生成多个不重叠时间点。
 
-        时间点之间至少间隔 2 分钟（红包时限的一半不可重叠，避免多个红包同时进行），
-        窗口已过则跳过。
+        时间点之间至少间隔一个红包时限（不重叠），窗口已过则跳过；
+        调度完成后私聊通知管理员具体的发放时间。
         """
         if not self.feature_flags.get("enable_red_packet", True):
             return
         if not self.RED_PACKET_GROUP:
+            self.logger.warning("红包未配置发送群聊（red_packet_group），今日红包不发放")
             return
         if self.RED_PACKET_COUNT < 1 or self.RED_PACKET_TOTAL < self.RED_PACKET_COUNT:
             self.logger.warning("红包配置无效：总额需≥份数（每份至少1积分），今日红包跳过")
+            await self._notify_admins(
+                "⚠️ 每日红包配置无效：红包总额需≥份数（每份至少1积分），今日红包已跳过")
             return
         sh, sm, eh, em = self.RED_PACKET_WINDOW
         now = datetime.now(TZ)
@@ -3658,6 +3694,7 @@ class PointGamesPlugin(Star):
         end = now.replace(hour=eh, minute=em, second=0, microsecond=0)
         if end <= start:
             self.logger.warning("红包时间窗口配置异常（结束早于开始），今日红包跳过")
+            await self._notify_admins("⚠️ 每日红包时间窗口配置异常（结束早于开始），今日红包已跳过")
             return
         window_start = max(start, now)
         if window_start >= end:
@@ -3671,18 +3708,31 @@ class PointGamesPlugin(Star):
         # 段尾预留一个完整时限，保证相邻两场红包不会同时进行
         seg = total_sec / times
         today = now.date().isoformat()
+        run_times = []
         for i in range(times):
             seg_start = window_start + timedelta(seconds=seg * i)
             seg_end = seg_start + timedelta(seconds=seg - self.RED_PACKET_TIMEOUT * 60)
             if seg_end <= seg_start:
                 seg_end = seg_start + timedelta(seconds=30)
             run_at = seg_start + timedelta(seconds=random.uniform(0, (seg_end - seg_start).total_seconds()))
+            run_times.append(run_at)
             self._scheduler.add_job(
                 self._send_red_packet,
                 DateTrigger(run_date=run_at, timezone=TZ),
                 id=f"red_packet_send_{today}_{i}", replace_existing=True,
             )
-        self.logger.info(f"今日红包已调度：{times} 次（窗口 {start.strftime('%H:%M')}-{end.strftime('%H:%M')}）")
+        times_text = "、".join(t.strftime("%H:%M") for t in run_times)
+        self.logger.info(f"今日红包已调度：{times} 次（{times_text}）")
+        # 通知管理员具体的发放时间
+        try:
+            await self._notify_admins(
+                "🧧 今日红包已排定！\n"
+                f"预计发放时间：{times_text}\n"
+                f"发送群：{self.RED_PACKET_GROUP}\n"
+                f"共 {times} 场，每场 {self.RED_PACKET_TOTAL} 积分 / {self.RED_PACKET_COUNT} 份"
+            )
+        except Exception:
+            self.logger.exception("红包调度通知发送失败")
 
     async def _send_red_packet(self):
         """在指定群发送拼手气红包，并注册超时结算任务。"""
@@ -3717,11 +3767,14 @@ class PointGamesPlugin(Star):
             f"💡 剩余：{count}份 | 已抢：0份"
         )]
         try:
-            await self._send_group_chain("", str(self.RED_PACKET_GROUP), chain)
+            sent_ok = await self._broadcast_to_group(str(self.RED_PACKET_GROUP), chain)
+            if not sent_ok:
+                raise RuntimeError("所有平台均发送失败")
         except Exception:
             self.logger.exception("红包消息发送失败")
             async with self._red_packet_lock:
                 self._red_packet = None
+            await self._notify_admins("⚠️ 今日红包发送失败，请检查插件日志")
             return
         # 注册超时结算（到点回收剩余积分）
         self._scheduler.add_job(
@@ -3820,7 +3873,7 @@ class PointGamesPlugin(Star):
             chain.extend([Plain("\n手气王："), At(qq=str(king_id)),
                           Plain(f" 获得 {king_amt} 积分！")])
         try:
-            await self._send_group_chain("", rp["group_id"], chain)
+            await self._broadcast_to_group(rp["group_id"], chain)
         except Exception:
             self.logger.exception("红包结算播报发送失败")
 
