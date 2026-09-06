@@ -5982,10 +5982,10 @@ class PointGamesPlugin(Star):
             limit = self.config.get("card_draw_daily_limit", self.CARD_DRAW_DAILY_LIMIT)
             if limit > 0:
                 today = datetime.now(self._beijing_tz).strftime("%Y-%m-%d")
-                count_row = session.execute(
+                count_row = (await session.execute(
                     text("SELECT COUNT(*) FROM points_log WHERE user_id=:uid AND operation='十连抽卡' AND DATE(datetime(time, 'unixepoch', 'localtime'))=:today"),
                     {"uid": user_id, "today": today}
-                ).fetchone()
+                )).fetchone()
                 today_count = count_row[0] if count_row else 0
                 if today_count >= limit:
                     raise _BizError(f"今日十连次数已用完喵~ 每日限制 {limit} 次，明天再来吧")
