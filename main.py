@@ -6526,7 +6526,7 @@ class PointGamesPlugin(Star):
         """执行积分签到并返回结果，供座驾签到监听器合并输出。"""
         ok_gate, msg_gate = await self._check_group_gate(event, "签到")
         if not ok_gate:
-            return msg_gate
+            return False, msg_gate
         user_id = event.get_sender_id()
         today = date.today().isoformat()
         yesterday = (date.today() - timedelta(days=1)).isoformat()
