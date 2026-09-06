@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.23.2
+作者：Zxin_Pro    版本：3.24.0
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -138,7 +138,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.23.2",
+    version="3.24.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -479,6 +479,11 @@ class PointGamesPlugin(Star):
     # 刮刮乐系统
     SCRATCH_PRICE = 20              # 每张价格
     SCRATCH_MAX = 10                # 单次最多购买张数
+    # 猜数字系统
+    GUESS_MIN = 5                   # 最低下注
+    GUESS_MAX = 500                 # 最高下注
+    GUESS_BIG_SMALL_MULTIPLIER = 1.8  # 猜大小的倍数
+    GUESS_EXACT_MULTIPLIER = 10     # 猜具体数字的倍数
     # 钓鱼系统
     MAX_RODS = 10                   # 每人最多鱼竿数
     ROD_COST = 200                  # 鱼竿价格
@@ -529,6 +534,7 @@ class PointGamesPlugin(Star):
         "enable_fortune": True,
         "enable_fruit_machine": True,
         "enable_scratch_card": True,
+        "enable_guess_number": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -571,6 +577,7 @@ class PointGamesPlugin(Star):
         "我的贷款": ("enable_loan", "贷款系统"),
         "水果机": ("enable_fruit_machine", "水果机"),
         "刮刮乐": ("enable_scratch_card", "刮刮乐"),
+        "猜数字": ("enable_guess_number", "猜数字"),
     }
 
     # ---------- 表结构定义 ----------
@@ -2047,7 +2054,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v3.23.2",
+            "🎮 积分游戏 v3.24.0",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -2059,6 +2066,7 @@ class PointGamesPlugin(Star):
             "炸弹：/炸弹开始｜/猜 [数字]（余额需满30）",
             "水果机：/水果机 [积分]（下注5-500，拼运气赚积分）",
             "刮刮乐：/刮刮乐 [张数]（20积分/张，即时开奖1-10张）",
+            "猜数字：/猜数字 [积分] [大/小/数字]（猜大小翻1.8倍，猜具体翻10倍）",
             "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
             "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计",
             "兑换：/兑换礼品（花费10000积分）",
@@ -5711,6 +5719,128 @@ class PointGamesPlugin(Star):
             else:
                 lines.append(f"净赚：±0积分")
             
+            lines.append(f"\n当前余额：{new_bal}积分")
+            
+            msg = "\n".join(lines)
+            
+            return True, msg, should_remind
+        
+        ok, msg, should_remind = await self._tx(fn)
+        yield event.plain_result(msg)
+        
+        # 事务外发送提醒
+        if ok and should_remind:
+            group_id = event.get_group_id()
+            if group_id:
+                try:
+                    yield event.plain_result(
+                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
+                    )
+                except Exception:
+                    pass
+
+    # ============================================================
+    #  功能24：猜数字系统（博彩）
+    # ============================================================
+    @filter.command("猜数字")
+    async def guess_number(self, event: AstrMessageEvent, args: MessageChain = CommandArg()):
+        """/猜数字 [积分] [大/小/数字] —— 博彩小游戏"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "猜数字")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        
+        user_id = event.get_sender_id()
+        text = args.extract_plain_text().strip()
+        
+        if not text:
+            yield event.plain_result("❌ 格式：/猜数字 [积分] [大/小/数字]\n例：/猜数字 50 大")
+            return
+        
+        parts = text.split()
+        if len(parts) < 2:
+            yield event.plain_result("❌ 格式：/猜数字 [积分] [大/小/数字]\n例：/猜数字 50 大")
+            return
+        
+        try:
+            bet = int(parts[0])
+        except ValueError:
+            yield event.plain_result("❌ 积分必须是整数喵~")
+            return
+        
+        choice = parts[1]
+        
+        # 验证选择
+        if choice not in ("大", "小") and not choice.isdigit():
+            yield event.plain_result("❌ 选择必须是'大'、'小'或具体数字喵~")
+            return
+        
+        if choice.isdigit():
+            guess = int(choice)
+            if guess < 1 or guess > 100:
+                yield event.plain_result("❌ 数字范围必须是1-100喵~")
+                return
+        
+        if bet < self.GUESS_MIN or bet > self.GUESS_MAX:
+            yield event.plain_result(f"❌ 下注范围：{self.GUESS_MIN}-{self.GUESS_MAX}积分喵~")
+            return
+        
+        async def fn(session):
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            
+            bal = await self._total_balance(session, user_id)
+            if bal < bet:
+                raise _BizError(f"积分不足喵~ 需要 {bet} 积分，你只有 {bal} 积分")
+            
+            # 开奖：1-100之间的随机数
+            number = random.randint(1, 100)
+            
+            # 判断胜负和奖励
+            win = False
+            reward = 0
+            msg_line = ""
+            
+            if choice in ("大", "小"):
+                # 猜大小模式
+                is_big = number >= 51
+                is_win = (choice == "大" and is_big) or (choice == "小" and not is_big)
+                
+                if is_win:
+                    win = True
+                    reward = int(bet * self.GUESS_BIG_SMALL_MULTIPLIER)
+                    result = "大" if is_big else "小"
+                    msg_line = f"🎯 开奖：{number}！{result}！🎉 恭喜猜中！获得{reward}积分！（净赚{reward-bet}）"
+                else:
+                    result = "大" if is_big else "小"
+                    msg_line = f"🎯 开奖：{number}！{result}！❌ 亏损{bet}积分！"
+            else:
+                # 猜具体数字模式
+                if number == guess:
+                    win = True
+                    reward = bet * self.GUESS_EXACT_MULTIPLIER
+                    msg_line = f"🎯 开奖：{number}！🎉 精准命中！获得{reward}积分！（净赚{reward-bet}）"
+                else:
+                    msg_line = f"🎯 开奖：{number}！❌ 未命中！亏损{bet}积分！"
+            
+            # 计算净收益（输了是负数）
+            net = reward - bet
+            
+            # 记账
+            await self._add_points(
+                session, user_id, net, "猜数字",
+                earned=reward, spent=bet,
+            )
+            
+            new_bal = await self._balance(session, user_id)
+            
+            # 检查消费达标提醒
+            should_remind = await self._check_spend_reward(session, user_id, event.get_group_id())
+            
+            # 组装完整消息
+            lines = [msg_line]
             lines.append(f"\n当前余额：{new_bal}积分")
             
             msg = "\n".join(lines)

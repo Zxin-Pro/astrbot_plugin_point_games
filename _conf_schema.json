@@ -14,6 +14,7 @@
   "enable_bomb": {"description": "【📁 功能开关】启用数字炸弹", "type": "bool", "default": true},
   "enable_math": {"description": "【📁 功能开关】启用速算挑战", "type": "bool", "default": true},
   "enable_card": {"description": "【📁 功能开关】启用抽卡系统", "type": "bool", "default": true},
+  "enable_guess_number": {"description": "【📁 功能开关】启用猜数字", "type": "bool", "default": true},
   "enable_fishing": {"description": "【📁 功能开关】启用钓鱼系统", "type": "bool", "default": true},
   "enable_sign_in": {"description": "【📁 功能开关】启用每日签到", "type": "bool", "default": true},
   "enable_ranking": {"description": "【📁 功能开关】启用积分查询和排行榜", "type": "bool", "default": true},
