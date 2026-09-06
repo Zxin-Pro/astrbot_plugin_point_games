@@ -6031,14 +6031,21 @@ class PointGamesPlugin(Star):
                 lines.append(f"奖励：{reward}积分（净赚+{net}）")
             else:
                 lines.append(f"奖励：{reward}积分（亏损{abs(net)}）")
-            if legendaries:
-                lines.append(f"🎉 [CQ:at,qq={user_id}] 抽到传说卡（{'、'.join(str(c) for c in legendaries)}分，共{len(legendaries)}张）！")
             lines.append(f"当前余额：{new_bal}积分")
 
-            return True, "\n".join(lines), should_remind
+            return True, "\n".join(lines), should_remind, legendaries
 
-        ok, msg, should_remind = await self._tx(fn)
+        ok, msg, should_remind, legendaries = await self._tx(fn)
         yield event.plain_result(msg)
+
+        # 传说卡广播（单独发送，艾特玩家）
+        if ok and legendaries:
+            try:
+                yield event.plain_result(
+                    f"🎉 [CQ:at,qq={user_id}] 抽到传说卡（{'、'.join(str(c) for c in legendaries)}分，共{len(legendaries)}张）！"
+                )
+            except Exception:
+                pass
 
         # 事务外发送提醒
         if ok and should_remind:
