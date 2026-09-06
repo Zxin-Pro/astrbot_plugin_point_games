@@ -871,7 +871,6 @@ class PointGamesPlugin(Star):
         self._red_packet_lock = asyncio.Lock()
         self._pending_loan_notifies: list[tuple[str, str]] = []  # 贷款通知队列 (user_id, text)，事务提交后统一私聊发送
         self._math_sessions: dict[str, dict] = {}  # user_id -> {question, answer, difficulty, expire}
-        self._richest_cache: dict | None = None  # 富豪榜缓存 {data: str, time: float}
         # 兼容不同版本的数据库获取方式
         self._db = None
         ctx = self.context
@@ -1552,6 +1551,12 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=self.LEADERBOARD_BROADCAST_HOUR, minute=self.LEADERBOARD_BROADCAST_MINUTE, timezone=TZ),
             id="point_games_leaderboard_broadcast", replace_existing=True,
         )
+        # 每日凌晨 0 点广播富豪榜
+        self._scheduler.add_job(
+            self._broadcast_richest_list,
+            CronTrigger(hour=0, minute=0, timezone=TZ),
+            id="point_games_richest_broadcast", replace_existing=True,
+        )
         # 钓鱼系统：每 30 分钟判定一次挂机鱼竿 + 每天凌晨重置今日统计
         self._scheduler.add_job(
             self._fishing_check,
@@ -1801,6 +1806,97 @@ class PointGamesPlugin(Star):
                 platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
         except Exception:
             platform_ids = []
+        for group_id, platform_id in groups:
+            targets = [str(platform_id)] if platform_id else platform_ids
+            for target_platform in targets:
+                await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
+
+    async def _broadcast_richest_list(self):
+        """每日凌晨 0 点广播全服富豪榜 TOP10（实时计算总资产）。"""
+        async def fn(session):
+            # 获取所有用户基础数据
+            rows = (
+                await session.execute(
+                    text("SELECT user_id, user_name, balance, loan_balance FROM users")
+                )
+            ).all()
+            
+            if not rows:
+                return True, "ok", ([], [])
+            
+            rankings = []
+            for row in rows:
+                uid, uname, balance, loan_balance = row[0], row[1], int(row[2] or 0), int(row[3] or 0)
+                
+                # 获取银行存款
+                bank_row = (
+                    await session.execute(
+                        text("SELECT current_balance FROM bank_accounts WHERE user_id = :uid"),
+                        {"uid": uid}
+                    )
+                ).first()
+                bank_balance = int(bank_row[0]) if bank_row else 0
+                
+                # 获取贷款负债（仅active/overdue状态）
+                loan_row = (
+                    await session.execute(
+                        text("""
+                            SELECT SUM(total_due - paid) FROM loans 
+                            WHERE user_id = :uid AND status IN ('active', 'overdue')
+                        """),
+                        {"uid": uid}
+                    )
+                ).first()
+                loan_debt = int(loan_row[0]) if loan_row and loan_row[0] else 0
+                
+                # 总资产 = 普通余额 + 贷款余额 + 银行存款 - 贷款负债
+                total_assets = balance + loan_balance + bank_balance - loan_debt
+                rankings.append((uid, uname or "未知玩家", total_assets))
+            
+            # 排序取前10
+            rankings.sort(key=lambda x: x[2], reverse=True)
+            top10 = rankings[:10]
+            
+            # 获取已开启玩法的群
+            groups = (
+                await session.execute(
+                    text("SELECT group_id, platform_id FROM group_settings WHERE enabled=1")
+                )
+            ).all()
+            
+            return True, "ok", (top10, groups)
+        
+        ok, _, data = await self._tx(fn)
+        if not ok or not data:
+            return
+        top10, groups = data
+        
+        # 构建富豪榜消息
+        if not top10:
+            broadcast_chain = [Plain("🏆 【富豪榜】\n暂无玩家数据喵~")]
+        else:
+            medals = ["👑", "🥈", "🥉"]
+            broadcast_chain = [Plain("🏆 【富豪榜】TOP10")]
+            for i, (uid, uname, total) in enumerate(top10):
+                prefix = medals[i] if i < 3 else f"{i+1}."
+                broadcast_chain.extend([
+                    Plain(f"\n{prefix} "),
+                    At(qq=str(uid)),
+                    Plain(f" {uname} —— {total} 积分"),
+                ])
+        
+        # 获取平台实例
+        platform_ids = []
+        try:
+            manager = getattr(self.context, "platform_manager", None)
+            if manager and hasattr(manager, "get_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
+            elif manager and hasattr(manager, "platform_insts"):
+                platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
+        except Exception:
+            platform_ids = []
+        
+        # 广播到所有已开启玩法的群
         for group_id, platform_id in groups:
             targets = [str(platform_id)] if platform_id else platform_ids
             for target_platform in targets:
@@ -4884,18 +4980,12 @@ class PointGamesPlugin(Star):
 
     @filter.command("排行", "富豪榜")
     async def rank(self, event: AstrMessageEvent):
-        """/排行 或 /富豪榜 —— 全服总资产排行榜 TOP10（每小时更新缓存）"""
+        """/排行 或 /富豪榜 —— 全服总资产排行榜 TOP10（实时计算）"""
         ok_gate, msg_gate = await self._check_group_gate(event, "排行")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
         user_id = event.get_sender_id()
-
-        # 检查缓存（1小时有效期）
-        now = time.time()
-        if self._richest_cache and (now - self._richest_cache.get('time', 0)) < 3600:
-            yield event.plain_result(self._richest_cache['data'])
-            return
 
         async def fn(session):
             remaining = await self._enforce_cooldown(session, user_id)
@@ -4956,9 +5046,6 @@ class PointGamesPlugin(Star):
                 lines.append(f"{prefix} {uname}：{total}积分")
             
             msg = "\n".join(lines)
-            
-            # 更新缓存
-            self._richest_cache = {'data': msg, 'time': now}
             
             return True, msg, None
 
