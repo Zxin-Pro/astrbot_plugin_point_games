@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：3.20.3
+作者：Zxin_Pro    版本：2.23.1
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -356,7 +356,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="3.20.4",
+    version="2.23.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1328,17 +1328,17 @@ class PointGamesPlugin(Star):
         )
 
     async def _check_spend_reward(self, session, user_id: str, group_id: str = None):
-        """检查用户累计消费是否达标，发送提醒（必须在事务内调用）"""
+        """检查用户余额是否达标，发送提醒（必须在事务内调用）"""
         row = (
             await session.execute(
-                text("SELECT total_spent, reward_reminded FROM users WHERE user_id=:u"),
+                text("SELECT balance, reward_reminded FROM users WHERE user_id=:u"),
                 {"u": user_id}
             )
         ).first()
         if not row:
             return
-        total_spent, reminded = int(row[0] or 0), int(row[1] or 0)
-        if total_spent >= self.SPEND_REWARD_THRESHOLD and reminded == 0:
+        balance, reminded = int(row[0] or 0), int(row[1] or 0)
+        if balance >= self.SPEND_REWARD_THRESHOLD and reminded == 0:
             await session.execute(
                 text("UPDATE users SET reward_reminded=1 WHERE user_id=:u"),
                 {"u": user_id}
@@ -2036,7 +2036,7 @@ class PointGamesPlugin(Star):
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
         return "\n".join([
-            "🎮 积分游戏 v3.20.4",
+            "🎮 积分游戏 v2.23.1",
             "所有指令直接发送，无需 /积分 前缀",
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
@@ -2127,7 +2127,7 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
                         f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
@@ -2362,7 +2362,7 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
                         f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
@@ -2504,7 +2504,7 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
                         f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
@@ -5330,7 +5330,7 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
+                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
                         f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
