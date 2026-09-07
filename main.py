@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.17
+作者：Zxin_Pro    版本：4.22.18
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.17 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.18 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.17",
+    version="4.22.18",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -7889,8 +7889,16 @@ class PointGamesPlugin(Star):
                     # 图片渲染成即优先发送（记录尺寸便于排查）
                     if _os.path.exists(_png):
                         self.logger.info(f"钓鱼播报图已生成：{_png}（{_os.path.getsize(_png)}B），发送群 {group_id}")
+                    # 与能出图的帮助插件同源：用 astrbot.core 的 Image.fromBytes 内存图
+                    try:
+                        from astrbot.core.message.components import Image as CoreImage
+                        with open(_png, "rb") as _fp:
+                            _raw = _fp.read()
+                        _img_comp = [CoreImage.fromBytes(_raw)]
+                    except Exception:
+                        _img_comp = [Image(_png, name="fish_report.png")]
                     await self._send_with_fallback(
-                        platform_id, group_id, [Image(_png, name="fish_report.png")],
+                        platform_id, group_id, _img_comp,
                         "钓鱼播报图片",
                     )
                     done = _os.path.exists(_png)
