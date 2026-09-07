@@ -7880,49 +7880,19 @@ class PointGamesPlugin(Star):
         # 事务外发送全群广播，避免阻塞数据库
         for platform_id, group_id, chain in broadcasts:
             await self._send_with_fallback(platform_id, group_id, chain, "钓鱼高价广播")
-        # 事件播报（不艾特）：按群合并成一条消息发送，发送失败自动兜底
-        # 渲染成图片（千图马克手写体）发送，失败则退回纯文本
-        grouped: dict[tuple[str, str], list[str]] = {}
+        # 事件播报：按成员各自聚合，一人发一条消息（成员=用户名）
+        per_user: dict[tuple, list] = {}
         for platform_id, group_id, text_line in notices:
-            grouped.setdefault((platform_id, group_id), []).append(text_line)
-        import tempfile, os as _os
-        try:
-            from fishing_poster import render_fishing_batch
-        except Exception as _imp_e:
-            # import 失败不再静默降级，写死日志便于排查
-            self.logger.error(f"钓鱼播报图片模块 import 失败：{_imp_e}", exc_info=True)
-            render_fishing_batch = None
-        for (platform_id, group_id), lines in grouped.items():
-            done = False
-            png_made = ""
-            if render_fishing_batch:
-                try:
-                    _png = _os.path.join(tempfile.gettempdir(),
-                                         f"fish_rpt_{int(time.time()*1000)}.png")
-                    render_fishing_batch(lines, _png)
-                    png_made = _png
-                    # 图片渲染成即优先发送（记录尺寸便于排查）
-                    if _os.path.exists(_png):
-                        self.logger.info(f"钓鱼播报图已生成：{_png}（{_os.path.getsize(_png)}B），发送群 {group_id}")
-                    # 与能出图的帮助插件同源：用 astrbot.core 的 Image.fromBytes 内存图
-                    try:
-                        from astrbot.core.message.components import Image as CoreImage
-                        with open(_png, "rb") as _fp:
-                            _raw = _fp.read()
-                        _img_comp = [CoreImage.fromBytes(_raw)]
-                    except Exception:
-                        _img_comp = [Image(_png, name="fish_report.png")]
-                    await self._send_with_fallback(
-                        platform_id, group_id, _img_comp,
-                        "钓鱼播报图片",
-                    )
-                    done = _os.path.exists(_png)
-                except Exception:
-                    self.logger.exception("钓鱼播报图片渲染失败，退回文本，png=%s", png_made)
-            if not done:
-                await self._send_with_fallback(
-                    platform_id, group_id, [Plain("\n".join(lines))], "钓鱼事件播报"
-                )
+            piece = str(text_line)
+            parts = piece.split(" ", 2)
+            who = parts[1] if len(parts) >= 2 and parts[0] == "🎣" else piece
+            key = (str(platform_id), str(group_id), who)
+            per_user.setdefault(key, []).append(piece)
+        for (platform_id, group_id, who), lines in per_user.items():
+            aggregate = "\n".join(lines)
+            await self._send_with_fallback(
+                platform_id, group_id, [Plain(aggregate)], f"钓鱼播报-{who}"
+            )
 
     async def _fishing_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
