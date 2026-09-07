@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.18
+作者：Zxin_Pro    版本：4.22.19
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.18 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.19 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.18",
+    version="4.22.19",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -2121,24 +2121,39 @@ class PointGamesPlugin(Star):
 
         async def fn(session):
             # 只捞余额达标的用户；逐个原子扣税（余额条件防并发透支）
+            # 税基 = 钱包普通余额 + 银行活期（两者合计达门槛才收）
             rows = (await session.execute(text(
-                "SELECT user_id, balance FROM users WHERE balance >= :m"
+                "SELECT u.user_id, u.balance, COALESCE(b.current_balance,0) "
+                "FROM users u LEFT JOIN bank_accounts b ON b.user_id=u.user_id "
+                "WHERE u.balance + COALESCE(b.current_balance,0) >= :m"
             ), {"m": self.TAX_MIN_BALANCE})).all()
             total_tax = 0
             tax_count = 0
-            for uid, balance in rows:
-                tax = int(int(balance) * self.TAX_RATE)  # 税率向下取整；余额≥1000时必≥1
+            for uid, wallet, bank in rows:
+                tax = int((int(wallet) + int(bank)) * self.TAX_RATE)
                 if tax < 1:
                     continue
-                # 扣税 + 流水（operation='tax'）
-                await self._add_points(session, str(uid), -tax, "tax",
-                                       earned=0, spent=tax)
-                # 税款流入手续费接收账户（复用转账的 fee_receiver）
-                await self._add_points(session, self.FEE_RECEIVER, tax, "tax_income",
-                                       earned=tax, spent=0)
-                # 税收记录
+                cash_take = min(tax, max(int(wallet), 0))
+                bank_take = tax - cash_take
+                if cash_take:
+                    await self._add_points(session, str(uid), -cash_take, "tax",
+                                           earned=0, spent=cash_take, force_normal=True)
+                    await self._add_points(session, self.FEE_RECEIVER, cash_take,
+                                           "tax_income", earned=cash_take, spent=0)
+                if bank_take > 0 and int(bank) > 0:
+                    bd = min(bank_take, int(bank))
+                    await session.execute(text(
+                        "UPDATE bank_accounts SET current_balance=current_balance-:a "
+                        "WHERE user_id=:u AND current_balance>=:a"
+                    ), {"a": bd, "u": str(uid)})
+                    await session.execute(text(
+                        "INSERT INTO bank_transactions(user_id,type,amount,create_time) "
+                        "VALUES(:u,'tax',:a,:t)"
+                    ), {"u": str(uid), "a": -bd, "t": time.time()})
+                    await self._add_points(session, self.FEE_RECEIVER, bd,
+                                           "tax_income", earned=bd, spent=0)
                 await session.execute(text(
-                    "INSERT INTO tax_records(user_id, amount, date) VALUES(:u, :a, :d)"
+                    "INSERT INTO tax_records(user_id, amount, date) VALUES(:u,:a,:d)"
                 ), {"u": str(uid), "a": tax, "d": tax_date})
                 total_tax += tax
                 tax_count += 1
