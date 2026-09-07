@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.13
+作者：Zxin_Pro    版本：4.22.14
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.13 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.14 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.13",
+    version="4.22.14",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -7865,13 +7865,33 @@ class PointGamesPlugin(Star):
         for platform_id, group_id, chain in broadcasts:
             await self._send_with_fallback(platform_id, group_id, chain, "钓鱼高价广播")
         # 事件播报（不艾特）：按群合并成一条消息发送，发送失败自动兜底
+        # 渲染成图片（千图马克手写体）发送，失败则退回纯文本
         grouped: dict[tuple[str, str], list[str]] = {}
         for platform_id, group_id, text_line in notices:
             grouped.setdefault((platform_id, group_id), []).append(text_line)
+        import tempfile, os as _os
+        try:
+            from fishing_poster import render_fishing_batch
+        except Exception:
+            render_fishing_batch = None
         for (platform_id, group_id), lines in grouped.items():
-            await self._send_with_fallback(
-                platform_id, group_id, [Plain("\n".join(lines))], "钓鱼事件播报"
-            )
+            done = False
+            if render_fishing_batch:
+                try:
+                    _png = _os.path.join(tempfile.gettempdir(),
+                                         f"fish_rpt_{int(time.time()*1000)}.png")
+                    render_fishing_batch(lines, _png)
+                    await self._send_with_fallback(
+                        platform_id, group_id, [Image(_png, name="fish_report.png")],
+                        "钓鱼播报图片",
+                    )
+                    done = True
+                except Exception:
+                    self.logger.exception("钓鱼播报图片渲染失败，退回文本")
+            if not done:
+                await self._send_with_fallback(
+                    platform_id, group_id, [Plain("\n".join(lines))], "钓鱼事件播报"
+                )
 
     async def _fishing_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
