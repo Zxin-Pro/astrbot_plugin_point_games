@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.9
+作者：Zxin_Pro    版本：4.22.10
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.9 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.10 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.9",
+    version="4.22.10",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -649,6 +649,14 @@ class PointGamesPlugin(Star):
         "collection": (30, 60),
     }
     FISH_TASK_BONUS = 50          # 全部完成额外奖励
+    SHOP_ITEMS = [
+        ("auto", "自动收鱼器", 500, "每小时自动收鱼（敬请期待）", "⚙️"),
+        ("discount", "鱼饵折扣卡", 300, "鱼饵价格永久-20%（已生效）", "🏷️"),
+        ("charm", "幸运护身符", 800, "稀有鱼概率永久+5%（已生效）", "🍀"),
+        ("double", "双倍卡", 200, "下次出售收益×2（已生效）", "✖️2"),
+        ("advanced", "高级鱼竿", 2000, "保底多捕1条（敬请期待）", "🎣"),
+        ("vip", "钓鱼VIP", 3000, "所有钓鱼收益+10%（已生效）", "💎"),
+    ]
     # 赞助系统
     SPONSOR_RATE = 100              # 1元=100积分（仅展示）
     SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
@@ -926,6 +934,12 @@ class PointGamesPlugin(Star):
             bonus_claimed INTEGER DEFAULT 0
         )""",
         "CREATE INDEX IF NOT EXISTS idx_fishing_tasks_user_date ON fishing_tasks(user_id, task_date)",
+        # 钓鱼商店（key:购买数量，json存已购道具）
+        """CREATE TABLE IF NOT EXISTS fishing_shop (
+            user_id TEXT PRIMARY KEY,
+            items TEXT DEFAULT '{}',
+            updated_at TIMESTAMP
+        )""",
         # 图鉴收集（钓到过即记录，卖鱼不影响图鉴进度）
         """CREATE TABLE IF NOT EXISTS fishing_collection (
             user_id TEXT NOT NULL,
@@ -7568,7 +7582,13 @@ class PointGamesPlugin(Star):
                 ), {"u": uid})).first()
                 pond_level = int(pond_row[0] or 1) if pond_row else 1
                 pond_rare_bonus = self.POND_RARE_BONUS.get(pond_level, 0)
+                # 商店加成：幸运符累加稀有、高级竿本判定提前计入(见渔获)，双倍在卖鱼生效
+                fish_shop = await self._get_shop_items(session, uid)
+                charm_n = int(fish_shop.get("charm", 0) or 0)
+                if charm_n > 0:
+                    pond_rare_bonus = pond_rare_bonus + 5 * charm_n  # 供本判定抽鱼
                 self._pond_rare_bonus = pond_rare_bonus   # 供本次判定抽鱼使用
+                self._active_shop = fish_shop              # 供本判定后续阶段读取
                 # 判定前消耗 1 个鱼饵，没鱼饵自动收杆
                 bait = await self._fishing_bait_count(session, uid)
                 if bait <= 0:
@@ -7580,9 +7600,11 @@ class PointGamesPlugin(Star):
                 await session.execute(
                     text("UPDATE fishing_baits SET count=count-1 WHERE user_id=:u"), {"u": uid}
                 )
-                # 鱼塘减耗效果：按减耗百分比有几率回补鱼饵
+                # 鱼塘减耗效果：按减耗百分比有几率回补鱼饵（商店折扣卡额外叠加 -20%/张）
                 pond_bait_pct = self.POND_BAIT_REDUCTION.get(pond_level, 0)
-                if pond_bait_pct > 0 and random.random() < (pond_bait_pct / 100.0):
+                disc_n = int((self._active_shop or {}).get("discount", 0) or 0)
+                pond_bait_pct = pond_bait_pct + 20 * disc_n
+                if pond_bait_pct > 0 and random.random() < (min(pond_bait_pct, 95) / 100.0):
                     await session.execute(
                         text("UPDATE fishing_baits SET count=count+1 WHERE user_id=:u"),
                         {"u": uid},
@@ -8127,8 +8149,18 @@ class PointGamesPlugin(Star):
                 total += price * cnt
                 fish_cnt += cnt
                 details.append(f"{name}×{cnt}")
-            # 卖鱼收入进账并记录流水（operation='sell_fish'）
-            await self._add_points(session, user_id, total, "sell_fish", earned=total)
+            # 卖鱼收入进账并记录流水（operation='sell_fish'），商店加成在此兑现
+            shop = await self._get_shop_items(session, user_id)
+            vip_n = int(shop.get("vip", 0) or 0)
+            double_n = int(shop.get("double", 0) or 0)
+            if vip_n > 0:
+                total = int(total * 1.1)
+            eff_total = total
+            if double_n > 0:
+                eff_total = total * 2
+                shop["double"] = double_n - 1
+                await self._save_shop_items(session, user_id, shop)
+            await self._add_points(session, user_id, eff_total, "sell_fish", earned=eff_total)
             await session.execute(text(
                 "UPDATE fishing_stats SET total_income=total_income+:t, "
                 "total_fish_count=total_fish_count+:c WHERE user_id=:u"
@@ -8461,6 +8493,76 @@ class PointGamesPlugin(Star):
             new_bal = await self._balance(session, user_id)
             return True, (f"🎉 全部完成！额外奖励 {self.FISH_TASK_BONUS} 积分已到账！\n"
                           f"当前积分：{new_bal} 喵~"), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 钓鱼商店 ====================
+    async def _get_shop_items(self, session, user_id: str) -> dict:
+        """读取玩家已购道具（items 内每个值 0=未购/购买数）"""
+        row = (await session.execute(text(
+            "SELECT items FROM fishing_shop WHERE user_id=:u"), {"u": user_id})).first()
+        if not row:
+            await session.execute(text(
+                "INSERT INTO fishing_shop(user_id, items, updated_at) VALUES(:u,'{}',:t)"),
+                {"u": user_id, "t": time.time()})
+            return {}
+        try:
+            return json.loads(row[0] or "{}")
+        except Exception:
+            return {}
+
+    async def _save_shop_items(self, session, user_id: str, items: dict):
+        await session.execute(text(
+            "UPDATE fishing_shop SET items=:i, updated_at=:t WHERE user_id=:u"),
+            {"u": user_id, "i": json.dumps(items, ensure_ascii=False), "t": time.time()})
+
+    @filter.command("钓鱼商店")
+    async def fishing_shop_view(self, event: AstrMessageEvent):
+        """/钓鱼商店 —— 查看可用钓鱼道具"""
+        user_id = event.get_sender_id()
+        async def fn(session):
+            items = await self._get_shop_items(session, user_id)
+            lines = ["🏪 【钓鱼商店】"]
+            for idx, (key, name, price, desc, icon) in enumerate(self.SHOP_ITEMS, 1):
+                cnt = int(items.get(key, 0) or 0)
+                owned = f"｜拥有×{cnt}" if cnt > 0 else ""
+                lines.append(f"{idx}. {icon} {name} {price}积分 {owned}\n   {desc}")
+            lines.append("发送 /购买鱼具 [编号] 购买（已购道具购买次数/×2卡次数累加）")
+            return True, "\n".join(lines), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("购买渔具", alias={"购买鱼具", "购买道具"})
+    async def fishing_shop_buy(self, event: AstrMessageEvent):
+        """/购买渔具 [编号] —— 购买钓鱼商店道具"""
+        user_id = event.get_sender_id()
+        text = self._strip_command(event, "购买渔具").strip()
+        if not text:
+            yield event.plain_result("用法：/购买渔具 [编号]（发 /钓鱼商店 查看）")
+            return
+        try:
+            idx = int(text.split()[0])
+        except ValueError:
+            yield event.plain_result("请填商品编号数字喵~")
+            return
+        if not (1 <= idx <= len(self.SHOP_ITEMS)):
+            yield event.plain_result("没有这个商品喵~")
+            return
+        key, name, price, desc, icon = self.SHOP_ITEMS[idx - 1]
+        async def fn(session):
+            items = await self._get_shop_items(session, user_id)
+            bal = await self._total_balance(session, user_id)
+            if bal < price:
+                raise _BizError(f"积分不足！购买需 {price} 积分，当前余额：{bal}")
+            await self._add_points(session, user_id, -price, "fish_shop", spent=price)
+            # 道具数量累加
+            items[key] = int(items.get(key, 0) or 0) + 1
+            await self._save_shop_items(session, user_id, items)
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"{icon} 购买成功！获得 {name}\n{desc}\n"
+                f"剩余积分：{new_bal} 喵~"
+            ), None
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
