@@ -1,145 +1,140 @@
 # -*- coding: utf-8 -*-
-"""钓鱼半时快报渲染器：把同一批次判定事件解析、分类、绘制成单张圆角 PNG。"""
+"""钓鱼半时快报渲染（成员聚合 · 整体渐变背景 · 思源黑体 / 无 emoji 缺字问题）
+
+布局：标题区 -> 每个成员一块，其下按 上钩/收获/落空/损失·罚款/状态 用彩色小标签罗列，
+同一个人在相隔事件能连续阅读。整张背景为 深蓝→青绿 上下渐变。
+"""
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-ORDER = {
-    "catch": 0,   # 上钩/进篓（好收获）
-    "good": 1,    # 正向奖励（老渔夫/宝箱/幸运）
-    "empty": 2,   # 失败（空钩/暗流/大雾/杂物/脱钩）
-    "fine": 3,    # 负向罚款/损失/维修
-    "state": 4,   # 状态（鱼饵用完/休息）
+ORDER = ["catch", "good", "empty", "fine", "state"]
+BAR = {
+    "catch": (255, 208, 112), "good": (250, 194, 62),
+    "empty": (150, 160, 175), "fine": (245, 110, 110), "state": (140, 190, 220),
 }
-
-CAT_BAR = {
-    "catch": (60, 190, 255),
-    "good": (255, 200, 80),
-    "empty": (135, 145, 160),
-    "fine": (255, 105, 105),
-    "state": (170, 170, 190),
-}
-CAT_TITLE = {
-    "catch": "🐟 有鱼上钩",
-    "good": "✨ 意外收获",
-    "empty": "😅 空手而归",
-    "fine": "⚠️ 损失与罚款",
-    "state": "🧺 状态提醒",
-}
+TAG = {"catch": "上钩", "good": "收获", "empty": "落空", "fine": "损失·罚款", "state": "状态"}
 
 
 def classify(text: str) -> str:
-    if ("上钩" in text or "进篓" in text or "双鱼" in text or "两条" in text
-            or "卖鱼" in text):
+    if "上钩" in text or "进篓" in text or "双鱼" in text or "两条" in text or "卖鱼" in text:
         return "catch"
-    if ("获得 " in text or "宝箱" in text or "幸运" in text or "传说召唤" in text
-            or "龙王" in text or "美人鱼" in text or "补贴" in text or "传授" in text):
+    if ("获得" in text or "宝箱" in text or "幸运" in text or "龙王" in text
+            or "美人鱼" in text or "补贴" in text or "传授" in text):
         return "good"
-    if ("空钩" in text or "一无所得" in text or "啥也没" in text or "破靴子" in text
-            or "大雾" in text or "暗流" in text or "海市蜃楼" in text or "锚被" in text
-            or "赤墨" in text or "乌贼" in text or "拔河" in text or "水草团" in text):
+    if ("空钩" in text or "一无所得" in text or "啥也没" in text or "破靴" in text
+            or "大雾" in text or "暗流" in text or "拔河" in text or "激流" in text
+            or "蜃楼" in text or "乌贼" in text or "漩涡" in text or "水草团" in text):
         return "empty"
-    if ("罚" in text or "损失" in text or "维修" in text or "保" in text or "-" in text
-            or "医药" in text or "中毒" in text or "断" in text or "卷刃" in text):
+    if ("罚" in text or "损失" in text or "维修" in text or "保养" in text
+            or "医药" in text or "卷刃" in text or "断裂" in text or "进水" in text
+            or "撞" in text):
         return "fine"
     return "state"
 
 
-def font_path():
-    here = os.path.dirname(os.path.abspath(__file__))
-    for n in ("千图马克手写体.ttf", "SourceHanSansCN-Regular.otf"):
-        p = os.path.join(here, "font", n)
+def font_path() -> str:
+    base = os.path.dirname(os.path.abspath(__file__))
+    for name in ("SourceHanSansCN-Regular.otf", "千图马克手写体.ttf"):
+        p = os.path.join(base, "font", name)
         if os.path.exists(p):
             return p
     return ""
 
 
-def _pick(name, font, text, color, **kw):
-    return font, color
+def _mix(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 
-class FishingBatchPoster:
-    MAX_W = 820
-    PAD = 28
+class Poster:
+    W = 860
 
     def __init__(self):
         path = font_path()
-        if path:
-            self.big = ImageFont.truetype(path, 34)
-            self.sec = ImageFont.truetype(path, 26)
-            self.md = ImageFont.truetype(path, 24)
-        else:
-            self.big = self.sec = self.md = ImageFont.load_default()
+        self.big = ImageFont.truetype(path, 34) if path else ImageFont.load_default()
+        self.md = ImageFont.truetype(path, 24) if path else ImageFont.load_default()
+        self.sm = ImageFont.truetype(path, 20) if path else ImageFont.load_default()
 
-    def _width(self, font, s):
+    @staticmethod
+    def _wd(font, s):
         return font.getlength(s) if hasattr(font, "getlength") else font.getsize(s)[0]
 
-    def _wrap(self, font, s):
-        cap = self.MAX_W - 2 * self.PAD - 40  # 左侧留分类色条
+    def _wrap(self, text):
+        cap = self.W - 96
         out, cur = [], ""
-        if not s:
-            return [""]
-        for ch in s:
-            if self._width(font, cur + ch) > cap:
+        for ch in text:
+            if self._wd(self.md, cur + ch) > cap and cur:
                 out.append(cur)
                 cur = ch
             else:
                 cur += ch
-        if cur:
-            out.append(cur)
-        return out
+        out.append(cur)
+        while out and out[-1] == "":
+            out.pop()
+        return out or [""]
 
-    def render(self, raw_lines, out):
-        bycat = {k: [] for k in ORDER}
-        for line in raw_lines:
-            line = line.strip()
-            cleaner = line.split(" ", 1)[1] if line.startswith("🎣") else line
-            bycat[classify(cleaner)].append(cleaner)
-        body = 0
-        for cat in sorted(ORDER, key=ORDER.get):
-            rows_all = [self._wrap(self.md, t) for t in bycat[cat]]
-            if not rows_all:
+    def render(self, lines: list, out: str):
+        users, uorder, u_cat = {}, [], {}
+        for ln in lines:
+            ln = ln.strip()
+            if not ln:
                 continue
-            body += 52  # 分类标题行
-            body += sum(len(rs) for rs in rows_all) * 36
-            body += 18
-        title_h = 92
-        h = title_h + body + 40
-        img = Image.new("RGB", (self.MAX_W, h), (9, 30, 44))
+            body = ln.split(" ", 1)[1] if ln.startswith("🎣") else ln
+            head = body.split(" ", 1)
+            if len(head) != 2 or not head[1].strip():
+                continue
+            uname, ev = head
+            ev = ev.strip()
+            if uname not in users:
+                users[uname] = {k: [] for k in ORDER}
+                uorder.append(uname)
+            users[uname][classify(ev)].append(ev)
+        # 高度：标题 + 每人(名行)块
+        title_h, gap, nh = 110, 18, 40
+        hh = title_h + 24
+        for uname in uorder:
+            hh += 40
+            member_rows = 0
+            for cat in ORDER:
+                if not users[uname][cat]:
+                    continue
+                hh += 26
+                for e in users[uname][cat]:
+                    member_rows += len(self._wrap(e))
+            hh += member_rows * 34 + 12 + gap
+        # 画布
+        img = Image.new("RGB", (self.W, hh), (9, 26, 40))
         dr = ImageDraw.Draw(img)
-        # 标题渐变
-        for i in range(title_h):
-            dr.line([(0, i), (self.MAX_W, i)],
-                    fill=(int(15 + 0.28 * i), int(48 + 0.35 * i), int(84 + 0.18 * i)))
-        dr.text((self.PAD, 24), "🎣 钓鱼实时快报", font=self.big, fill=(255, 236, 174))
-        dr.line([(self.PAD - 4, 70), (self.MAX_W - self.PAD + 4, 70)],
-                fill=(88, 118, 130), width=3)
-        y = title_h + 16
-        # 分类排序绘制
-        for cat in sorted(ORDER, key=ORDER.get):
-            entries = bycat[cat]
-            if not entries:
-                continue
-            bar_color = CAT_BAR[cat]
-            # 分类标题底色块
-            txt = CAT_TITLE[cat]
-            dr.rectangle([(self.PAD, y - 4), (self.PAD + dr.textlength(txt, font=self.sec or self.sec) and 240, y + 34)],
-                         fill=(255, 255, 255))
-            dr.rectangle([(self.PAD, y - 2), (self.MAX_W - self.PAD, y + 38)],
-                         fill=bar_color + (0,) if isinstance(bar_color, tuple) and len(bar_color) == 4 else ((bar_color[0] // 10, bar_color[1] // 10, bar_color[2] // 10)))
-            dr.rectangle([(self.PAD, y - 4), (self.PAD + 210, y + 36)], fill=bar_color)
-            dr.text((self.PAD + 14, y - 2), txt, font=self.sec, fill=(255, 255, 255))
-            y += 46
-            for ent in entries:
-                for seg in self._wrap(self.md, ent):
-                    idx = seg.find("（")
-                    badge = seg  # 整段已分类不需前缀
-                    dr.text((self.PAD + 16, y), badge, font=self.md,
-                            fill=(225, 232, 240))
-                    y += 34
-            y += 8
+        top = (9, 36, 58)
+        bottom = (12, 92, 78)
+        for yy in range(hh):
+            dr.line([(0, yy), (self.W, yy)],
+                    fill=_mix(top, bottom, yy / max(1, hh)))
+        # 标题（亮字）
+        dr.text((30, 26), "钓鱼实况 · 成员汇总", font=self.big, fill=(250, 251, 253))
+        dr.rectangle((30, 92, self.W - 30, 96), fill=(255, 255, 255))
+        y = 124
+        for uname in uorder:
+            dr.text((34, y), uname, font=self.sm, fill=(255, 218, 130))
+            y += 36
+            for cat in ORDER:
+                for e in []:
+                    pass
+                for ev in users[uname][cat]:
+                    pass
+                # flatten
+                tags = users[uname][cat]
+                if not tags:
+                    continue
+                dr.text((40, y), f"〔{TAG[cat]}〕", font=self.sm, fill=BAR[cat])
+                y += 26
+                for ev in tags:
+                    for seg in self._wrap(ev):
+                        dr.text((64, y), seg, font=self.md, fill=(213, 231, 238))
+                        y += 34
+            y += 10
         img.save(out)
         return out
 
 
 def render_fishing_batch(lines, out_path):
-    return FishingBatchPoster().render(lines, out_path)
+    return Poster().render(lines, out_path)
