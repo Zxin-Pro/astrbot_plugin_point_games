@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.7
+作者：Zxin_Pro    版本：4.22.8
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -138,7 +138,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|兑换礼品|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.7 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.8 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -405,7 +405,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/修鱼竿 [编号]", "钓鱼系统：50积分修理损坏的鱼竿"),
     ("/钓鱼排行", "钓鱼系统：排行榜（收入|数量|大鱼|图鉴）"),
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
-    ("/兑换礼品", "花费10000积分兑换小礼品一份（兑换后联系管理员领取）"),
+    ("/鱼塘", "钓鱼系统：查看鱼塘等级与加成（可升级）"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
     ("/开户", "银行系统：开通银行账户（免费，享每日5%活期利息）"),
     ("/存钱 [积分]", "银行系统：将钱包积分存入银行"),
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.7",
+    version="4.22.8",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -516,7 +516,6 @@ class PointGamesPlugin(Star):
     UC_MAX_PLAYERS = 12
     UC_DEFAULT_PLAYERS = 6
     # 消费达标提醒
-    SPEND_REWARD_THRESHOLD = 10000  # 消费达标阈值
     # 积分转账
     TRANSFER_FEE_RATE = 0.1         # 手续费比例：10%（向下取整）
     TRANSFER_MIN = 1                # 单次转账最低积分
@@ -626,6 +625,13 @@ class PointGamesPlugin(Star):
     FISHING_RESET_HOUR = 0          # 今日统计重置小时
     FISHING_RESET_MINUTE = 0        # 今日统计重置分钟
     FISHING_RANK_SIZE = 10          # 钓鱼排行显示人数
+    # 鱼塘养成系统
+    POND_MAX_LEVEL = 5                                    # 鱼塘最高等级
+    POND_UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}   # 每级升级费用(升到level的花费)
+    POND_BAIT_REDUCTION = {1: 0, 2: 10, 3: 20, 4: 30, 5: 50}       # 鱼饵消耗减少 %
+    POND_RARE_BONUS = {1: 0, 2: 0, 3: 5, 4: 10, 5: 20}             # 稀有鱼概率加成 %
+    POND_EXTRA_HOURS = {1: 0, 2: 0, 3: 0, 4: 0, 5: 24}            # 额外挂机小时
+    POND_BASE_HOURS = 48          # 基础挂机上限小时
     # 赞助系统
     SPONSOR_RATE = 100              # 1元=100积分（仅展示）
     SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
@@ -679,6 +685,8 @@ class PointGamesPlugin(Star):
         "买鱼竿": ("enable_fishing", "钓鱼系统"),
         "买鱼饵": ("enable_fishing", "钓鱼系统"),
         "挂机钓鱼": ("enable_fishing", "钓鱼系统"),
+        "鱼塘": ("enable_fishing", "钓鱼系统"),
+        "升级鱼塘": ("enable_fishing", "钓鱼系统"),
         "收鱼": ("enable_fishing", "钓鱼系统"),
         "卖鱼": ("enable_fishing", "钓鱼系统"),
         "鱼图鉴": ("enable_fishing", "钓鱼系统"),
@@ -686,7 +694,6 @@ class PointGamesPlugin(Star):
         "修鱼竿": ("enable_fishing", "钓鱼系统"),
         "钓鱼排行": ("enable_fishing", "钓鱼系统"),
         "钓鱼统计": ("enable_fishing", "钓鱼系统"),
-        "兑换礼品": ("enable_ranking", "消费兑换"),
         "转账": ("enable_transfer", "积分转账"),
         "开户": ("enable_bank", "银行系统"),
         "存钱": ("enable_bank", "银行系统"),
@@ -713,7 +720,6 @@ class PointGamesPlugin(Star):
             sign_in_date TEXT,
             sign_in_streak INTEGER DEFAULT 0,
             reward_reminded INTEGER DEFAULT 0,
-            gift_redeemed INTEGER DEFAULT 0,
             loan_balance INTEGER DEFAULT 0
         )""",
         """CREATE TABLE IF NOT EXISTS lottery (
@@ -906,7 +912,8 @@ class PointGamesPlugin(Star):
             total_fish_count INTEGER DEFAULT 0,
             best_fish_name TEXT,
             best_fish_value INTEGER DEFAULT 0,
-            collection_count INTEGER DEFAULT 0
+            collection_count INTEGER DEFAULT 0,
+            pond_level INTEGER DEFAULT 1
         )""",
         """CREATE TABLE IF NOT EXISTS transfer_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1483,24 +1490,8 @@ class PointGamesPlugin(Star):
         )
 
     async def _check_spend_reward(self, session, user_id: str, group_id: str = None):
-        """检查用户余额是否达标，发送提醒（必须在事务内调用）"""
-        row = (
-            await session.execute(
-                text("SELECT balance, reward_reminded FROM users WHERE user_id=:u"),
-                {"u": user_id}
-            )
-        ).first()
-        if not row:
-            return
-        balance, reminded = int(row[0] or 0), int(row[1] or 0)
-        if balance >= self.SPEND_REWARD_THRESHOLD and reminded == 0:
-            await session.execute(
-                text("UPDATE users SET reward_reminded=1 WHERE user_id=:u"),
-                {"u": user_id}
-            )
-            # 提醒消息在事务外发送（下方调用处理）
-            return True
         return False
+
 
     async def _enforce_cooldown(self, session, user_id: str, seconds: int = None) -> float:
         """指令冷却：3 秒内重复指令返回剩余秒数（>0 表示被拦截）。必须在事务内调用"""
@@ -1585,9 +1576,6 @@ class PointGamesPlugin(Star):
                     await session.execute(text("ALTER TABLE users ADD COLUMN user_name TEXT DEFAULT ''"))
                 if "reward_reminded" not in user_columns:
                     await session.execute(text("ALTER TABLE users ADD COLUMN reward_reminded INTEGER DEFAULT 0"))
-                if "gift_redeemed" not in user_columns:
-                    # 一次性消费兑换礼品：已兑换次数
-                    await session.execute(text("ALTER TABLE users ADD COLUMN gift_redeemed INTEGER DEFAULT 0"))
                 if "loan_balance" not in user_columns:
                     # 贷款余额：贷款积分单独存放，不可转账
                     await session.execute(text("ALTER TABLE users ADD COLUMN loan_balance INTEGER DEFAULT 0"))
@@ -1603,6 +1591,8 @@ class PointGamesPlugin(Star):
                 ):
                     if column not in fishing_columns:
                         await session.execute(text(f"ALTER TABLE fishing_stats ADD COLUMN {column} {definition}"))
+                if "pond_level" not in fishing_columns:
+                    await session.execute(text("ALTER TABLE fishing_stats ADD COLUMN pond_level INTEGER DEFAULT 1"))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -2317,8 +2307,7 @@ class PointGamesPlugin(Star):
             "猜数字：/猜数字 [积分] [大/小/数字]（猜大小翻1.8倍，猜具体翻10倍）",
             "十连：/十连（100积分抽10张卡，总分高有翻倍奖励）",
             "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
-            "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计",
-            "兑换：/兑换礼品（花费10000积分）",
+            "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计｜/鱼塘",
             "签到：群发 签到 / jrzj / 今日座驾（附带今日运势）",
             "排行：/排行 或 /富豪榜（总资产TOP10，含银行存款与贷款）",
             "管理：/加积分 @玩家 数量｜/减积分 @玩家 数量",
@@ -2398,8 +2387,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -2633,8 +2620,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -2775,8 +2760,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -3544,8 +3527,6 @@ class PointGamesPlugin(Star):
         if ok and data and data[1]:
             try:
                 yield event.plain_result(
-                    f"🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                    f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                 )
             except Exception:
                 pass
@@ -5851,8 +5832,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 余额已达 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -6054,8 +6033,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -6181,8 +6158,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -6303,8 +6278,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -6422,8 +6395,6 @@ class PointGamesPlugin(Star):
             if group_id:
                 try:
                     yield event.plain_result(
-                        f"[CQ:at,qq={user_id}] 🎉 累计消费达到 {self.SPEND_REWARD_THRESHOLD} 积分！\n"
-                        f"发送 /兑换礼品 花费 {self.SPEND_REWARD_THRESHOLD} 积分即可兑换小礼品一份喵~"
                     )
                 except Exception:
                     pass
@@ -7389,50 +7360,6 @@ class PointGamesPlugin(Star):
             return error_response(msg)
         return json_response(data)
 
-    @filter.command("兑换礼品")
-    async def redeem_gift(self, event: AstrMessageEvent):
-        """/兑换礼品 —— 花费 10000 积分兑换小礼品一份，兑换后联系管理员领取"""
-        ok_gate, msg_gate = await self._check_group_gate(event, "兑换礼品")
-        if not ok_gate:
-            yield event.plain_result(msg_gate)
-            return
-        user_id = event.get_sender_id()
-
-        async def fn(session):
-            await self._ensure_user(session, user_id)
-            remaining = await self._enforce_cooldown(session, user_id)
-            if remaining > 0:
-                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
-            # 兑换礼品只能用普通余额（贷款积分不可用于兑换）
-            bal = await self._balance(session, user_id)
-            if bal < self.SPEND_REWARD_THRESHOLD:
-                loan_row = (await session.execute(text(
-                    "SELECT loan_balance FROM users WHERE user_id=:u"
-                ), {"u": user_id})).first()
-                loan_bal = int(loan_row[0]) if loan_row else 0
-                hint = (f"\n（贷款余额 {loan_bal} 积分不可用于兑换礼品）"
-                        if loan_bal > 0 else "")
-                raise _BizError(
-                    f"积分不足喵~ 兑换礼品需要 {self.SPEND_REWARD_THRESHOLD} 积分，"
-                    f"你只有 {bal} 积分{hint}"
-                )
-            # 扣积分并记录流水（只用普通余额），同时累计兑换次数
-            await self._add_points(
-                session, user_id, -self.SPEND_REWARD_THRESHOLD, "兑换礼品",
-                force_normal=True,
-            )
-            await session.execute(text(
-                "UPDATE users SET gift_redeemed=gift_redeemed+1 WHERE user_id=:u"
-            ), {"u": user_id})
-            new_bal = await self._balance(session, user_id)
-            return True, (
-                f"🎁 兑换成功！已花费 {self.SPEND_REWARD_THRESHOLD} 积分，"
-                f"当前积分：{new_bal}\n请联系管理员领取小礼品喵~"
-            ), None
-
-        ok, msg, _ = await self._tx(fn)
-        yield event.plain_result(msg)
-
     # ============================================================
     #  钓鱼系统
     # ============================================================
@@ -7450,12 +7377,17 @@ class PointGamesPlugin(Star):
         """按概率加权随机抽一条鱼，返回 (鱼名, 售价, 稀有度, 单条概率%)。
 
         鱼类配置概率合计约 70.73%，剩余部分视为钓上杂物（返回 None，一无所得）。
+        若本次判定来自高等级鱼塘（鱼塘加成生效），有几率把抽到的普通鱼升级为传说级。
         """
         roll = random.uniform(0, 100)
         cumulative = 0.0
         for name, (price, rarity, prob) in FISH_POOL.items():
             cumulative += prob
             if roll <= cumulative:
+                # 鱼塘稀有加成：对低价值渔获按等级概率替换为高稀有
+                bonus = int(getattr(self, "_pond_rare_bonus", 0) or 0)
+                if bonus > 0 and price < 100 and random.random() < (bonus / 200.0):
+                    return self._fishing_pick_fish_tier("传说")
                 return name, price, rarity, prob
         return None  # 杂物：水面漂过一片水草，一无所得
 
@@ -7473,7 +7405,7 @@ class PointGamesPlugin(Star):
         )).first()
         if not row:
             await session.execute(
-                text("INSERT INTO fishing_stats(user_id, today_date) VALUES(:u, :d)"),
+                text("INSERT INTO fishing_stats(user_id, today_date, pond_level) VALUES(:u, :d, 1)"),
                 {"u": user_id, "d": today},
             )
         elif row[0] != today:
@@ -7594,6 +7526,13 @@ class PointGamesPlugin(Star):
                     if group_id:
                         notices.append((platform_id, group_id, f"🎣 {user_name} {text_line}"))
                 await self._fishing_ensure_stats(session, uid)
+                # 鱼塘等级（每判定读取一次，应用到本判定的鱼饵与稀有加成）
+                pond_row = (await session.execute(text(
+                    "SELECT pond_level FROM fishing_stats WHERE user_id=:u"
+                ), {"u": uid})).first()
+                pond_level = int(pond_row[0] or 1) if pond_row else 1
+                pond_rare_bonus = self.POND_RARE_BONUS.get(pond_level, 0)
+                self._pond_rare_bonus = pond_rare_bonus   # 供本次判定抽鱼使用
                 # 判定前消耗 1 个鱼饵，没鱼饵自动收杆
                 bait = await self._fishing_bait_count(session, uid)
                 if bait <= 0:
@@ -7605,6 +7544,13 @@ class PointGamesPlugin(Star):
                 await session.execute(
                     text("UPDATE fishing_baits SET count=count-1 WHERE user_id=:u"), {"u": uid}
                 )
+                # 鱼塘减耗效果：按减耗百分比有几率回补鱼饵
+                pond_bait_pct = self.POND_BAIT_REDUCTION.get(pond_level, 0)
+                if pond_bait_pct > 0 and random.random() < (pond_bait_pct / 100.0):
+                    await session.execute(
+                        text("UPDATE fishing_baits SET count=count+1 WHERE user_id=:u"),
+                        {"u": uid},
+                    )
                 # 幸运日 buff：有效期内空钩视为上钩
                 st = (await session.execute(
                     text("SELECT lucky_day_expire FROM fishing_stats WHERE user_id=:u"),
@@ -8214,6 +8160,88 @@ class PointGamesPlugin(Star):
             for slot, status in rods:
                 lines.append(f"{int(slot)} 号竿：{status_text.get(str(status), str(status))}")
             return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("鱼塘")
+    async def pond_status(self, event: AstrMessageEvent):
+        """/鱼塘 —— 查看自己的鱼塘等级与加成效果"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "鱼塘")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            row = (await session.execute(text(
+                "SELECT pond_level FROM fishing_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            level = int(row[0] or 1) if row else 1
+            bait_red = self.POND_BAIT_REDUCTION.get(level, 0)
+            rare_bonus = self.POND_RARE_BONUS.get(level, 0)
+            max_hours = self.POND_BASE_HOURS + self.POND_EXTRA_HOURS.get(level, 0)
+            lines = [
+                "🏊 【鱼塘状态】",
+                f"等级：{level}级",
+                f"鱼饵消耗：-{bait_red}%",
+                f"稀有鱼概率：+{rare_bonus}%",
+                f"挂机时间上限：{max_hours}小时",
+            ]
+            if level < self.POND_MAX_LEVEL:
+                nxt = level + 1
+                cost = self.POND_UPGRADE_COST.get(nxt, 0)
+                lines.append(f"升级到{nxt}级需要：{cost}积分")
+                lines.append("发送 /升级鱼塘 升级！")
+            else:
+                lines.append("✅ 已满级，鱼塘欣欣向荣！")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("升级鱼塘")
+    async def pond_upgrade(self, event: AstrMessageEvent):
+        """/升级鱼塘 —— 花费积分永久提升钓鱼收益"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "升级鱼塘")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            row = (await session.execute(text(
+                "SELECT pond_level FROM fishing_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            level = int(row[0] or 1) if row else 1
+            if level >= self.POND_MAX_LEVEL:
+                raise _BizError(f"✅ 已满级！当前等级：{self.POND_MAX_LEVEL}级")
+            nxt = level + 1
+            cost = self.POND_UPGRADE_COST.get(nxt, 0)
+            bal = await self._total_balance(session, user_id)
+            if bal < cost:
+                raise _BizError(
+                    f"❌ 积分不足！升级需要 {cost} 积分，当前余额：{bal} 积分"
+                )
+            await self._add_points(session, user_id, -cost, "pond_upgrade", spent=cost)
+            await session.execute(
+                text("UPDATE fishing_stats SET pond_level=:l WHERE user_id=:u"),
+                {"u": user_id, "l": nxt},
+            )
+            bait_red = self.POND_BAIT_REDUCTION.get(nxt, 0)
+            rare_bonus = self.POND_RARE_BONUS.get(nxt, 0)
+            extra = self.POND_EXTRA_HOURS.get(nxt, 0)
+            new_bal = await self._balance(session, user_id)
+            add_effects = [f"鱼饵消耗-{bait_red}%", f"稀有鱼概率+{rare_bonus}%"]
+            if extra:
+                add_effects.append(f"挂机上限+{extra}小时")
+            return True, (
+                f"✅ 鱼塘升级成功！当前等级：{nxt}级\n"
+                f"新增效果：{'，'.join(add_effects)}\n"
+                f"花费 {cost} 积分，当前积分：{new_bal} 喵~"
+            ), None
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
