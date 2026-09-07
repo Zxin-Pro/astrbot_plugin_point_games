@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.5
+作者：Zxin_Pro    版本：4.22.6
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.5 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.6 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.5",
+    version="4.22.6",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -8187,47 +8187,76 @@ class PointGamesPlugin(Star):
 
     @filter.command("修鱼竿")
     async def fishing_repair(self, event: AstrMessageEvent):
-        """/修鱼竿 [编号] —— 花费 50 积分修理损坏的鱼竿"""
+        """/修鱼竿 [编号] —— 自动修理损坏的鱼竿（不带编号=一键修好全部）"""
         ok_gate, msg_gate = await self._check_group_gate(event, "修鱼竿")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
         user_id = event.get_sender_id()
-        args = self._strip_command(event, "修鱼竿")
-        if not args:
-            yield event.plain_result("用法：/修鱼竿 编号 喵~ 发 /鱼竿列表 查看编号")
-            return
-        try:
-            slot = int(args.split()[0])
-        except ValueError:
-            yield event.plain_result("鱼竿编号得是数字喵~")
-            return
+        args = self._strip_command(event, "修鱼竿").strip()
+
+        # 解析编号：不带编号 = 一键修理全部损坏鱼竿
+        slot = None
+        if args:
+            try:
+                slot = int(args.split()[0])
+            except ValueError:
+                yield event.plain_result("鱼竿编号得是数字喵~ 不带编号则一键修理全部")
+                return
 
         async def fn(session):
             await self._fishing_ensure_stats(session, user_id)
             remaining = await self._enforce_cooldown(session, user_id)
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
-            rod = (await session.execute(text(
-                "SELECT id, status FROM fishing_rods WHERE user_id=:u AND slot=:s"
-            ), {"u": user_id, "s": slot})).first()
-            if not rod:
-                raise _BizError(f"没有 {slot} 号鱼竿喵~ 发 /鱼竿列表 查看你的鱼竿")
-            if rod[1] != "broken":
-                raise _BizError(f"{slot} 号鱼竿没坏，不用修喵~")
-            bal = await self._total_balance(session, user_id)
-            if bal < self.REPAIR_COST:
-                raise _BizError(
-                    f"积分不足喵~ 修鱼竿需要 {self.REPAIR_COST} 积分，你只有 {bal} 积分"
+
+            if slot is not None:
+                # 指定编号：修单根
+                rod = (await session.execute(text(
+                    "SELECT id, status FROM fishing_rods WHERE user_id=:u AND slot=:s"
+                ), {"u": user_id, "s": slot})).first()
+                if not rod:
+                    raise _BizError(f"没有 {slot} 号鱼竿喵~ 发 /鱼竿列表 查看你的鱼竿")
+                if rod[1] != "broken":
+                    raise _BizError(f"{slot} 号鱼竿没坏，不用修喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.REPAIR_COST:
+                    raise _BizError(
+                        f"积分不足喵~ 修鱼竿需要 {self.REPAIR_COST} 积分，你只有 {bal} 积分"
+                    )
+                await self._add_points(session, user_id, -self.REPAIR_COST, "repair_rod")
+                await session.execute(
+                    text("UPDATE fishing_rods SET status='idle' WHERE id=:i"), {"i": rod[0]}
                 )
-            await self._add_points(session, user_id, -self.REPAIR_COST, "repair_rod")
-            await session.execute(
-                text("UPDATE fishing_rods SET status='idle' WHERE id=:i"), {"i": rod[0]}
-            )
+                new_bal = await self._balance(session, user_id)
+                return True, (
+                    f"🔧 {slot} 号鱼竿修好啦！花费 {self.REPAIR_COST} 积分，"
+                    f"当前积分：{new_bal} 喵~"
+                ), None
+
+            # 一键模式：自动修理全部损坏的鱼竿
+            broken = (await session.execute(text(
+                "SELECT id, slot FROM fishing_rods WHERE user_id=:u AND status='broken' ORDER BY slot"
+            ), {"u": user_id})).all()
+            if not broken:
+                raise _BizError("没有损坏的鱼竿喵~ 全部完好无损！")
+            cost = self.REPAIR_COST * len(broken)
+            bal = await self._total_balance(session, user_id)
+            if bal < cost:
+                raise _BizError(
+                    f"积分不足喵~ 修理 {len(broken)} 根鱼竿需要 {cost} 积分"
+                    f"（{self.REPAIR_COST}/根），你只有 {bal} 积分"
+                )
+            for rod in broken:
+                await session.execute(
+                    text("UPDATE fishing_rods SET status='idle' WHERE id=:i"), {"i": rod[0]}
+                )
+            await self._add_points(session, user_id, -cost, "repair_rod")
+            slots = "、".join(str(r[1]) for r in broken)
             new_bal = await self._balance(session, user_id)
             return True, (
-                f"🔧 {slot} 号鱼竿修好啦！花费 {self.REPAIR_COST} 积分，"
-                f"当前积分：{new_bal} 喵~"
+                f"🔧 一键修理完成！{slots} 号鱼竿全部修好啦！\n"
+                f"共修理 {len(broken)} 根，花费 {cost} 积分，当前积分：{new_bal} 喵~"
             ), None
 
         ok, msg, _ = await self._tx(fn)
