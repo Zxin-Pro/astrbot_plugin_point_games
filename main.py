@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.6
+作者：Zxin_Pro    版本：4.22.7
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.6 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.7 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -403,7 +403,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/鱼图鉴", "钓鱼系统：查看鱼类收集进度（共102种）"),
     ("/鱼竿列表", "钓鱼系统：查看每根鱼竿状态"),
     ("/修鱼竿 [编号]", "钓鱼系统：50积分修理损坏的鱼竿"),
-    ("/钓鱼排行", "钓鱼系统：累计卖鱼收入前十名"),
+    ("/钓鱼排行", "钓鱼系统：排行榜（收入|数量|大鱼|图鉴）"),
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
     ("/兑换礼品", "花费10000积分兑换小礼品一份（兑换后联系管理员领取）"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.6",
+    version="4.22.7",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -902,7 +902,11 @@ class PointGamesPlugin(Star):
             lucky_day INTEGER DEFAULT 0,
             lucky_day_expire TIMESTAMP,
             today_count INTEGER DEFAULT 0,
-            today_date TEXT
+            today_date TEXT,
+            total_fish_count INTEGER DEFAULT 0,
+            best_fish_name TEXT,
+            best_fish_value INTEGER DEFAULT 0,
+            collection_count INTEGER DEFAULT 0
         )""",
         """CREATE TABLE IF NOT EXISTS transfer_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1587,6 +1591,18 @@ class PointGamesPlugin(Star):
                 if "loan_balance" not in user_columns:
                     # 贷款余额：贷款积分单独存放，不可转账
                     await session.execute(text("ALTER TABLE users ADD COLUMN loan_balance INTEGER DEFAULT 0"))
+
+                fishing_columns = {
+                    str(row[1]) for row in (await session.execute(text("PRAGMA table_info(fishing_stats)"))).all()
+                }
+                for column, definition in (
+                    ("total_fish_count", "INTEGER DEFAULT 0"),
+                    ("best_fish_name", "TEXT"),
+                    ("best_fish_value", "INTEGER DEFAULT 0"),
+                    ("collection_count", "INTEGER DEFAULT 0"),
+                ):
+                    if column not in fishing_columns:
+                        await session.execute(text(f"ALTER TABLE fishing_stats ADD COLUMN {column} {definition}"))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -8082,6 +8098,10 @@ class PointGamesPlugin(Star):
                 "SELECT fish_name FROM fishing_collection WHERE user_id=:u"
             ), {"u": user_id})).all()}
             rewards = await self._fishing_grant_titles(session, user_id, collected)
+            # 图鉴榜：按永久图鉴记录统计，卖鱼后也不会减少
+            await session.execute(text(
+                "UPDATE fishing_stats SET collection_count=:c WHERE user_id=:u"
+            ), {"u": user_id, "c": len(collected)})
             msg = f"🐟 收鱼成功！本次进篓 {total} 条：{'、'.join(details)}喵~"
             if new_species:
                 msg += f"\n✨ 图鉴新收录：{'、'.join(new_species)}"
@@ -8124,8 +8144,21 @@ class PointGamesPlugin(Star):
             # 卖鱼收入进账并记录流水（operation='sell_fish'）
             await self._add_points(session, user_id, total, "sell_fish", earned=total)
             await session.execute(text(
-                "UPDATE fishing_stats SET total_income=total_income+:t WHERE user_id=:u"
-            ), {"u": user_id, "t": total})
+                "UPDATE fishing_stats SET total_income=total_income+:t, "
+                "total_fish_count=total_fish_count+:c WHERE user_id=:u"
+            ), {"u": user_id, "t": total, "c": fish_cnt})
+            # 兼容旧数据：从本次售出的鱼中维护最高价值鱼
+            best_name, best_value = max(
+                ((str(name), int(FISH_POOL.get(str(name), (0,))[0])) for name, _ in rows),
+                key=lambda item: item[1], default=(None, 0)
+            )
+            current_best = (await session.execute(text(
+                "SELECT best_fish_value FROM fishing_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if best_name and (not current_best or best_value > int(current_best[0] or 0)):
+                await session.execute(text(
+                    "UPDATE fishing_stats SET best_fish_name=:n, best_fish_value=:v WHERE user_id=:u"
+                ), {"u": user_id, "n": best_name, "v": best_value})
             await session.execute(
                 text("DELETE FROM fishing_inventory WHERE user_id=:u"), {"u": user_id}
             )
@@ -8264,24 +8297,69 @@ class PointGamesPlugin(Star):
 
     @filter.command("钓鱼排行")
     async def fishing_rank(self, event: AstrMessageEvent):
-        """/钓鱼排行 —— 显示累计卖鱼收入前十名"""
+        """/钓鱼排行 [收入|数量|大鱼|图鉴] —— 钓鱼排行榜（默认收入榜）"""
         ok_gate, msg_gate = await self._check_group_gate(event, "钓鱼排行")
         if not ok_gate:
             yield event.plain_result(msg_gate)
             return
+        subcmd = self._strip_command(event, "钓鱼排行").strip() or "收入"
 
         async def fn(session):
-            rows = (await session.execute(text(
-                "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), s.total_income "
-                "FROM fishing_stats s LEFT JOIN users u ON u.user_id = s.user_id "
-                "WHERE s.total_income > 0 ORDER BY s.total_income DESC LIMIT :n"
-            ), {"n": self.FISHING_RANK_SIZE})).all()
-            if not rows:
-                raise _BizError("还没有人有卖鱼收入喵~ 快去 /挂机钓鱼 抢占榜首！")
-            medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, len(rows) + 1)]
-            lines = [f"🐟 钓鱼总收入排行 TOP{len(rows)}"]
-            for i, (uid, name, income) in enumerate(rows):
-                lines.append(f"{medals[i]} {name} —— {int(income)} 积分")
+            medals = ["👑", "🥈", "🥉"] + [f"{i}." for i in range(4, self.FISHING_RANK_SIZE + 1)]
+            
+            if subcmd == "收入":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), s.total_income "
+                    "FROM fishing_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.total_income > 0 ORDER BY s.total_income DESC LIMIT :n"
+                ), {"n": self.FISHING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人有卖鱼收入喵~ 快去 /挂机钓鱼 抢占榜首！")
+                lines = [f"📊 【钓鱼排行·收入榜】TOP{len(rows)}"]
+                for i, (uid, name, income) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(income)} 积分")
+            
+            elif subcmd == "数量":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), s.total_fish_count "
+                    "FROM fishing_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.total_fish_count > 0 ORDER BY s.total_fish_count DESC LIMIT :n"
+                ), {"n": self.FISHING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人卖过鱼喵~ 快去钓鱼吧！")
+                lines = [f"📊 【钓鱼排行·数量榜】TOP{len(rows)}"]
+                for i, (uid, name, count) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(count)} 条")
+            
+            elif subcmd == "大鱼":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), "
+                    "s.best_fish_name, s.best_fish_value "
+                    "FROM fishing_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.best_fish_value > 0 ORDER BY s.best_fish_value DESC LIMIT :n"
+                ), {"n": self.FISHING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人钓到大鱼喵~ 快去碰碰运气！")
+                lines = [f"📊 【钓鱼排行·大鱼榜】TOP{len(rows)}"]
+                for i, (uid, name, fish_name, fish_value) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{fish_name}（{int(fish_value)} 积分）")
+            
+            elif subcmd == "图鉴":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), s.collection_count "
+                    "FROM fishing_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.collection_count > 0 ORDER BY s.collection_count DESC LIMIT :n"
+                ), {"n": self.FISHING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人收集过图鉴喵~")
+                total_species = len(FISH_POOL)
+                lines = [f"📊 【钓鱼排行·图鉴榜】TOP{len(rows)}"]
+                for i, (uid, name, count) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(count)}/{total_species} 种")
+            
+            else:
+                raise _BizError("用法：/钓鱼排行 [收入|数量|大鱼|图鉴]")
+            
             return True, "\n".join(lines), None
 
         ok, msg, _ = await self._tx(fn)
