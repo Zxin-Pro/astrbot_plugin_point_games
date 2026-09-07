@@ -1,5 +1,10 @@
 # 更新日志
 
+## [4.22.16] - 2026-09-07
+
+### 红包调度告警修复
+- `_get_platform_ids()` 在 _notify_admins/_broadcast_to_group 调用处未 await 导致 coroutine not iterable
+- 修复后管理员红包调度通知可正常私聊送达
 ## [4.22.15] - 2026-09-07
 
 ### 钓鱼播报图（最终版式）
