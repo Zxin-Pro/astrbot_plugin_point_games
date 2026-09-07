@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.8
+作者：Zxin_Pro    版本：4.22.9
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -138,7 +138,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.8 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.9 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.8",
+    version="4.22.9",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -632,6 +632,23 @@ class PointGamesPlugin(Star):
     POND_RARE_BONUS = {1: 0, 2: 0, 3: 5, 4: 10, 5: 20}             # 稀有鱼概率加成 %
     POND_EXTRA_HOURS = {1: 0, 2: 0, 3: 0, 4: 0, 5: 24}            # 额外挂机小时
     POND_BASE_HOURS = 48          # 基础挂机上限小时
+    # 钓鱼每日任务
+    FISH_TASK_TYPES = ["count", "specific", "value", "combo", "collection"]
+    FISH_TASK_REQUIREMENTS = {
+        "count": [5, 10, 15, 20],
+        "specific": [1],
+        "value": [100, 200, 500],
+        "combo": [5, 8, 10, 15],
+        "collection": [3, 5, 8, 10],
+    }
+    FISH_TASK_REWARD_RANGES = {
+        "count": (20, 50),
+        "specific": (50, 80),
+        "value": (50, 80),
+        "combo": (30, 60),
+        "collection": (30, 60),
+    }
+    FISH_TASK_BONUS = 50          # 全部完成额外奖励
     # 赞助系统
     SPONSOR_RATE = 100              # 1元=100积分（仅展示）
     SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
@@ -687,6 +704,8 @@ class PointGamesPlugin(Star):
         "挂机钓鱼": ("enable_fishing", "钓鱼系统"),
         "鱼塘": ("enable_fishing", "钓鱼系统"),
         "升级鱼塘": ("enable_fishing", "钓鱼系统"),
+        "钓鱼任务": ("enable_fishing", "钓鱼系统"),
+        "领取任务奖励": ("enable_fishing", "钓鱼系统"),
         "收鱼": ("enable_fishing", "钓鱼系统"),
         "卖鱼": ("enable_fishing", "钓鱼系统"),
         "鱼图鉴": ("enable_fishing", "钓鱼系统"),
@@ -893,6 +912,20 @@ class PointGamesPlugin(Star):
             catch_time TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_fishing_pending_user ON fishing_pending(user_id)",
+        # 钓鱼每日任务
+        """CREATE TABLE IF NOT EXISTS fishing_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            task_date TEXT,
+            task_type TEXT,
+            task_target TEXT,
+            task_requirement INTEGER,
+            task_progress INTEGER DEFAULT 0,
+            task_reward INTEGER,
+            task_status TEXT DEFAULT 'pending',
+            bonus_claimed INTEGER DEFAULT 0
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_fishing_tasks_user_date ON fishing_tasks(user_id, task_date)",
         # 图鉴收集（钓到过即记录，卖鱼不影响图鉴进度）
         """CREATE TABLE IF NOT EXISTS fishing_collection (
             user_id TEXT NOT NULL,
@@ -913,7 +946,8 @@ class PointGamesPlugin(Star):
             best_fish_name TEXT,
             best_fish_value INTEGER DEFAULT 0,
             collection_count INTEGER DEFAULT 0,
-            pond_level INTEGER DEFAULT 1
+            pond_level INTEGER DEFAULT 1,
+            today_success INTEGER DEFAULT 0
         )""",
         """CREATE TABLE IF NOT EXISTS transfer_records (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1593,6 +1627,8 @@ class PointGamesPlugin(Star):
                         await session.execute(text(f"ALTER TABLE fishing_stats ADD COLUMN {column} {definition}"))
                 if "pond_level" not in fishing_columns:
                     await session.execute(text("ALTER TABLE fishing_stats ADD COLUMN pond_level INTEGER DEFAULT 1"))
+                if "today_success" not in fishing_columns:
+                    await session.execute(text("ALTER TABLE fishing_stats ADD COLUMN today_success INTEGER DEFAULT 0"))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -7592,6 +7628,8 @@ class PointGamesPlugin(Star):
                         await session.execute(text(
                             "UPDATE fishing_stats SET total_caught=total_caught+1 WHERE user_id=:u"
                         ), {"u": uid})
+                        # 更新每日钓鱼任务
+                        await self._fishing_task_tick(session, uid, 1, name, price)
                         # 全群广播：传说级及以上（售价 > 1000 也触发）
                         if rarity in self.FISHING_BROADCAST_RARITIES or price > self.FISHING_BROADCAST_PRICE:
                             chain = [At(qq=str(uid))]
@@ -7611,6 +7649,7 @@ class PointGamesPlugin(Star):
                     elif fish_names:
                         prefix = "一次钓上两条！" if caught == 2 and fish_names else ""
                         notify(f"{prefix}有鱼上钩啦，{('、'.join(fish_names))} 进了鱼篓！")
+                        await self._fishing_task_streak(session, uid, broke=False)
                 elif event == "神秘宝箱":
                     amount = random.randint(self.FISHING_BOX_MIN, self.FISHING_BOX_MAX)
                     await self._add_points(session, uid, amount, "钓鱼宝箱")
@@ -7762,6 +7801,7 @@ class PointGamesPlugin(Star):
                 # 空钩：普通事件也播报一下
                 elif event == "空钩":
                     notify("守了半天，只有鱼饵被啃了，啥也没钓到…")
+                    await self._fishing_task_streak(session, uid, broke=True)
                 elif event in ("水草缠竿", "暗流漩涡", "锚被卡住"):
                     skip_desc = {
                         "水草缠竿": "水草缠住鱼竿，折腾半天才解开，本次判定跳过…",
@@ -8243,6 +8283,184 @@ class PointGamesPlugin(Star):
                 f"花费 {cost} 积分，当前积分：{new_bal} 喵~"
             ), None
 
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 钓鱼每日任务 ====================
+    async def _ensure_daily_fishing_tasks(self, session, user_id: str):
+        """为今日生成每日任务（已有今日任务则跳过）"""
+        today = date.today().isoformat()
+        exist = (await session.execute(text(
+            "SELECT 1 FROM fishing_tasks WHERE user_id=:u AND task_date=:d LIMIT 1"
+        ), {"u": user_id, "d": today})).first()
+        if exist:
+            return
+        types = random.sample(self.FISH_TASK_TYPES, 3)
+        for t in types:
+            req_opts = self.FISH_TASK_REQUIREMENTS[t]
+            req = random.choice(req_opts)
+            lo, hi = self.FISH_TASK_REWARD_RANGES[t]
+            reward = random.randint(lo, hi)
+            target = str(req)
+            if t == "specific":
+                target = random.choice(list(FISH_POOL.keys())[:196])
+            elif t == "value":
+                target = str(random.choice(self.FISH_TASK_REQUIREMENTS["value"]))
+            req = int(target) if str(target).isdigit() else 1
+            await session.execute(text(
+                "INSERT INTO fishing_tasks(user_id, task_date, task_type, task_target, "
+                "task_requirement, task_reward) VALUES(:u,:d,:ty,:tg,:rq,:rw)"
+            ), {"u": user_id, "d": today, "ty": t, "tg": target,
+                "rq": req, "rw": reward})
+
+    async def _fishing_task_tick(self, session, user_id: str,
+                                 n_fish: int = 0, name: str = "", value: int = 0):
+        await self._ensure_daily_fishing_tasks(session, user_id)
+        today = date.today().isoformat()
+        tasks = (await session.execute(text(
+            "SELECT id, task_type, task_target, task_requirement, task_progress, task_reward "
+            "FROM fishing_tasks WHERE user_id=:u AND task_date=:d AND task_status='pending'"
+        ), {"u": user_id, "d": today})).all()
+        if not tasks:
+            return
+        for t in tasks:
+            tid, ty, tg, req, prog, reward = t
+            req = int(req); prog = int(prog or 0)
+            if ty == "collection":
+                cnt = (await session.execute(text(
+                    "SELECT COUNT(DISTINCT fish_name) FROM fishing_collection WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                distinct = int(cnt[0] or 0) if cnt else 0
+                np = max(prog, min(distinct, req))
+                await session.execute(text(
+                    "UPDATE fishing_tasks SET task_progress=:p WHERE id=:i"),
+                    {"p": np, "i": tid})
+                complete = distinct >= req
+            elif ty == "count":
+                np = min(prog + n_fish, req)
+                await session.execute(text(
+                    "UPDATE fishing_tasks SET task_progress=:p WHERE id=:i"),
+                    {"p": np, "i": tid})
+                complete = np >= req
+            elif ty == "specific":
+                complete = name and name == tg and prog < 1
+                if complete:
+                    await session.execute(text(
+                        "UPDATE fishing_tasks SET task_progress=1 WHERE id=:i"), {"i": tid})
+            elif ty == "value":
+                complete = prog < 1 and value >= int(tg)
+                if complete:
+                    await session.execute(text(
+                        "UPDATE fishing_tasks SET task_progress=1 WHERE id=:i"), {"i": tid})
+            else:  # combo
+                complete = False
+            if complete:
+                await session.execute(text(
+                    "UPDATE fishing_tasks SET task_status='completed' WHERE id=:i"), {"i": tid})
+                await self._add_points(session, user_id, int(reward), "fishing_task")
+
+    async def _fishing_task_streak(self, session, user_id: str, broke: bool):
+        """维护今日连续成功数并推进 combo 任务"""
+        today = date.today().isoformat()
+        row = (await session.execute(text(
+            "SELECT today_success FROM fishing_stats WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        val = 0 if broke else (int(row[0] or 0) + (0 if broke else 1))
+        if not broke:
+            await session.execute(text(
+                "UPDATE fishing_stats SET today_success=:s WHERE user_id=:u"),
+                {"s": val, "u": user_id})
+        await self._ensure_daily_fishing_tasks(session, user_id)
+        tasks = (await session.execute(text(
+            "SELECT id, task_type, task_target, task_requirement, task_progress "
+            "FROM fishing_tasks WHERE user_id=:u AND task_date=:d "
+            "AND task_type='combo' AND task_status='pending'"),
+            {"u": user_id, "d": today})).all()
+        for t in tasks:
+            tid, ty, tg, req, prog = t
+            req = int(req); nv = max(int(prog or 0), min(val, req))
+            await session.execute(text(
+                "UPDATE fishing_tasks SET task_progress=:p WHERE id=:i"),
+                {"p": nv, "i": tid})
+            if nv >= req:
+                rw = (await session.execute(text(
+                    "SELECT task_reward FROM fishing_tasks WHERE id=:i"), {"i": tid})).first()
+                await session.execute(text(
+                    "UPDATE fishing_tasks SET task_status='completed' WHERE id=:i"), {"i": tid})
+                if rw and int(rw[0] or 0) > 0:
+                    await self._add_points(session, user_id, int(rw[0]), "fishing_task")
+
+    @filter.command("钓鱼任务")
+    async def fishing_task_view(self, event: AstrMessageEvent):
+        """/钓鱼任务 —— 查看今日钓鱼任务"""
+        user_id = event.get_sender_id()
+        today = date.today().isoformat()
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            await self._ensure_daily_fishing_tasks(session, user_id)
+            tasks = (await session.execute(text(
+                "SELECT task_type, task_target, task_requirement, task_progress, "
+                "task_reward, task_status FROM fishing_tasks "
+                "WHERE user_id=:u AND task_date=:d ORDER BY id"),
+                {"u": user_id, "d": today})).all()
+            lines = ["📋 【今日钓鱼任务】"]
+            done = 0
+            for ty, tg, req, prog, rwd, st in tasks:
+                req = int(req); p = int(prog or 0)
+                if ty == "count":
+                    disp = f"钓到{tg}条鱼"
+                elif ty == "specific":
+                    disp = f"钓到 1 条「{tg}」"
+                elif ty == "value":
+                    disp = f"钓到价值>{tg}的鱼"
+                elif ty == "combo":
+                    disp = f"连续上钩{req}次（不空钩）"
+                else:
+                    disp = f"钓到{req}种不同鱼"
+                done += 1 if st == "completed" else 0
+                mark = " ✅ 已领取" if st == "completed" else ""
+                lines.append(f"• {disp}（{min(p,req)}/{req}）→ {rwd}积分{mark}")
+            lines.append("─────────────")
+            lines.append(f"完成进度：{done}/{len(tasks)}")
+            if done < len(tasks):
+                lines.append(f"还差 {len(tasks)-done} 个任务")
+            else:
+                bonus = (await session.execute(text(
+                    "SELECT bonus_claimed FROM fishing_tasks WHERE user_id=:u "
+                    "AND task_date=:d LIMIT 1"), {"u": user_id, "d": today})).first()
+                if bonus and int(bonus[0] or 0):
+                    lines.append(f"✅ 全部完成！额外奖励 {self.FISH_TASK_BONUS} 积分已领取！")
+                else:
+                    lines.append(f"🎉 全部完成！发 /领取任务奖励 领额外 {self.FISH_TASK_BONUS} 积分！")
+            return True, "\n".join(lines), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("领取任务奖励")
+    async def fishing_task_claim(self, event: AstrMessageEvent):
+        """/领取任务奖励 —— 全部完成时发额外奖励"""
+        user_id = event.get_sender_id()
+        today = date.today().isoformat()
+        async def fn(session):
+            await self._fishing_ensure_stats(session, user_id)
+            await self._ensure_daily_fishing_tasks(session, user_id)
+            pend = (await session.execute(text(
+                "SELECT COUNT(*) FROM fishing_tasks WHERE user_id=:u AND task_date=:d "
+                "AND task_status='pending'"), {"u": user_id, "d": today})).first()
+            if pend and int(pend[0] or 0) > 0:
+                raise _BizError(f"还有 {int(pend[0])} 个任务未完成，完成后再来喵~")
+            b = (await session.execute(text(
+                "SELECT bonus_claimed FROM fishing_tasks WHERE user_id=:u "
+                "AND task_date=:d LIMIT 1"), {"u": user_id, "d": today})).first()
+            if b and int(b[0] or 0):
+                raise _BizError("今日额外奖励已领取喵~")
+            await session.execute(text(
+                "UPDATE fishing_tasks SET bonus_claimed=1 WHERE user_id=:u AND task_date=:d"),
+                {"u": user_id, "d": today})
+            await self._add_points(session, user_id, self.FISH_TASK_BONUS, "fishing_task_bonus")
+            new_bal = await self._balance(session, user_id)
+            return True, (f"🎉 全部完成！额外奖励 {self.FISH_TASK_BONUS} 积分已到账！\n"
+                          f"当前积分：{new_bal} 喵~"), None
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
