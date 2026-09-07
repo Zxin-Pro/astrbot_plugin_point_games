@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.12
+作者：Zxin_Pro    版本：4.22.13
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.12 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.13 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.12",
+    version="4.22.13",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -690,6 +690,7 @@ class PointGamesPlugin(Star):
         "enable_guess_number": True,
         "enable_card_draw": True,
         "enable_user_red_packet": True,
+        "enable_fish_shop": False,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -8516,6 +8517,8 @@ class PointGamesPlugin(Star):
     # ==================== 钓鱼商店 ====================
     async def _get_shop_items(self, session, user_id: str) -> dict:
         """读取玩家已购道具（items 内每个值 0=未购/购买数）"""
+        if not self.feature_flags.get("enable_fish_shop", False):
+            return {}
         row = (await session.execute(text(
             "SELECT items FROM fishing_shop WHERE user_id=:u"), {"u": user_id})).first()
         if not row:
@@ -8536,6 +8539,10 @@ class PointGamesPlugin(Star):
     @filter.command("钓鱼商店")
     async def fishing_shop_view(self, event: AstrMessageEvent):
         """/钓鱼商店 —— 查看可用钓鱼道具"""
+        if not self.feature_flags.get("enable_fish_shop", False):
+            yield event.plain_result("🎏 渔具商店暂时关闭，敬请期待喵~")
+            return
+
         user_id = event.get_sender_id()
         async def fn(session):
             items = await self._get_shop_items(session, user_id)
@@ -8552,6 +8559,9 @@ class PointGamesPlugin(Star):
     @filter.command("购买渔具", alias={"购买鱼具", "购买道具"})
     async def fishing_shop_buy(self, event: AstrMessageEvent):
         """/购买渔具 [编号] —— 购买钓鱼商店道具"""
+        if not self.feature_flags.get("enable_fish_shop", False):
+            yield event.plain_result("🎏 渔具商店暂时关闭，敬请期待喵~")
+            return
         user_id = event.get_sender_id()
         text = self._strip_command(event, "购买渔具").strip()
         if not text:

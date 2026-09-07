@@ -18,6 +18,7 @@
   "enable_card_draw": {"description": "【📁 功能开关】启用十连抽卡", "type": "bool", "default": true},
   "card_draw_daily_limit": {"description": "【📁 十连抽卡】每日次数限制", "type": "int", "default": 10, "hint": "每个玩家每天最多抽十连的次数，0=不限制"},
   "enable_fishing": {"description": "【📁 功能开关】启用钓鱼系统", "type": "bool", "default": true},
+  "enable_fish_shop": {"description": "【📁 钓鱼商店】启用渔具商店（含已购道具的增益生效）", "type": "bool", "default": false, "hint": "关闭=-1 商店功能与所有已购道具增益一并失效"},
   "enable_sign_in": {"description": "【📁 功能开关】启用每日签到", "type": "bool", "default": true},
   "enable_ranking": {"description": "【📁 功能开关】启用积分查询和排行榜", "type": "bool", "default": true},
   "enable_activity": {"description": "【📁 功能开关】启用群活跃奖励（每日22:00结算发言前三名）", "type": "bool", "default": true},
