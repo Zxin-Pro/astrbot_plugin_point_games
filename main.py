@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.10
+作者：Zxin_Pro    版本：4.22.11
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -307,7 +307,7 @@ for _rarity, (_total_prob, _fishes) in FISH_TABLE.items():
 del _rarity, _total_prob, _fishes, _per_prob, _name, _price
 
 # 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和 100
-# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.10 扩容 49 事件）
+# 钓鱼随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100（v4.22.11 扩容 49 事件）
 # 鱼群效应：每根挂机竿 +7% 概率额外 +1 积分（代码内实现，鼓励多竿挂机）
 FISHING_EVENTS: list[tuple[str, float]] = [
     ("正常上钩", 52.35),   # 钓到 1 条鱼（概率经精确求解：单竿小亏、满挂微赚）
@@ -461,7 +461,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.10",
+    version="4.22.11",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -657,6 +657,10 @@ class PointGamesPlugin(Star):
         ("advanced", "高级鱼竿", 2000, "保底多捕1条（敬请期待）", "🎣"),
         ("vip", "钓鱼VIP", 3000, "所有钓鱼收益+10%（已生效）", "💎"),
     ]
+    # 钓鱼组队
+    TEAM_MAX_SIZE = 4
+    TEAM_BONUS = {1: 0.0, 2: 0.05, 3: 0.10, 4: 0.15}
+    CAPTAIN_BONUS = 0.05
     # 赞助系统
     SPONSOR_RATE = 100              # 1元=100积分（仅展示）
     SPONSOR_ADMIN_QQ_LIST = []      # 管理员QQ列表（配置页填写）
@@ -940,6 +944,15 @@ class PointGamesPlugin(Star):
             items TEXT DEFAULT '{}',
             updated_at TIMESTAMP
         )""",
+        """CREATE TABLE IF NOT EXISTS fishing_teams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            captain_id TEXT,
+            members TEXT,
+            current_size INTEGER DEFAULT 1,
+            group_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_ft_members ON fishing_teams(group_id, current_size)",
         # 图鉴收集（钓到过即记录，卖鱼不影响图鉴进度）
         """CREATE TABLE IF NOT EXISTS fishing_collection (
             user_id TEXT NOT NULL,
@@ -8160,11 +8173,15 @@ class PointGamesPlugin(Star):
                 eff_total = total * 2
                 shop["double"] = double_n - 1
                 await self._save_shop_items(session, user_id, shop)
+            # 组队收益加成
+            team_mult = await self._team_bonus_mult(session, user_id)
+            if team_mult > 1.0:
+                eff_total = int(eff_total * team_mult)
             await self._add_points(session, user_id, eff_total, "sell_fish", earned=eff_total)
             await session.execute(text(
                 "UPDATE fishing_stats SET total_income=total_income+:t, "
                 "total_fish_count=total_fish_count+:c WHERE user_id=:u"
-            ), {"u": user_id, "t": total, "c": fish_cnt})
+            ), {"u": user_id, "t": eff_total, "c": fish_cnt})
             # 兼容旧数据：从本次售出的鱼中维护最高价值鱼
             best_name, best_value = max(
                 ((str(name), int(FISH_POOL.get(str(name), (0,))[0])) for name, _ in rows),
@@ -8563,6 +8580,139 @@ class PointGamesPlugin(Star):
                 f"{icon} 购买成功！获得 {name}\n{desc}\n"
                 f"剩余积分：{new_bal} 喵~"
             ), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 钓鱼组队 ====================
+    async def _team_for(self, session, user_id: str):
+        """返回 用户所在队伍 row 或 None"""
+        return (await session.execute(text(
+            "SELECT id, captain_id, members, current_size, group_id FROM fishing_teams "
+            "WHERE members LIKE :like ESCAPE '\\' LIMIT 1"
+        ), {"like": f'%"{user_id}"%'})).first()
+
+    async def _team_bonus_mult(self, session, user_id: str) -> float:
+        """用户钓鱼收益加成倍率（队伍加成），默认 1.0"""
+        row = await self._team_for(session, user_id)
+        if not row:
+            return 1.0
+        _id, captain, members_json, size, _g = row
+        base = self.TEAM_BONUS.get(int(size or 1), 0.0)
+        if str(user_id) == str(captain):
+            base += self.CAPTAIN_BONUS
+        return 1.0 + base
+
+    @filter.command("创建队伍")
+    async def team_create(self, event: AstrMessageEvent):
+        """/创建队伍 —— 组成钓鱼小队（2-4人共享收益）"""
+        user_id = str(event.get_sender_id() or "").strip()
+        group_id = str(event.get_group_id() or "").strip() or "PM"
+        async def fn(session):
+            if await self._team_for(session, user_id):
+                raise _BizError("你已在队伍中喵~")
+            await session.execute(text(
+                "INSERT INTO fishing_teams(captain_id, members, current_size, group_id) "
+                "VALUES(:c,:m,1,:g)"), {
+                "c": user_id, "m": json.dumps([user_id]), "g": group_id})
+            return True, ("🏠 队伍创建成功！\n当前队伍：1/4人\n"
+                          "收益加成：0%（需2人以上）\n队友发送 /加入队伍 加入"), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("加入队伍")
+    async def team_join(self, event: AstrMessageEvent):
+        """/加入队伍 —— 加入本群已有钓鱼小队"""
+        user_id = str(event.get_sender_id() or "").strip()
+        group_id = str(event.get_group_id() or "").strip() or "PM"
+        async def fn(session):
+            if await self._team_for(session, user_id):
+                raise _BizError("你已在队伍中喵~")
+            row = (await session.execute(text(
+                "SELECT id, captain_id, current_size FROM fishing_teams "
+                "WHERE group_id=:g AND current_size < :m ORDER BY id LIMIT 1"
+            ), {"g": group_id, "m": self.TEAM_MAX_SIZE})).first()
+            if not row:
+                raise _BizError("本群没有可加入的队伍，先 /创建队伍 喵~")
+            tid, captain, size = int(row[0]), row[1], int(row[2] or 1)
+            cur = (await session.execute(text(
+                "SELECT members FROM fishing_teams WHERE id=:i"), {"i": tid})).first()
+            members = json.loads(cur[0] or "[]")
+            if user_id in members:
+                raise _BizError("你已在队伍中喵~")
+            members.append(user_id)
+            await session.execute(text(
+                "UPDATE fishing_teams SET members=:m, current_size=:s WHERE id=:i"),
+                {"m": json.dumps(members), "s": size + 1, "i": tid})
+            full = (size + 1) >= self.TEAM_MAX_SIZE
+            base = int(self.TEAM_BONUS.get(size + 1, 0) * 100)
+            cap = base + int(self.CAPTAIN_BONUS * 100)
+            tail = "（已满员）" if full else ""
+            return True, (f"✅ {user_id} 加入队伍！当前：{size+1}/4人{tail}\n"
+                          f"收益加成：成员+{base}%，队长+{cap}%"), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("队伍状态")
+    async def team_status(self, event: AstrMessageEvent):
+        """/队伍状态 —— 查看小队成员与加成"""
+        user_id = str(event.get_sender_id() or "").strip()
+        async def fn(session):
+            row = await self._team_for(session, user_id)
+            if not row:
+                raise _BizError("你不在任何队伍中喵~")
+            tid, captain, members_json, size, g = row
+            members = json.loads(members_json or "[]")
+            full = int(size) >= self.TEAM_MAX_SIZE
+            base = int(self.TEAM_BONUS.get(int(size), 0) * 100)
+            cap = base + int(self.CAPTAIN_BONUS * 100)
+            ct = "（队长）" if str(user_id) == str(captain) else ""
+            txt = [f"🏠 【队伍状态】队长：{captain}",
+                   f"成员：{'、'.join(members)}（{size}/4人）",
+                   f"收益加成：队长+{cap}%，其余+{base}%",
+                   f"状态：✅ 已满员" if full else f"状态：欢迎加入（{self.TEAM_MAX_SIZE-int(size)}个空位）{ct}"]
+            return True, "\n".join(txt), None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("退出队伍")
+    async def team_leave(self, event: AstrMessageEvent):
+        """/退出队伍 —— 主动离开小队（队长退出即解散）"""
+        user_id = str(event.get_sender_id() or "").strip()
+        async def fn(session):
+            row = await self._team_for(session, user_id)
+            if not row:
+                raise _BizError("你不在任何队伍中喵~")
+            tid, captain, members_json, size, g = row
+            members = json.loads(members_json or "[]")
+            if str(user_id) == str(captain):
+                await session.execute(text("DELETE FROM fishing_teams WHERE id=:i"),
+                                       {"i": int(tid)})
+                return True, "🏠 队伍已解散（队长离开）", None
+            members.remove(user_id)
+            n = int(size) - 1
+            if n <= 0:
+                await session.execute(text("DELETE FROM fishing_teams WHERE id=:i"),
+                                       {"i": int(tid)})
+                return True, "🏠 队伍已解散", None
+            await session.execute(text(
+                "UPDATE fishing_teams SET members=:m,current_size=:s WHERE id=:i"),
+                {"m": json.dumps(members), "s": n, "i": int(tid)})
+            return True, f"✅ 已退出队伍，剩余 {n} 人", None
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("解散队伍")
+    async def team_disband(self, event: AstrMessageEvent):
+        """/解散队伍 —— 队长解散"""
+        user_id = str(event.get_sender_id() or "").strip()
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT id FROM fishing_teams WHERE captain_id=:c"), {"c": user_id})).first()
+            if not row:
+                raise _BizError("你不是队长或无队伍喵~")
+            await session.execute(text("DELETE FROM fishing_teams WHERE id=:i"),
+                                   {"i": int(row[0])})
+            return True, "🏠 队伍已解散", None
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
