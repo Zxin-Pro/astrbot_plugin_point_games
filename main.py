@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.19
+作者：Zxin_Pro    版本：4.22.23
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -629,7 +629,7 @@ class PointGamesPlugin(Star):
     POND_MAX_LEVEL = 5                                    # 鱼塘最高等级
     POND_UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}   # 每级升级费用(升到level的花费)
     POND_BAIT_REDUCTION = {1: 0, 2: 10, 3: 20, 4: 30, 5: 50}       # 鱼饵消耗减少 %
-    POND_RARE_BONUS = {1: 0, 2: 0, 3: 5, 4: 10, 5: 20}             # 稀有鱼概率加成 %
+    POND_RARE_BONUS = {1: 0, 2: 12, 3: 25, 4: 38, 5: 55}           # 普通鱼升级为稀有鱼的转化率 %
     POND_EXTRA_HOURS = {1: 0, 2: 0, 3: 0, 4: 0, 5: 24}            # 额外挂机小时
     POND_BASE_HOURS = 48          # 基础挂机上限小时
     # 钓鱼每日任务
@@ -7456,18 +7456,18 @@ class PointGamesPlugin(Star):
     def _fishing_pick_fish(self):
         """按概率加权随机抽一条鱼，返回 (鱼名, 售价, 稀有度, 单条概率%)。
 
-        鱼类配置概率合计约 70.73%，剩余部分视为钓上杂物（返回 None，一无所得）。
-        若本次判定来自高等级鱼塘（鱼塘加成生效），有几率把抽到的普通鱼升级为传说级。
+        剩余概率视为钓上杂物（返回 None，一无所得）。
+        鱼塘加成：普通鱼按转化率整体升级为稀有鱼（真实生效，非小概率替换）。
         """
         roll = random.uniform(0, 100)
         cumulative = 0.0
+        bonus = int(getattr(self, "_pond_rare_bonus", 0) or 0)  # 鱼塘稀有转化率 %
         for name, (price, rarity, prob) in FISH_POOL.items():
             cumulative += prob
             if roll <= cumulative:
-                # 鱼塘稀有加成：对低价值渔获按等级概率替换为高稀有
-                bonus = int(getattr(self, "_pond_rare_bonus", 0) or 0)
-                if bonus > 0 and price < 100 and random.random() < (bonus / 200.0):
-                    return self._fishing_pick_fish_tier("传说")
+                # 鱼塘稀有加成：普通鱼按转化率升级为稀有档
+                if rarity == "普通" and bonus > 0 and random.random() < (bonus / 100.0):
+                    return self._fishing_pick_fish_tier("稀有")
                 return name, price, rarity, prob
         return None  # 杂物：水面漂过一片水草，一无所得
 
@@ -8297,7 +8297,7 @@ class PointGamesPlugin(Star):
                 "🏊 【鱼塘状态】",
                 f"等级：{level}级",
                 f"鱼饵消耗：-{bait_red}%",
-                f"稀有鱼概率：+{rare_bonus}%",
+                f"稀有鱼转化：普通鱼有 {rare_bonus}% 概率升级为稀有鱼",
                 f"挂机时间上限：{max_hours}小时",
             ]
             if level < self.POND_MAX_LEVEL:
