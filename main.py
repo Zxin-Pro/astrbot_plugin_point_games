@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.23
+作者：Zxin_Pro    版本：4.22.24
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -7454,22 +7454,28 @@ class PointGamesPlugin(Star):
         return "空钩"
 
     def _fishing_pick_fish(self):
-        """按概率加权随机抽一条鱼，返回 (鱼名, 售价, 稀有度, 单条概率%)。
-
-        剩余概率视为钓上杂物（返回 None，一无所得）。
-        鱼塘加成：普通鱼按转化率整体升级为稀有鱼（真实生效，非小概率替换）。
-        """
+        """按概率加权随机抽一条鱼，返回 (鱼名, 售价, 稀有度, 单条概率%)。"""
         roll = random.uniform(0, 100)
         cumulative = 0.0
-        bonus = int(getattr(self, "_pond_rare_bonus", 0) or 0)  # 鱼塘稀有转化率 %
         for name, (price, rarity, prob) in FISH_POOL.items():
             cumulative += prob
             if roll <= cumulative:
-                # 鱼塘稀有加成：普通鱼按转化率升级为稀有档
-                if rarity == "普通" and bonus > 0 and random.random() < (bonus / 100.0):
-                    return self._fishing_pick_fish_tier("稀有")
                 return name, price, rarity, prob
         return None  # 杂物：水面漂过一片水草，一无所得
+
+    def _fishing_apply_pond_upgrade(self, picked):
+        """在每条渔获判定时应用鱼塘加成，返回 (渔获, 是否由鱼塘升级)。
+
+        放在 _fishing_check 的逐条渔获路径调用，普通上钩和鱼汛普通保底都会生效，
+        同时让播报能明确展示「鱼塘加成升级」。
+        """
+        if picked is None:
+            return None, False
+        name, price, rarity, prob = picked
+        bonus = int(getattr(self, "_pond_rare_bonus", 0) or 0)
+        if rarity == "普通" and bonus > 0 and random.random() < (bonus / 100.0):
+            return self._fishing_pick_fish_tier("稀有"), True
+        return picked, False
 
     def _fishing_pick_fish_tier(self, tier: str):
         """从指定稀有度档位随机抽一条鱼（保底必出，不含杂物）"""
@@ -7667,12 +7673,15 @@ class PointGamesPlugin(Star):
                     fish_names: list[str] = []
                     junk = 0
                     for _ in range(caught):
-                        picked = self._fishing_pick_fish_tier(force_tier) if force_tier else self._fishing_pick_fish()
+                        raw_picked = self._fishing_pick_fish_tier(force_tier) if force_tier else self._fishing_pick_fish()
+                        # 鱼塘转化明确在每条渔获的判定路径执行，方便播报和排查
+                        picked, pond_upgraded = self._fishing_apply_pond_upgrade(raw_picked)
                         if picked is None:
                             junk += 1
                             continue  # 杂物
                         name, price, rarity, prob = picked
-                        fish_names.append(f"{name}（{price}积分）")
+                        upgrade_tag = "·鱼塘加成↑" if pond_upgraded else ""
+                        fish_names.append(f"{name}（{price}积分{upgrade_tag}）")
                         await session.execute(text(
                             "INSERT INTO fishing_pending(user_id, fish_name, catch_time) "
                             "VALUES(:u, :n, :t)"
