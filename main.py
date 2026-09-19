@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.29
+作者：Zxin_Pro    版本：4.22.30
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -463,7 +463,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.29",
+    version="4.22.30",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -4136,8 +4136,8 @@ class PointGamesPlugin(Star):
         platform_id = event.get_platform_id()
         group_key = f"{platform_id}_{group_id}"
         
-        text = self._strip_command(event, "发红包").strip()
-        parts = text.split()
+        args_text = self._strip_command(event, "发红包").strip()
+        parts = args_text.split()
         
         if len(parts) < 2:
             yield event.plain_result("❌ 格式：/发红包 [总积分] [份数]\n示例：/发红包 200 5")
