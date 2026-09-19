@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.25
+作者：Zxin_Pro    版本：4.22.26
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -463,7 +463,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.25",
+    version="4.22.26",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -652,15 +652,44 @@ class PointGamesPlugin(Star):
         "collection": (30, 60),
     }
     FISH_TASK_BONUS = 50          # 全部完成额外奖励
+    # 钓鱼商店：(key, 名称, 价格, 描述, 图标, 时效小时)；时效 0=永久（v4.22.26 全部重做为限时增益）
     SHOP_ITEMS = [
-        ("auto", "自动收鱼器", 500, "每小时自动收鱼（敬请期待）", "⚙️"),
-        ("discount", "鱼饵折扣卡", 300, "鱼饵价格永久-20%（已生效）", "🏷️"),
-        ("charm", "幸运护身符", 800, "稀有鱼概率永久+5%（已生效）", "🍀"),
-        ("double", "双倍卡", 200, "下次出售收益×2（已生效）", "✖️2"),
-        ("advanced", "高级鱼竿", 2000, "保底多捕1条（敬请期待）", "🎣"),
-        ("vip", "钓鱼VIP", 3000, "所有钓鱼收益+10%（已生效）", "💎"),
-        ("onekey", "一键钓鱼通行证", 20000, "永久解锁 /一键钓鱼：收鱼→卖鱼→修竿→挂机一步到位（已生效）", "⚡"),
+        ("auto", "自动收鱼器", 500, "24小时内挂机渔获自动收进鱼篓（免 /收鱼）", "⚙️", 24),
+        ("discount", "鱼饵折扣卡", 300, "24小时内每次判定有几率免耗鱼饵（省饵20%）", "🏷️", 24),
+        ("charm", "幸运护身符", 800, "24小时内稀有鱼概率+5%", "🍀", 24),
+        ("double", "双倍卡", 200, "24小时内卖鱼收益×2（可与VIP叠加）", "✖️2", 24),
+        ("advanced", "高级鱼竿", 2000, "24小时内每次上钩额外多捕1条", "🎣", 24),
+        ("vip", "钓鱼VIP", 3000, "7天内所有卖鱼收益+10%", "💎", 168),
+        ("onekey", "一键钓鱼通行证", 20000, "永久解锁 /一键钓鱼：收鱼→卖鱼→修竿→挂机一步到位（已生效）", "⚡", 0),
     ]
+
+    @staticmethod
+    def _shop_active(items: dict, key: str) -> bool:
+        """时效道具是否生效中（items 值=到期时间戳；旧版数量小整数一律视为失效）"""
+        try:
+            v = float(items.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return False
+        return v > time.time()
+
+    @staticmethod
+    def _shop_remaining_text(items: dict, key: str) -> str:
+        """道具剩余有效期的可读文本，未生效返回空串"""
+        try:
+            remain = float(items.get(key, 0) or 0) - time.time()
+        except (TypeError, ValueError):
+            return ""
+        if remain <= 0:
+            return ""
+        h = int(remain // 3600)
+        m = int((remain % 3600) // 60)
+        return f"{h}小时{m}分" if h else f"{m}分钟"
+
+    @staticmethod
+    def _shop_hours_text(hours: int) -> str:
+        if hours >= 24 and hours % 24 == 0:
+            return f"{hours // 24}天"
+        return f"{hours}小时"
     # 钓鱼组队
     TEAM_MAX_SIZE = 4
     TEAM_BONUS = {1: 0.0, 2: 0.05, 3: 0.10, 4: 0.15}
@@ -7625,11 +7654,10 @@ class PointGamesPlugin(Star):
                 ), {"u": uid})).first()
                 pond_level = int(pond_row[0] or 1) if pond_row else 1
                 pond_rare_bonus = self.POND_RARE_BONUS.get(pond_level, 0)
-                # 商店加成：幸运符累加稀有、高级竿本判定提前计入(见渔获)，双倍在卖鱼生效
+                # 商店加成：幸运符生效中+5稀有；高级竿生效中本判定多捕1条(见渔获)；双倍/VIP在卖鱼生效
                 fish_shop = await self._get_shop_items(session, uid)
-                charm_n = int(fish_shop.get("charm", 0) or 0)
-                if charm_n > 0:
-                    pond_rare_bonus = pond_rare_bonus + 5 * charm_n  # 供本判定抽鱼
+                if self._shop_active(fish_shop, "charm"):
+                    pond_rare_bonus = pond_rare_bonus + 5  # 幸运护身符生效中
                 self._pond_rare_bonus = pond_rare_bonus   # 供本次判定抽鱼使用
                 self._active_shop = fish_shop              # 供本判定后续阶段读取
                 # 判定前消耗 1 个鱼饵，没鱼饵自动收杆
@@ -7643,10 +7671,10 @@ class PointGamesPlugin(Star):
                 await session.execute(
                     text("UPDATE fishing_baits SET count=count-1 WHERE user_id=:u"), {"u": uid}
                 )
-                # 鱼塘减耗效果：按减耗百分比有几率回补鱼饵（商店折扣卡额外叠加 -20%/张）
+                # 鱼塘减耗效果：按减耗百分比有几率回补鱼饵（折扣卡生效中额外+20%省饵）
                 pond_bait_pct = self.POND_BAIT_REDUCTION.get(pond_level, 0)
-                disc_n = int((self._active_shop or {}).get("discount", 0) or 0)
-                pond_bait_pct = pond_bait_pct + 20 * disc_n
+                if self._shop_active(self._active_shop or {}, "discount"):
+                    pond_bait_pct = pond_bait_pct + 20  # 鱼饵折扣卡生效中
                 if pond_bait_pct > 0 and random.random() < (min(pond_bait_pct, 95) / 100.0):
                     await session.execute(
                         text("UPDATE fishing_baits SET count=count+1 WHERE user_id=:u"),
@@ -7677,6 +7705,8 @@ class PointGamesPlugin(Star):
                 if event in multi_map:
                     # 上钩：鱼先进入 pending，等 /收鱼（指定档位保底必出，普通档可能钓上杂物）
                     caught, force_tier = multi_map[event]
+                    if self._shop_active(self._active_shop or {}, "advanced"):
+                        caught = caught + 1  # 高级鱼竿生效中：额外多捕1条
                     fish_names: list[str] = []
                     junk = 0
                     for _ in range(caught):
@@ -7885,6 +7915,11 @@ class PointGamesPlugin(Star):
                         "钓到水草团": "拉上来一大团水草，一无所得…",
                     }
                     notify(fog_desc[event])
+                # 自动收鱼器生效中：本竿判定结束后把渔获（含本轮新钓的）直接收进鱼篓
+                if self._shop_active(self._active_shop or {}, "auto"):
+                    got = await self._fishing_auto_collect(session, uid)
+                    if got:
+                        notify(f"的自动收鱼器把 {got} 条鱼收进了鱼篓")
             return True, "判定完成", (broadcasts, notices)
 
         ok, msg, data = await self._tx(fn)
@@ -8200,17 +8235,13 @@ class PointGamesPlugin(Star):
                 total += price * cnt
                 fish_cnt += cnt
                 details.append(f"{name}×{cnt}")
-            # 卖鱼收入进账并记录流水（operation='sell_fish'），商店加成在此兑现
+            # 卖鱼收入进账并记录流水（operation='sell_fish'），商店时效加成在此兑现
             shop = await self._get_shop_items(session, user_id)
-            vip_n = int(shop.get("vip", 0) or 0)
-            double_n = int(shop.get("double", 0) or 0)
-            if vip_n > 0:
+            vip_on = self._shop_active(shop, "vip")
+            double_on = self._shop_active(shop, "double")
+            if vip_on:
                 total = int(total * 1.1)
-            eff_total = total
-            if double_n > 0:
-                eff_total = total * 2
-                shop["double"] = double_n - 1
-                await self._save_shop_items(session, user_id, shop)
+            eff_total = total * 2 if double_on else total
             # 组队收益加成
             team_mult = await self._team_bonus_mult(session, user_id)
             if team_mult > 1.0:
@@ -8553,7 +8584,11 @@ class PointGamesPlugin(Star):
 
     # ==================== 钓鱼商店 ====================
     async def _get_shop_items(self, session, user_id: str) -> dict:
-        """读取玩家已购道具（items 内每个值 0=未购/购买数）"""
+        """读取玩家已购道具。
+
+        v4.22.26 起为时效制：非 onekey 的值=到期时间戳；生效判断用 _shop_active。
+        旧版叠加数量制（值为小整数）读取时视为失效并自动清除 —— 旧效果统一作废重算。
+        """
         if not self.feature_flags.get("enable_fish_shop", False):
             return {}
         row = (await session.execute(text(
@@ -8564,9 +8599,25 @@ class PointGamesPlugin(Star):
                 {"u": user_id, "t": time.time()})
             return {}
         try:
-            return json.loads(row[0] or "{}")
+            items = json.loads(row[0] or "{}")
         except Exception:
             return {}
+        if not isinstance(items, dict):
+            return {}
+        cleaned: dict = {}
+        for k, v in items.items():
+            if k == "onekey":
+                cleaned[k] = 1
+                continue
+            try:
+                v = float(v)
+            except (TypeError, ValueError):
+                continue
+            if v > 1e9:  # 只有到期时间戳有效；旧版叠加数量（小整数）全部作废
+                cleaned[k] = v
+        if len(cleaned) != len(items):
+            await self._save_shop_items(session, user_id, cleaned)
+        return cleaned
 
     async def _save_shop_items(self, session, user_id: str, items: dict):
         await session.execute(text(
@@ -8590,11 +8641,15 @@ class PointGamesPlugin(Star):
             if onekey_on and int(onekey_on[0] or 0) > 0:
                 items["onekey"] = 1
             lines = ["🏪 【钓鱼商店】"]
-            for idx, (key, name, price, desc, icon) in enumerate(self.SHOP_ITEMS, 1):
-                cnt = int(items.get(key, 0) or 0)
-                owned = f"｜拥有×{cnt}" if cnt > 0 else ""
+            for idx, (key, name, price, desc, icon, hours) in enumerate(self.SHOP_ITEMS, 1):
+                if key == "onekey":
+                    cnt = int(items.get(key, 0) or 0)
+                    owned = f"｜拥有×{cnt}" if cnt > 0 else "｜永久"
+                else:
+                    remain = self._shop_remaining_text(items, key)
+                    owned = f"｜⏳生效中·剩{remain}" if remain else f"｜时效{self._shop_hours_text(hours)}"
                 lines.append(f"{idx}. {icon} {name} {price}积分 {owned}\n   {desc}")
-            lines.append("发送 /购买鱼具 [编号] 购买（已购道具购买次数/×2卡次数累加）")
+            lines.append("发送 /购买鱼具 [编号] 购买（时效道具生效中不可重复购买，过期后可续购）")
             return True, "\n".join(lines), None
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
@@ -8618,7 +8673,7 @@ class PointGamesPlugin(Star):
         if not (1 <= idx <= len(self.SHOP_ITEMS)):
             yield event.plain_result("没有这个商品喵~")
             return
-        key, name, price, desc, icon = self.SHOP_ITEMS[idx - 1]
+        key, name, price, desc, icon, hours = self.SHOP_ITEMS[idx - 1]
         async def fn(session):
             items = await self._get_shop_items(session, user_id)
             if key == "onekey":
@@ -8626,19 +8681,28 @@ class PointGamesPlugin(Star):
                 await self._fishing_ensure_stats(session, user_id)
                 if await self._fishing_onekey_owned(session, user_id):
                     raise _BizError("你已经有一键钓鱼通行证了喵~ 直接发 /一键钓鱼 使用")
+            elif self._shop_active(items, key):
+                remain = self._shop_remaining_text(items, key)
+                raise _BizError(f"{name}生效中（剩 {remain}），不能重复购买喵~ 过期后再来续购")
             bal = await self._total_balance(session, user_id)
             if bal < price:
                 raise _BizError(f"积分不足！购买需 {price} 积分，当前余额：{bal}")
             await self._add_points(session, user_id, -price, "fish_shop", spent=price)
-            # 道具数量累加（一键钓鱼通行证为永久激活，同步写统计标记）
-            items[key] = int(items.get(key, 0) or 0) + 1
             if key == "onekey":
                 # 注意：本函数局部 text 变量遮蔽了 sqlalchemy.text，必须走辅助方法
                 await self._fishing_set_onekey(session, user_id)
+                items[key] = 1
+            else:
+                # 时效道具：写入到期时间戳，同道具生效期内不可重复购买
+                items[key] = time.time() + hours * 3600
             await self._save_shop_items(session, user_id, items)
             new_bal = await self._balance(session, user_id)
+            if key == "onekey":
+                head = f"{icon} 购买成功！获得 {name}"
+            else:
+                head = f"{icon} 购买成功！{name} 已生效（时效 {self._shop_hours_text(hours)}）"
             return True, (
-                f"{icon} 购买成功！获得 {name}\n{desc}\n"
+                f"{head}\n{desc}\n"
                 f"剩余积分：{new_bal} 喵~"
             ), None
         ok, msg, _ = await self._tx(fn)
@@ -8861,6 +8925,41 @@ class PointGamesPlugin(Star):
         await session.execute(text(
             "UPDATE fishing_stats SET onekey_fishing=1 WHERE user_id=:u"), {"u": user_id})
 
+    async def _fishing_auto_collect(self, session, user_id: str) -> int:
+        """自动收鱼器：把 pending 渔获直接收进鱼篓（含图鉴/称号/统计），返回收取条数"""
+        pending = (await session.execute(text(
+            "SELECT fish_name, COUNT(*) FROM fishing_pending WHERE user_id=:u "
+            "GROUP BY fish_name"
+        ), {"u": user_id})).all()
+        if not pending:
+            return 0
+        total = 0
+        for name, cnt in pending:
+            name = str(name)
+            cnt = int(cnt)
+            total += cnt
+            await session.execute(text(
+                "INSERT INTO fishing_inventory(user_id, fish_name, count) "
+                "VALUES(:u, :n, :c) "
+                "ON CONFLICT(user_id, fish_name) DO UPDATE SET "
+                "count=fishing_inventory.count+:c"
+            ), {"u": user_id, "n": name, "c": cnt})
+            await session.execute(text(
+                "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
+                "VALUES(:u, :n, :t)"
+            ), {"u": user_id, "n": name, "t": time.time()})
+        await session.execute(
+            text("DELETE FROM fishing_pending WHERE user_id=:u"), {"u": user_id}
+        )
+        collected = {str(r[0]) for r in (await session.execute(text(
+            "SELECT fish_name FROM fishing_collection WHERE user_id=:u"
+        ), {"u": user_id})).all()}
+        await self._fishing_grant_titles(session, user_id, collected)
+        await session.execute(text(
+            "UPDATE fishing_stats SET collection_count=:c WHERE user_id=:u"
+        ), {"u": user_id, "c": len(collected)})
+        return total
+
     async def _fishing_onekey_owned(self, session, user_id: str) -> bool:
         """是否已购买一键钓鱼通行证（钓鱼统计标记或商店道具任一即可）"""
         row = (await session.execute(text(
@@ -8988,15 +9087,11 @@ class PointGamesPlugin(Star):
                     total += price * int(cnt or 0)
                     fish_cnt += int(cnt or 0)
                 shop = await self._get_shop_items(session, user_id)
-                vip_n = int(shop.get("vip", 0) or 0)
-                double_n = int(shop.get("double", 0) or 0)
-                if vip_n > 0:
+                vip_on = self._shop_active(shop, "vip")
+                double_on = self._shop_active(shop, "double")
+                if vip_on:
                     total = int(total * 1.1)
-                eff_total = total
-                if double_n > 0:
-                    eff_total = total * 2
-                    shop["double"] = double_n - 1
-                    await self._save_shop_items(session, user_id, shop)
+                eff_total = total * 2 if double_on else total
                 team_mult = await self._team_bonus_mult(session, user_id)
                 if team_mult > 1.0:
                     eff_total = int(eff_total * team_mult)
