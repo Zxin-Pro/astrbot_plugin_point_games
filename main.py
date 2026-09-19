@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.30
+作者：Zxin_Pro    版本：4.22.31
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -463,7 +463,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.30",
+    version="4.22.31",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1722,6 +1722,18 @@ class PointGamesPlugin(Star):
                             "UPDATE point_transactions SET earned=:e, spent=:s, balance_after=:b WHERE id=:i"
                         ), {"e": max(amount, 0), "s": max(-amount, 0),
                             "b": running[uid], "i": row[0]})
+
+                # 红包表迁移：老库缺 sender_id/group_id/platform_id 列时自动补齐
+                rp_columns = {
+                    str(row[1]) for row in (await session.execute(text("PRAGMA table_info(red_packet_log)"))).all()
+                }
+                for column, definition in (
+                    ("sender_id", "TEXT DEFAULT 'system'"),
+                    ("group_id", "TEXT DEFAULT ''"),
+                    ("platform_id", "TEXT DEFAULT ''"),
+                ):
+                    if column not in rp_columns:
+                        await session.execute(text(f"ALTER TABLE red_packet_log ADD COLUMN {column} {definition}"))
 
                 # BOSS 初始行
                 row = (await session.execute(text("SELECT id FROM boss WHERE id=1"))).first()
