@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.31
+作者：Zxin_Pro    版本：4.22.32
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -463,7 +463,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.31",
+    version="4.22.32",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1057,6 +1057,10 @@ class PointGamesPlugin(Star):
             group_id TEXT DEFAULT '',
             platform_id TEXT DEFAULT '',
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS red_packet_schedule (
+            date TEXT PRIMARY KEY,
+            times TEXT
         )""",
         """CREATE TABLE IF NOT EXISTS loans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3988,22 +3992,17 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  功能：每日红包（拼手气）
     # ============================================================
-    def _get_platform_ids(self) -> list[str]:
-        """获取当前所有平台实例 ID（主动发消息兜底用）。"""
-        try:
-            manager = getattr(self.context, "platform_manager", None)
-            if manager and hasattr(manager, "get_insts"):
-                return [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
-            if manager and hasattr(manager, "platform_insts"):
-                return [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
-        except Exception:
-            pass
-        return []
-
-    async def _broadcast_to_group(self, group_id: str, chain):
-        """向指定群广播消息：platform_id 为空时自动向所有平台实例 fan-out。"""
-        targets = await self._get_platform_ids() or [""]
-        for target_platform in targets:
+    async def _broadcast_to_group(self, group_id: str, chain, platform_id: str = ""):
+        """向指定群广播消息：优先用传入的 platform_id，失败或为空时向所有平台实例 fan-out。"""
+        tried: list[str] = []
+        if platform_id:
+            tried.append(str(platform_id))
+        for pid in await self._get_platform_ids():
+            if pid and pid not in tried:
+                tried.append(pid)
+        if not tried:
+            tried = [""]
+        for target_platform in tried:
             try:
                 await self._send_group_chain(target_platform, str(group_id), chain)
                 return True
@@ -4038,6 +4037,37 @@ class PointGamesPlugin(Star):
             await self._notify_admins(
                 "⚠️ 每日红包配置无效：红包总额需≥份数（每份至少1积分），今日红包已跳过")
             return
+        # 当日调度已持久化过：重启/重载后只恢复未发放的时间点，不重新随机、不重复通知
+        now_d = datetime.now(TZ)
+        today = now_d.date().isoformat()
+        async def load_schedule(session):
+            row = (await session.execute(text(
+                "SELECT times FROM red_packet_schedule WHERE date=:d"
+            ), {"d": today})).first()
+            return True, "ok", (str(row[0]) if row else None)
+        ok, _, saved = await self._tx(load_schedule)
+        if ok and saved:
+            restored = 0
+            for t in saved.split(","):
+                t = t.strip()
+                if not t:
+                    continue
+                try:
+                    run_at = datetime.fromisoformat(t)
+                except ValueError:
+                    continue
+                if run_at.tzinfo is None:
+                    run_at = run_at.replace(tzinfo=TZ)
+                if run_at <= now_d:
+                    continue  # 已发放/已过期的时间点不恢复
+                self._scheduler.add_job(
+                    self._send_red_packet,
+                    DateTrigger(run_date=run_at, timezone=TZ),
+                    id=f"red_packet_send_{today}_{restored}", replace_existing=True,
+                )
+                restored += 1
+            self.logger.info(f"今日红包调度已存在，恢复 {restored} 个未发放时间点")
+            return
         sh, sm, eh, em = self.RED_PACKET_WINDOW
         now = datetime.now(TZ)
         start = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
@@ -4057,7 +4087,6 @@ class PointGamesPlugin(Star):
         # 均分窗口成 times 段，每段内随机一个时间点；
         # 段尾预留一个完整时限，保证相邻两场红包不会同时进行
         seg = total_sec / times
-        today = now.date().isoformat()
         run_times = []
         for i in range(times):
             seg_start = window_start + timedelta(seconds=seg * i)
@@ -4071,6 +4100,16 @@ class PointGamesPlugin(Star):
                 DateTrigger(run_date=run_at, timezone=TZ),
                 id=f"red_packet_send_{today}_{i}", replace_existing=True,
             )
+        # 持久化今日调度：重启/重载后据此恢复，不重新随机不重复通知
+        async def save_schedule(session):
+            await session.execute(text(
+                "INSERT OR REPLACE INTO red_packet_schedule(date, times) VALUES(:d, :t)"
+            ), {"d": today, "t": ",".join(t.isoformat() for t in run_times)})
+            await session.execute(text(
+                "DELETE FROM red_packet_schedule WHERE date < :d"
+            ), {"d": today})
+            return True, "ok", None
+        await self._tx(save_schedule)
         times_text = "、".join(t.strftime("%H:%M") for t in run_times)
         self.logger.info(f"今日红包已调度：{times} 次（{times_text}）")
         # 通知管理员具体的发放时间
@@ -4124,6 +4163,13 @@ class PointGamesPlugin(Star):
             self.logger.exception("红包消息发送失败")
             async with self._red_packet_lock:
                 self._red_packet = None
+            # 落库标记本场未发出，避免日志里留一条永远 active 的假红包
+            async def fn_send_fail(session):
+                await session.execute(text(
+                    "UPDATE red_packet_log SET status='send_failed' WHERE packet_id=:p"
+                ), {"p": packet_id})
+                return True, "ok", None
+            await self._tx(fn_send_fail)
             await self._notify_admins("⚠️ 今日红包发送失败，请检查插件日志")
             return
         # 注册超时结算（到点回收剩余积分）
@@ -4170,12 +4216,18 @@ class PointGamesPlugin(Star):
             yield event.plain_result(f"❌ 份数范围：1-{total}（每份至少1积分）")
             return
         
-        # 检查该群是否已有活跃红包
+        # 检查该群是否已有活跃红包（占位防并发双发）
         lock = self._user_red_packet_locks.setdefault(group_key, asyncio.Lock())
+        rp_busy = False
         async with lock:
             if group_key in self._user_red_packets and not self._user_red_packets[group_key]["finished"]:
-                yield event.plain_result("❌ 本群还有红包未抢完，请等待结束后再发喵~")
-                return
+                rp_busy = True
+            else:
+                # finished=True 的占位条目：堵住检查与写入状态之间的并发窗口
+                self._user_red_packets[group_key] = {"finished": True}
+        if rp_busy:
+            yield event.plain_result("❌ 本群还有红包未抢完，请等待结束后再发喵~")
+            return
         
         # 扣积分并创建红包
         async def fn(session):
@@ -4200,6 +4252,9 @@ class PointGamesPlugin(Star):
         
         ok, packet_id, _ = await self._tx(fn)
         if not ok:
+            # 创建失败：撤掉占位条目
+            async with lock:
+                self._user_red_packets.pop(group_key, None)
             yield event.plain_result(packet_id)
             return
         
@@ -4245,6 +4300,8 @@ class PointGamesPlugin(Star):
         
         # 优先检查群友红包
         lock = self._user_red_packet_locks.get(group_key)
+        user_rp_handled = False
+        finish_needed = False
         if lock:
             async with lock:
                 rp = self._user_red_packets.get(group_key)
@@ -4287,13 +4344,24 @@ class PointGamesPlugin(Star):
                         return True, "ok", None
                     
                     ok, _, _ = await self._tx(fn)
+                    if not ok:
+                        # 事务失败：回滚内存状态，不发假到账消息
+                        rp["remain_count"] += 1
+                        rp["remain_amount"] += amount
+                        rp["claimed"].pop(user_id, None)
+                        yield event.plain_result("❌ 红包领取失败，积分未入账，请稍后再试喵~")
+                        return
                     yield event.chain_result([Plain("🎉 恭喜 "), At(qq=str(user_id)),
                                               Plain(f" 抢到 {amount} 积分！\n{hint}")])
                     
-                    if ok and is_last:
-                        await self._finish_user_red_packet(group_key)
-                    return
-        
+                    user_rp_handled = True
+                    finish_needed = ok and is_last
+            if user_rp_handled:
+                # 锁外结算，避免同锁重入死锁
+                if finish_needed:
+                    await self._finish_user_red_packet(group_key)
+                return
+
         # 系统红包（原逻辑）
         packet_id = None
         state = None
