@@ -62,8 +62,7 @@
   "sign_in_week_bonus": {"description": "【📁 签到与活跃】连续签到周期奖励", "type": "int", "default": 20, "hint": "连续签到每满7天额外奖励"},
   "activity_settle_hour": {"description": "【📁 签到与活跃】群活跃奖励结算小时", "type": "int", "default": 22},
   "activity_settle_minute": {"description": "【📁 签到与活跃】群活跃奖励结算分钟", "type": "int", "default": 0},
-  "leaderboard_broadcast_hour": {"description": "【📁 签到与活跃】全服排行榜自动播报小时", "type": "int", "default": 12},
-  "leaderboard_broadcast_minute": {"description": "【📁 签到与活跃】全服排行榜自动播报分钟", "type": "int", "default": 0},
+  "richest_broadcast_groups": {"description": "【📁 签到与活跃】富豪榜每日播报白名单群号，多个用逗号分隔", "type": "list", "default": [], "hint": "填了就只播报这些群；留空则播报所有已开启玩法的群"},
 
   "boss_max_hp": {"description": "【📁 BOSS战】BOSS初始血量", "type": "int", "default": 10000},
   "boss_pool": {"description": "【📁 BOSS战】BOSS死亡分红积分池", "type": "int", "default": 500},

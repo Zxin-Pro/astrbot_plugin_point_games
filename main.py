@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.27
+作者：Zxin_Pro    版本：4.22.28
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -410,7 +410,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/鱼塘", "钓鱼系统：查看鱼塘等级与加成（可升级）"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
     ("/开户", "银行系统：开通银行账户（免费，享每日5%活期利息）"),
-    ("/存钱 [积分]", "银行系统：将钱包积分存入银行"),
+    ("/存钱 [积分]", "银行系统：将钱包积分存入银行（不带金额默认存入全部）"),
     ("/取钱 [积分]", "银行系统：从银行取出积分到钱包"),
     ("/我的银行", "银行系统：查看活期余额与累计利息"),
     ("/贷款 [积分]", "贷款系统：向银行申请贷款（利息5%/天，不可转账）"),
@@ -463,7 +463,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.27",
+    version="4.22.28",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -510,8 +510,6 @@ class PointGamesPlugin(Star):
     DICE_DAILY_LIMIT = 5            # 掷骰每日次数上限（可配置）
     ACTIVITY_SETTLE_HOUR = 22       # 群活跃奖励结算小时（可配置）
     ACTIVITY_SETTLE_MINUTE = 0      # 群活跃奖励结算分钟（可配置）
-    LEADERBOARD_BROADCAST_HOUR = 12 # 全服排行榜播报小时（可配置）
-    LEADERBOARD_BROADCAST_MINUTE = 0 # 全服排行榜播报分钟（可配置）
     ACTIVITY_REWARDS = (50, 30, 10)
     # 谁是卧底
     UC_MIN_PLAYERS = 4
@@ -1181,6 +1179,14 @@ class PointGamesPlugin(Star):
         self.FISHING_BROADCAST_GROUPS = [
             str(x).strip() for x in (raw_fbg or []) if str(x).strip()
         ]
+
+        # 富豪榜每日播报白名单群列表（支持逗号分隔字符串或列表；空 = 播报所有已开启玩法的群）
+        raw_rbg = config.get("richest_broadcast_groups", [])
+        if isinstance(raw_rbg, str):
+            raw_rbg = [x.strip() for x in raw_rbg.replace("，", ",").split(",") if x.strip()]
+        self.RICHEST_BROADCAST_GROUPS = [
+            str(x).strip() for x in (raw_rbg or []) if str(x).strip()
+        ]
         
         # 速算挑战配置
         self.MATH_TIMEOUT = integer("math_timeout", self.MATH_TIMEOUT, 1)
@@ -1209,8 +1215,6 @@ class PointGamesPlugin(Star):
         self.DICE_DAILY_LIMIT = integer("dice_daily_limit", self.DICE_DAILY_LIMIT, 1)
         self.ACTIVITY_SETTLE_HOUR = min(integer("activity_settle_hour", self.ACTIVITY_SETTLE_HOUR, 0), 23)
         self.ACTIVITY_SETTLE_MINUTE = min(integer("activity_settle_minute", self.ACTIVITY_SETTLE_MINUTE, 0), 59)
-        self.LEADERBOARD_BROADCAST_HOUR = min(integer("leaderboard_broadcast_hour", self.LEADERBOARD_BROADCAST_HOUR, 0), 23)
-        self.LEADERBOARD_BROADCAST_MINUTE = min(integer("leaderboard_broadcast_minute", self.LEADERBOARD_BROADCAST_MINUTE, 0), 59)
         self.UC_MIN_PLAYERS = integer("uc_min_players", self.UC_MIN_PLAYERS, 2)
         self.UC_MAX_PLAYERS = max(integer("uc_max_players", self.UC_MAX_PLAYERS, 2), self.UC_MIN_PLAYERS)
         self.UC_DEFAULT_PLAYERS = min(
@@ -1785,11 +1789,6 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=self.ACTIVITY_SETTLE_HOUR, minute=self.ACTIVITY_SETTLE_MINUTE, timezone=TZ),
             id="point_games_activity_rewards", replace_existing=True,
         )
-        self._scheduler.add_job(
-            self._broadcast_leaderboard,
-            CronTrigger(hour=self.LEADERBOARD_BROADCAST_HOUR, minute=self.LEADERBOARD_BROADCAST_MINUTE, timezone=TZ),
-            id="point_games_leaderboard_broadcast", replace_existing=True,
-        )
         # 每日凌晨 0 点广播富豪榜
         self._scheduler.add_job(
             self._broadcast_richest_list,
@@ -2007,49 +2006,6 @@ class PointGamesPlugin(Star):
 
         await self._tx(fn)
 
-    async def _broadcast_leaderboard(self):
-        """每天向已开启玩法的群播报全服积分排行榜。"""
-        async def fn(session):
-            rows = (await session.execute(text(
-                "SELECT user_id, user_name, balance FROM users "
-                "ORDER BY balance DESC LIMIT 10"
-            ))).all()
-            groups = (await session.execute(text(
-                "SELECT group_id, platform_id FROM group_settings WHERE enabled=1"
-            ))).all()
-            return True, "ok", (rows, groups)
-
-        ok, _, data = await self._tx(fn)
-        if not ok or not data:
-            return
-        rows, groups = data
-        if not rows:
-            broadcast_chain = [Plain("🏆 全服积分排行榜\n暂无玩家数据喵~")]
-        else:
-            medals = ["🥇", "🥈", "🥉"]
-            broadcast_chain = [Plain("🏆 全服积分排行榜 TOP10")]
-            for rank, row in enumerate(rows, 1):
-                prefix = medals[rank - 1] if rank <= 3 else f"{rank}."
-                name = row[1] or "未知玩家"
-                broadcast_chain.extend([
-                    Plain(f"\n{prefix} "),
-                    At(qq=str(row[0])),
-                    Plain(f" {name} —— {int(row[2])} 积分"),
-                ])
-        platform_ids = []
-        try:
-            manager = getattr(self.context, "platform_manager", None)
-            if manager and hasattr(manager, "get_insts"):
-                platform_ids = [str(p.meta().id) for p in manager.get_insts() if p.meta().id]
-            elif manager and hasattr(manager, "platform_insts"):
-                platform_ids = [str(p.meta().id) for p in manager.platform_insts if p.meta().id]
-        except Exception:
-            platform_ids = []
-        for group_id, platform_id in groups:
-            targets = [str(platform_id)] if platform_id else platform_ids
-            for target_platform in targets:
-                await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
-
     async def _broadcast_richest_list(self):
         """每日凌晨 0 点广播全服富豪榜 TOP10（实时计算总资产）。"""
         async def fn(session):
@@ -2109,6 +2065,13 @@ class PointGamesPlugin(Star):
         if not ok or not data:
             return
         top10, groups = data
+        # 富豪榜播报白名单：配置了群号就只播报这些群
+        whitelist = [str(g) for g in getattr(self, "RICHEST_BROADCAST_GROUPS", [])]
+        if whitelist:
+            wl_set = set(whitelist)
+            groups = [(gid, pid) for gid, pid in groups if str(gid) in wl_set]
+            if not groups:
+                return
         
         # 构建富豪榜消息
         if not top10:
@@ -2411,7 +2374,7 @@ class PointGamesPlugin(Star):
             "查询：/积分 或 /查询",
             "玩法：/转盘 [积分]｜/闯关｜/攻击｜/BOSS状态｜/BOSS排行",
             "转账：/转账 @群友 [积分]（私聊用QQ号，手续费10%）",
-            "银行：/开户｜/存钱 [积分]｜/取钱 [积分]｜/我的银行（活期5%/天）",
+            "银行：/开户｜/存钱 [积分]（不带金额存全部）｜/取钱 [积分]｜/我的银行（活期5%/天）",
             "贷款：/贷款 [积分]｜/还款｜/我的贷款（信用额度，逾期有惩罚）",
             "彩票：/买彩票 [积分]｜/彩票奖池",
             "卧底：/卧底开始 [人数]｜/加入卧底｜/投票 @玩家｜/卧底结束",
@@ -3700,7 +3663,8 @@ class PointGamesPlugin(Star):
         user_id = str(event.get_sender_id()).strip()
         args = self._strip_command(event, "存钱").split()
         amount = self._parse_bank_amount(args)
-        if amount is None or amount <= 0:
+        deposit_all = amount is None  # 不带金额 = 默认存入全部普通余额
+        if amount is not None and amount <= 0:
             yield event.plain_result("❌ 请输入有效的存入金额，如：/存钱 100")
             return
 
@@ -3715,6 +3679,12 @@ class PointGamesPlugin(Star):
                 "SELECT balance, loan_balance FROM users WHERE user_id=:u"
             ), {"u": user_id})).first()
             normal, loan_bal = int(row[0]), int(row[1])
+            if deposit_all:
+                amount = normal
+                if amount <= 0:
+                    hint = (f"（贷款余额 {loan_bal} 积分不可用于存银行）"
+                            if loan_bal > 0 else "当前没有积分可存喵~")
+                    raise _BizError(f"❌ 普通余额为 0，没得存{hint}")
             if normal < amount:
                 hint = (f"\n（贷款余额 {loan_bal} 积分不可用于存银行）"
                         if loan_bal > 0 else "")
