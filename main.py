@@ -539,7 +539,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.23.0",
+    version="4.23.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -706,6 +706,16 @@ class PointGamesPlugin(Star):
     FISHING_CRAB_BAITS = 3          # 螃蟹夹走鱼饵数上限
     # 触发全群广播的稀有度（传说级及以上）
     FISHING_BROADCAST_RARITIES = ("传说", "远古", "海洋传说", "终极神话", "至高传说")
+    # ---------- 闪光鱼系统 ----------
+    FISHING_SHINY_RATE = 0.01          # 闪光鱼概率：1%
+    FISHING_SHINY_MULT = 3             # 闪光鱼售价倍率：3 倍
+    FISHING_SHINY_PREFIX = "✨闪光"     # 闪光鱼名称前缀（图鉴/鱼篓显示用）
+    FISHING_SHINY_REWARDS = (          # 闪光收集阶段奖励：(需要种类数, 积分, 称号)
+        (10, 200, "闪光猎人"),
+        (30, 500, "闪光大师"),
+        (50, 1000, "闪光传说"),
+        (100, 3000, "闪光之王"),
+    )
     FISHING_RESET_HOUR = 0          # 今日统计重置小时
     FISHING_RESET_MINUTE = 0        # 今日统计重置分钟
     FISHING_RANK_SIZE = 10          # 钓鱼排行显示人数
@@ -1031,8 +1041,9 @@ class PointGamesPlugin(Star):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
             fish_name TEXT NOT NULL,
+            is_shiny INTEGER DEFAULT 0,
             count INTEGER DEFAULT 0,
-            UNIQUE(user_id, fish_name)
+            UNIQUE(user_id, fish_name, is_shiny)
         )""",
         "CREATE INDEX IF NOT EXISTS idx_fishing_inv_user ON fishing_inventory(user_id)",
         """CREATE TABLE IF NOT EXISTS fishing_pending (
@@ -1091,6 +1102,8 @@ class PointGamesPlugin(Star):
             best_fish_name TEXT,
             best_fish_value INTEGER DEFAULT 0,
             collection_count INTEGER DEFAULT 0,
+            shiny_count INTEGER DEFAULT 0,
+            shiny_reward_level INTEGER DEFAULT 0,
             pond_level INTEGER DEFAULT 1,
             today_success INTEGER DEFAULT 0
         )""",
@@ -1821,6 +1834,8 @@ class PointGamesPlugin(Star):
                     ("best_fish_value", "INTEGER DEFAULT 0"),
                     ("collection_count", "INTEGER DEFAULT 0"),
                     ("onekey_fishing", "INTEGER DEFAULT 0"),
+                    ("shiny_count", "INTEGER DEFAULT 0"),
+                    ("shiny_reward_level", "INTEGER DEFAULT 0"),
                 ):
                     if column not in fishing_columns:
                         await session.execute(text(f"ALTER TABLE fishing_stats ADD COLUMN {column} {definition}"))
@@ -1828,6 +1843,33 @@ class PointGamesPlugin(Star):
                     await session.execute(text("ALTER TABLE fishing_stats ADD COLUMN pond_level INTEGER DEFAULT 1"))
                 if "today_success" not in fishing_columns:
                     await session.execute(text("ALTER TABLE fishing_stats ADD COLUMN today_success INTEGER DEFAULT 0"))
+
+                # 闪光鱼迁移：老 fishing_inventory 无 is_shiny 列且唯一键为 (user_id, fish_name)，
+                # SQLite 无法改唯一约束，整体重建并把旧数据标记为普通版
+                inv_columns = {
+                    str(row[1]) for row in (await session.execute(text("PRAGMA table_info(fishing_inventory)"))).all()
+                }
+                if "is_shiny" not in inv_columns:
+                    await session.execute(text(
+                        "ALTER TABLE fishing_inventory RENAME TO fishing_inventory_old"
+                    ))
+                    await session.execute(text(
+                        "CREATE TABLE fishing_inventory ("
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                        "user_id TEXT NOT NULL, "
+                        "fish_name TEXT NOT NULL, "
+                        "is_shiny INTEGER DEFAULT 0, "
+                        "count INTEGER DEFAULT 0, "
+                        "UNIQUE(user_id, fish_name, is_shiny))"
+                    ))
+                    await session.execute(text(
+                        "INSERT INTO fishing_inventory(id, user_id, fish_name, is_shiny, count) "
+                        "SELECT id, user_id, fish_name, 0, count FROM fishing_inventory_old"
+                    ))
+                    await session.execute(text("DROP TABLE fishing_inventory_old"))
+                    await session.execute(text(
+                        "CREATE INDEX IF NOT EXISTS idx_fishing_inv_user ON fishing_inventory(user_id)"
+                    ))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -8184,6 +8226,11 @@ class PointGamesPlugin(Star):
                             continue  # 杂物
                         name, price, rarity, prob = picked
                         upgrade_tag = "·鱼塘加成↑" if pond_upgraded else ""
+                        # 闪光判定：1% 概率为闪光版，售价 ×3（pending 以 ✨闪光 前缀名携带闪光标记）
+                        if random.random() < self.FISHING_SHINY_RATE:
+                            name = f"{self.FISHING_SHINY_PREFIX}{name}"
+                            price = int(price * self.FISHING_SHINY_MULT)
+                            upgrade_tag = f"{upgrade_tag}·闪光×3" if upgrade_tag else "·闪光×3"
                         fish_names.append(f"{name}（{price}积分{upgrade_tag}）")
                         await session.execute(text(
                             "INSERT INTO fishing_pending(user_id, fish_name, catch_time) "
@@ -8336,7 +8383,7 @@ class PointGamesPlugin(Star):
                 elif event == "鱼篓破洞":
                     lost_n = random.randint(1, 3)
                     lost_rows = (await session.execute(text(
-                        "SELECT id, fish_name FROM fishing_inventory WHERE user_id=:u "
+                        "SELECT id, fish_name, is_shiny FROM fishing_inventory WHERE user_id=:u "
                         "ORDER BY RANDOM() LIMIT :n"
                     ), {"u": uid, "n": lost_n})).all()
                     if lost_rows:
@@ -8344,7 +8391,10 @@ class PointGamesPlugin(Star):
                             await session.execute(text(
                                 "DELETE FROM fishing_inventory WHERE id=:i"
                             ), {"i": r[0]})
-                        lost_names = "、".join(r[1] for r in lost_rows)
+                        lost_names = "、".join(
+                            (f"{self.FISHING_SHINY_PREFIX}{r[1]}" if int(r[2] or 0) else str(r[1]))
+                            for r in lost_rows
+                        )
                         notify(f"鱼篓破了个洞，{lost_names} 溜走了…")
                     else:
                         notify("鱼篓破了个洞，好在鱼篓是空的…")
@@ -8704,25 +8754,30 @@ class PointGamesPlugin(Star):
             total = 0
             new_species: list[str] = []
             details: list[str] = []
+            new_shiny = 0
             for name, cnt in pending:
                 name = str(name)
                 cnt = int(cnt)
                 total += cnt
-                price, rarity, _prob = FISH_POOL.get(name, (0, "未知", 0.0))
-                # 并入鱼篓
+                base, is_shiny = self._shiny_split(name)
+                price = self._shiny_price(base, is_shiny)
+                rarity = FISH_POOL.get(base, (0, "未知", 0.0))[1]
+                # 并入鱼篓（闪光版与普通版分行存放）
                 await session.execute(text(
-                    "INSERT INTO fishing_inventory(user_id, fish_name, count) "
-                    "VALUES(:u, :n, :c) "
-                    "ON CONFLICT(user_id, fish_name) DO UPDATE SET "
+                    "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, count) "
+                    "VALUES(:u, :n, :s, :c) "
+                    "ON CONFLICT(user_id, fish_name, is_shiny) DO UPDATE SET "
                     "count=fishing_inventory.count+:c"
-                ), {"u": user_id, "n": name, "c": cnt})
-                # 记录图鉴（钓到过即收集，卖鱼不影响进度）
+                ), {"u": user_id, "n": base, "s": is_shiny, "c": cnt})
+                # 记录图鉴（钓到过即收集，卖鱼不影响进度；闪光版独立收录）
                 result = await session.execute(text(
                     "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
                     "VALUES(:u, :n, :t)"
                 ), {"u": user_id, "n": name, "t": time.time()})
                 if result.rowcount == 1:
                     new_species.append(f"{name}（{rarity}·{price}积分）")
+                    if is_shiny:
+                        new_shiny += 1
                 details.append(f"{name}×{cnt}")
             await session.execute(
                 text("DELETE FROM fishing_pending WHERE user_id=:u"), {"u": user_id}
@@ -8736,9 +8791,14 @@ class PointGamesPlugin(Star):
             await session.execute(text(
                 "UPDATE fishing_stats SET collection_count=:c WHERE user_id=:u"
             ), {"u": user_id, "c": len(collected)})
+            # 闪光收集数同步 + 阶段奖励判定
+            shiny_n, shiny_rewards = await self._fishing_shiny_sync(session, user_id)
+            rewards.extend(shiny_rewards)
             msg = f"🐟 收鱼成功！本次进篓 {total} 条：{'、'.join(details)}喵~"
             if new_species:
                 msg += f"\n✨ 图鉴新收录：{'、'.join(new_species)}"
+            if new_shiny:
+                msg += f"\n✨ 这是你的第 {shiny_n} 种闪光鱼！"
             for line in rewards:
                 msg += f"\n{line}"
             return True, msg, None
@@ -8761,20 +8821,23 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             rows = (await session.execute(text(
-                "SELECT fish_name, count FROM fishing_inventory WHERE user_id=:u"
+                "SELECT fish_name, is_shiny, count FROM fishing_inventory WHERE user_id=:u"
             ), {"u": user_id})).all()
             if not rows:
                 raise _BizError("鱼篓里没有鱼可以卖喵~ 先 /挂机钓鱼 再来")
             total = 0
             fish_cnt = 0
             details: list[str] = []
-            for name, cnt in rows:
+            for name, is_shiny, cnt in rows:
                 name = str(name)
                 cnt = int(cnt or 0)
-                price = FISH_POOL.get(name, (0,))[0]
+                is_shiny = int(is_shiny or 0)
+                # 闪光版售价 ×3
+                price = self._shiny_price(name, is_shiny)
                 total += price * cnt
                 fish_cnt += cnt
-                details.append(f"{name}×{cnt}")
+                display = f"{self.FISHING_SHINY_PREFIX}{name}" if is_shiny else name
+                details.append(f"{display}×{cnt}")
             # 卖鱼收入进账并记录流水（operation='sell_fish'），商店时效加成在此兑现
             shop = await self._get_shop_items(session, user_id)
             vip_on = self._shop_active(shop, "vip")
@@ -8828,10 +8891,29 @@ class PointGamesPlugin(Star):
             collected = {str(r[0]) for r in (await session.execute(text(
                 "SELECT fish_name FROM fishing_collection WHERE user_id=:u"
             ), {"u": user_id})).all()}
-            lines = [f"📖 鱼图鉴：已收集 {len(collected)}/{len(FISH_POOL)} 种喵~"]
+            # 闪光版以「✨闪光」前缀独立收录，与普通版分开统计
+            prefix = self.FISHING_SHINY_PREFIX
+            normal = {n for n in collected if not n.startswith(prefix)}
+            shiny = {n for n in collected if n.startswith(prefix)}
+            lines = [
+                "📊 【鱼类图鉴】",
+                f"已收集：{len(normal)}/{len(FISH_POOL)}种（普通）",
+                f"✨ 闪光收集：{len(shiny)}/{len(FISH_POOL)}种（闪光）",
+            ]
             for rarity, (_total_prob, fishes) in FISH_TABLE.items():
                 names = {n for n, _p in fishes}
-                lines.append(f"{rarity}：{len(names & collected)}/{len(names)}")
+                lines.append(f"{rarity}：{len(names & normal)}/{len(names)}")
+            if shiny:
+                lines.append("✨ 已收集的闪光鱼：")
+                lines.extend(f"✨ {n[len(prefix):]} ✅" for n in sorted(shiny))
+            next_tier = next(
+                ((need, pts) for need, pts, _t in self.FISHING_SHINY_REWARDS if len(shiny) < need),
+                None,
+            )
+            if next_tier:
+                lines.append(
+                    f"🎯 下一阶段奖励：收集 {next_tier[0]} 种闪光鱼 → +{next_tier[1]} 积分"
+                )
             return True, "\n".join(lines), None
 
         ok, msg, _ = await self._tx(fn)
@@ -9465,6 +9547,50 @@ class PointGamesPlugin(Star):
         await session.execute(text(
             "UPDATE fishing_stats SET onekey_fishing=1 WHERE user_id=:u"), {"u": user_id})
 
+    # ==================== 闪光鱼系统 ====================
+    def _shiny_split(self, name: str) -> tuple[str, int]:
+        """拆分闪光前缀：返回 (基础鱼名, 是否闪光 is_shiny)"""
+        prefix = self.FISHING_SHINY_PREFIX
+        if name.startswith(prefix):
+            return name[len(prefix):], 1
+        return name, 0
+
+    def _shiny_price(self, base: str, is_shiny: int) -> int:
+        """按基础鱼名+闪光标记计算售价（闪光版 ×3）"""
+        price = FISH_POOL.get(base, (0,))[0]
+        return int(price * self.FISHING_SHINY_MULT) if is_shiny else price
+
+    async def _fishing_shiny_sync(self, session, user_id: str) -> tuple[int, list[str]]:
+        """同步闪光收集数并判定阶段奖励（必须在事务内调用）。
+
+        图鉴中闪光鱼以「✨闪光{鱼名}」前缀记录，与普通版天然区分。
+        返回 (闪光种类数, 奖励提示列表)。
+        """
+        await self._fishing_ensure_stats(session, user_id)
+        shiny_names = {str(r[0]) for r in (await session.execute(text(
+            "SELECT fish_name FROM fishing_collection WHERE user_id=:u AND fish_name LIKE :p"
+        ), {"u": user_id, "p": self.FISHING_SHINY_PREFIX + "%"})).all()}
+        shiny_n = len(shiny_names)
+        await session.execute(text(
+            "UPDATE fishing_stats SET shiny_count=:c WHERE user_id=:u"
+        ), {"u": user_id, "c": shiny_n})
+        rewards: list[str] = []
+        row = (await session.execute(text(
+            "SELECT shiny_reward_level FROM fishing_stats WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        claimed = int(row[0] or 0) if row else 0
+        newly = claimed
+        for idx, (need, pts, title) in enumerate(self.FISHING_SHINY_REWARDS, start=1):
+            if shiny_n >= need and claimed < idx:
+                await self._add_points(session, user_id, pts, "shiny_reward")
+                rewards.append(f"🌟 收集 {need} 种闪光鱼达成：+{pts} 积分 +「{title}」称号！")
+                newly = idx
+        if newly != claimed:
+            await session.execute(text(
+                "UPDATE fishing_stats SET shiny_reward_level=:l WHERE user_id=:u"
+            ), {"u": user_id, "l": newly})
+        return shiny_n, rewards
+
     async def _fishing_auto_collect(self, session, user_id: str) -> int:
         """自动收鱼器：把 pending 渔获直接收进鱼篓（含图鉴/称号/统计），返回收取条数"""
         pending = (await session.execute(text(
@@ -9478,12 +9604,13 @@ class PointGamesPlugin(Star):
             name = str(name)
             cnt = int(cnt)
             total += cnt
+            base, is_shiny = self._shiny_split(name)
             await session.execute(text(
-                "INSERT INTO fishing_inventory(user_id, fish_name, count) "
-                "VALUES(:u, :n, :c) "
-                "ON CONFLICT(user_id, fish_name) DO UPDATE SET "
+                "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, count) "
+                "VALUES(:u, :n, :s, :c) "
+                "ON CONFLICT(user_id, fish_name, is_shiny) DO UPDATE SET "
                 "count=fishing_inventory.count+:c"
-            ), {"u": user_id, "n": name, "c": cnt})
+            ), {"u": user_id, "n": base, "s": is_shiny, "c": cnt})
             await session.execute(text(
                 "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
                 "VALUES(:u, :n, :t)"
@@ -9498,6 +9625,8 @@ class PointGamesPlugin(Star):
         await session.execute(text(
             "UPDATE fishing_stats SET collection_count=:c WHERE user_id=:u"
         ), {"u": user_id, "c": len(collected)})
+        # 闪光收集数同步 + 阶段奖励判定
+        await self._fishing_shiny_sync(session, user_id)
         return total
 
     async def _fishing_onekey_owned(self, session, user_id: str) -> bool:
@@ -9579,23 +9708,28 @@ class PointGamesPlugin(Star):
             if pending:
                 total = 0
                 new_species: list[str] = []
+                new_shiny = 0
                 for name, cnt in pending:
                     name = str(name)
                     cnt = int(cnt)
                     total += cnt
-                    price, rarity, _prob = FISH_POOL.get(name, (0, "未知", 0.0))
+                    base, is_shiny = self._shiny_split(name)
+                    price = self._shiny_price(base, is_shiny)
+                    rarity = FISH_POOL.get(base, (0, "未知", 0.0))[1]
                     await session.execute(text(
-                        "INSERT INTO fishing_inventory(user_id, fish_name, count) "
-                        "VALUES(:u, :n, :c) "
-                        "ON CONFLICT(user_id, fish_name) DO UPDATE SET "
+                        "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, count) "
+                        "VALUES(:u, :n, :s, :c) "
+                        "ON CONFLICT(user_id, fish_name, is_shiny) DO UPDATE SET "
                         "count=fishing_inventory.count+:c"
-                    ), {"u": user_id, "n": name, "c": cnt})
+                    ), {"u": user_id, "n": base, "s": is_shiny, "c": cnt})
                     result = await session.execute(text(
                         "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
                         "VALUES(:u, :n, :t)"
                     ), {"u": user_id, "n": name, "t": time.time()})
                     if result.rowcount == 1:
                         new_species.append(f"{name}（{rarity}·{price}积分）")
+                        if is_shiny:
+                            new_shiny += 1
                 await session.execute(
                     text("DELETE FROM fishing_pending WHERE user_id=:u"), {"u": user_id}
                 )
@@ -9606,22 +9740,27 @@ class PointGamesPlugin(Star):
                 await session.execute(text(
                     "UPDATE fishing_stats SET collection_count=:c WHERE user_id=:u"
                 ), {"u": user_id, "c": len(collected)})
+                shiny_n, shiny_rewards = await self._fishing_shiny_sync(session, user_id)
+                rewards.extend(shiny_rewards)
                 line = f"🐟 收鱼 {total} 条"
                 if new_species:
                     line += f"\n✨ 图鉴新收录：{'、'.join(new_species)}"
+                if new_shiny:
+                    line += f"\n✨ 这是你的第 {shiny_n} 种闪光鱼！"
                 for rline in rewards:
                     line += f"\n{rline}"
                 parts.append(line)
 
             # ② 卖鱼：鱼篓全部出售换积分（商店/队伍加成同 /卖鱼）
             inv_rows = (await session.execute(text(
-                "SELECT fish_name, count FROM fishing_inventory WHERE user_id=:u"
+                "SELECT fish_name, is_shiny, count FROM fishing_inventory WHERE user_id=:u"
             ), {"u": user_id})).all()
             if inv_rows:
                 total = 0
                 fish_cnt = 0
-                for name, cnt in inv_rows:
-                    price = FISH_POOL.get(str(name), (0,))[0]
+                for name, is_shiny, cnt in inv_rows:
+                    # 闪光版售价 ×3
+                    price = self._shiny_price(str(name), int(is_shiny or 0))
                     total += price * int(cnt or 0)
                     fish_cnt += int(cnt or 0)
                 shop = await self._get_shop_items(session, user_id)
@@ -9641,7 +9780,7 @@ class PointGamesPlugin(Star):
                     "total_fish_count=total_fish_count+:c WHERE user_id=:u"
                 ), {"u": user_id, "t": eff_total, "c": fish_cnt})
                 best_name, best_value = max(
-                    ((str(n), int(FISH_POOL.get(str(n), (0,))[0])) for n, _ in inv_rows),
+                    ((str(n), self._shiny_price(str(n), int(s or 0))) for n, s, _ in inv_rows),
                     key=lambda item: item[1], default=(None, 0)
                 )
                 current_best = (await session.execute(text(
