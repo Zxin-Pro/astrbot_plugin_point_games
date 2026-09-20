@@ -210,7 +210,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -438,6 +438,91 @@ FISHING_EVENTS: list[tuple[str, float]] = [
 # 长期期望 ≈ +1.5 积分/次（长期挂机稍微赚，高价值鱼纯看脸）。
 
 # ============================================================
+#  挖矿系统数据（v4.24.0）
+# ============================================================
+# 矿石表：稀有度 -> (该档总概率%, [(矿名, 售价), ...])
+# 各档概率合计 70.2672%。「挖到东西」判定成立后按档内均摊概率抽矿；
+# roll 超出概率总和时兜底回落普通档（保证挖到必有收获）。
+# 注意：萤石同时出现在普通/稀有档（稀有档 30 分生效），石膏取后值 7 分
+ORE_TABLE: dict[str, tuple[float, list]] = {
+    "普通": (45.0, [
+        ("煤矿", 3), ("铁矿", 4), ("铜矿", 5), ("锡矿", 5), ("铅矿", 4), ("锌矿", 4),
+        ("镍矿", 5), ("铝矿", 5), ("银矿", 4), ("金矿", 3), ("石灰石", 3), ("石英", 4),
+        ("石墨", 3), ("石膏", 3), ("云母", 3), ("滑石", 4), ("长石", 5), ("辉石", 3),
+        ("角闪石", 4), ("橄榄石", 5), ("蛇纹石", 6), ("绿泥石", 7), ("方解石", 8), ("萤石", 9),
+        ("重晶石", 10), ("磷灰石", 4), ("芒硝", 8), ("硼砂", 10), ("明矾", 6), ("石膏", 7),
+        ("岩盐", 5), ("钾盐", 8), ("天然碱", 10), ("天青石", 12), ("菱镁矿", 10), ("白云石", 8),
+        ("硅藻土", 6), ("膨润土", 5), ("高岭土", 4), ("耐火粘土", 3), ("铝土矿", 5), ("锰矿", 6),
+        ("铬铁矿", 7), ("钛铁矿", 8), ("钒钛磁铁矿", 9), ("钨矿", 10), ("钼矿", 12), ("钴矿", 8),
+        ("锑矿", 7), ("汞矿", 6), ("铋矿", 5), ("砷矿", 4), ("硒矿", 6), ("碲矿", 8),
+        ("铊矿", 10), ("锗矿", 12), ("镓矿", 15), ("铟矿", 14), ("镉矿", 13), ("铍矿", 11),
+    ]),
+    "稀有": (18.0, [
+        ("紫水晶", 30), ("黄水晶", 25), ("粉水晶", 35), ("绿松石", 40), ("孔雀石", 45), ("青金石", 50),
+        ("月光石", 35), ("日光石", 45), ("虎眼石", 30), ("鹰眼石", 40), ("猫眼石", 50), ("红宝石", 65),
+        ("蓝宝石", 70), ("绿宝石", 80), ("钻石", 90), ("坦桑石", 60), ("尖晶石", 45), ("锆石", 35),
+        ("橄榄石", 40), ("石榴石", 50), ("碧玺", 65), ("托帕石", 55), ("海蓝宝", 70), ("摩根石", 60),
+        ("锂辉石", 45), ("透辉石", 35), ("萤石", 30), ("方钠石", 45), ("霞石", 35), ("白榴石", 40),
+        ("青田石", 50), ("寿山石", 45), ("鸡血石", 80), ("田黄石", 100), ("和田玉", 90), ("独山玉", 60),
+        ("岫玉", 50), ("玛瑙", 35), ("玉髓", 30), ("碧玉", 45), ("青玉", 40), ("墨玉", 50),
+        ("黄玉", 60), ("红玉", 70), ("蓝玉", 65), ("紫玉", 55), ("白玉", 45), ("黑曜石", 35),
+        ("黑玛瑙", 30), ("金曜石", 45), ("银曜石", 40), ("红曜石", 50), ("蓝曜石", 45), ("绿曜石", 40),
+        ("紫曜石", 55), ("彩虹曜石", 65), ("雪花石", 50), ("冰种玉", 80), ("玻璃种玉", 100), ("羊脂玉", 95),
+    ]),
+    "珍稀": (6.0, [
+        ("陨铁", 130), ("陨石", 110), ("陨金", 150), ("天外陨石", 200), ("天上陨铁", 180), ("陨铜", 140),
+        ("陨银", 160), ("陨锡", 120), ("陨铅", 100), ("陨锌", 110), ("陨镍", 130), ("陨钛", 150),
+        ("陨铬", 170), ("陨钨", 200), ("陨钼", 220), ("陨钴", 160), ("陨锑", 140), ("陨汞", 150),
+        ("陨铋", 130), ("陨砷", 120), ("陨硒", 140), ("陨碲", 160), ("陨铊", 180), ("陨锗", 200),
+        ("陨镓", 220), ("陨铟", 210), ("陨镉", 190), ("陨铍", 170), ("陨稀土", 250), ("陨放射性矿", 300),
+    ]),
+    "传说": (1.0, [
+        ("神话金刚石", 500), ("九色宝石", 480), ("冰雪钻石", 450), ("凤凰红宝石", 400), ("玄天黑曜石", 380),
+    ]),
+    "远古": (0.2, [
+        ("星核", 800), ("龙晶", 900), ("深渊矿", 1000), ("混沌矿", 1200),
+        ("创世矿石", 1500), ("灭世陨铁", 2000),
+    ]),
+    "海洋传说": (0.05, [
+        ("海神三叉戟矿", 1200), ("亚特兰蒂斯晶", 1500), ("深海龙晶", 1300),
+        ("海底龙脉石", 1100), ("波塞冬之矿", 1500),
+    ]),
+    "终极神话": (0.016, [
+        ("东方青龙矿", 3000), ("玄武神龟矿", 2500), ("鲲鹏之祖矿", 4000),
+    ]),
+    "至高传说": (0.0012, [
+        ("烛心", 10000), ("闲鱼", 10000), ("小洛", 10000), ("满穗", 10000),
+    ]),
+}
+
+# 展开为 矿名 -> (售价, 稀有度, 单块概率%)，供加权抽取与广播使用
+# 同名矿以后定义的档位为准（萤石→稀有 30 分、石膏→普通 7 分）
+ORE_POOL: dict[str, tuple[int, str, float]] = {}
+for _rarity, (_total_prob, _ores) in ORE_TABLE.items():
+    _per_prob = _total_prob / len(_ores)
+    for _name, _price in _ores:
+        ORE_POOL[_name] = (_price, _rarity, _per_prob)
+del _rarity, _total_prob, _ores, _per_prob, _name, _price
+ORE_PROB_TOTAL = sum(t for t, _ in ORE_TABLE.values())
+
+# 挖矿随机事件表：(事件名, 概率%)，按顺序累计判定，总和恰为 100
+MINING_EVENTS: list[tuple[str, float]] = [
+    ("正常挖到", 50.0),   # 挖到 1 块矿石
+    ("空洞", 33.0),   # 体力白费，啥也没挖到
+    ("矿镐断裂", 8.0),   # 需 /修矿镐
+    ("双倍矿石", 5.0),   # 一次挖到 2 块
+    ("矿脉爆发", 3.0),   # 额外消耗 1 体力，获得一块矿石
+    ("神秘宝箱", 0.7),   # 开出 20~100 积分
+    ("塌方", 0.2),   # 矿镐永久消失
+    ("暴风雪", 0.08),   # 所有矿镐暂停 1 小时
+    ("幸运日", 0.02),   # 24 小时内卖矿收入翻倍
+]
+
+# 长期期望说明：上钩判定 58%（正常50+双倍5+矿脉3）× 平均矿价 ≈ 每次期望卖矿 11.8 积分，
+# 扣体力 10 积分、断镐摊销 2 积分（8% × 修理费 50）、宝箱期望回补约 0.42，
+# 长期期望 ≈ -1.185 积分/次（略亏），纯看脸搏高价值矿。
+
+# ============================================================
 #  玩法帮助注册表
 #  【扩展玩法】以后新增玩法时：
 #   1. 在下方 COMMAND_HELP 加一行 (指令, 说明)
@@ -481,6 +566,23 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/钓鱼排行", "钓鱼系统：排行榜（收入|数量|大鱼|图鉴）"),
     ("/钓鱼统计", "钓鱼系统：查看自己的钓鱼数据与称号"),
     ("/鱼塘", "钓鱼系统：查看鱼塘等级与加成（可升级）"),
+    ("/买矿镐", "挖矿系统：200积分购买矿镐（最多5把）"),
+    ("/买体力 [数量]", "挖矿系统：10积分/个购买体力"),
+    ("/挂机挖矿 [编号]", "挖矿系统：矿镐挂机，每30分钟判定一次"),
+    ("/收矿", "挖矿系统：收取挂机挖到的矿石进矿仓"),
+    ("/矿仓", "挖矿系统：查看矿仓里的矿石"),
+    ("/卖矿", "挖矿系统：一键卖出矿仓里所有矿石"),
+    ("/矿图鉴", "挖矿系统：查看矿石收集进度（共百余种）"),
+    ("/矿镐列表", "挖矿系统：查看每把矿镐状态"),
+    ("/修矿镐 [编号]", "挖矿系统：50积分修理损坏的矿镐"),
+    ("/矿洞", "挖矿系统：查看矿洞等级与加成（可升级）"),
+    ("/升级矿洞", "挖矿系统：升级矿洞永久提升挖矿收益"),
+    ("/挖矿任务", "挖矿系统：查看今日挖矿任务"),
+    ("/领取挖矿奖励", "挖矿系统：挖矿任务全部完成领额外奖励"),
+    ("/挖矿天气", "挖矿系统：查看今日矿洞天气与加成"),
+    ("/挖矿排行", "挖矿系统：排行榜（收入|数量|大矿|图鉴|连击）"),
+    ("/挖矿统计", "挖矿系统：查看自己的挖矿数据与称号"),
+    ("/偷矿 @玩家", "挖矿系统：去别人的矿仓偷矿（30%被抓，每天5次）"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
     ("/开户", "银行系统：开通银行账户（免费，享每日5%活期利息）"),
     ("/存钱 [积分]", "银行系统：将钱包积分存入银行（不带金额默认存入全部）"),
@@ -540,7 +642,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.23.2",
+    version="4.24.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -800,6 +902,78 @@ class PointGamesPlugin(Star):
         if hours >= 24 and hours % 24 == 0:
             return f"{hours // 24}天"
         return f"{hours}小时"
+    # ---------- 挖矿系统 ----------
+    MINING_MAX_PICKS = 5           # 每人最多矿镐数
+    MINING_PICK_COST = 200         # 矿镐单价
+    MINING_ENERGY_COST = 10        # 体力单价
+    MINING_REPAIR_COST = 50        # 修矿镐费用
+    MINING_CHECK_INTERVAL = 30     # 判定间隔（分钟）
+    MINING_BOX_MIN = 20            # 神秘宝箱积分下限
+    MINING_BOX_MAX = 100           # 神秘宝箱积分上限
+    MINING_LUCKY_HOURS = 24        # 幸运日时长（小时，卖矿收入翻倍）
+    MINING_STORM_HOURS = 1         # 暴风雪暂停时长（小时）
+    MINING_BROADCAST_PRICE = 1000  # 触发全群广播的矿价阈值
+    MINING_BROADCAST_RARITIES = ("传说", "远古", "海洋传说", "终极神话", "至高传说")
+    MINING_RANK_SIZE = 10          # 挖矿排行显示人数
+    MINING_FULL_REWARD = 5000      # 集齐全部矿石图鉴奖励
+    MINING_BOTH_LEGEND_REWARD = 1000  # 同时拥有烛心和闲鱼额外奖励
+    MINING_RESET_HOUR = 0          # 今日统计重置小时
+    MINING_RESET_MINUTE = 0        # 今日统计重置分钟
+    # 矿洞养成系统
+    CAVE_MAX_LEVEL = 5
+    CAVE_UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}   # 升到 level 的花费
+    CAVE_ENERGY_REDUCTION = {1: 0, 2: 10, 3: 20, 4: 30, 5: 50}      # 体力消耗减少 %
+    CAVE_RARE_BONUS = {1: 0, 2: 0, 3: 5, 4: 10, 5: 20}              # 普通矿升级稀有矿转化率 %
+    CAVE_EXTRA_HOURS = {1: 0, 2: 0, 3: 0, 4: 0, 5: 24}              # 额外挂机小时
+    CAVE_BASE_HOURS = 48          # 基础挂机上限小时
+    # 挖矿连击：[(需要连击数, 价值加成倍率(乘法), 额外积分)]，取满足的最高档
+    # 5连×1.1｜10连×1.2+10分｜20连×1.5+30分+稀有率+10%｜
+    # 50连×2.0+100分+必定稀有｜100连×3.0+500分+必定传说（判定代码内实现）
+    MINING_COMBO_TIERS = (
+        (100, 3.00, 500), (50, 2.00, 100), (20, 1.50, 30), (10, 1.20, 10), (5, 1.10, 0),
+    )
+    # 挖矿每日任务
+    MINING_TASK_TYPES = ["count", "specific", "value", "combo", "collection"]
+    MINING_TASK_REQUIREMENTS = {
+        "count": [5, 10, 15, 20],
+        "specific": [1],
+        "value": [110, 200, 500],
+        "combo": [5, 8, 10, 15],
+        "collection": [3, 5, 8, 10],
+    }
+    MINING_TASK_REWARD_RANGES = {
+        "count": (20, 50),
+        "specific": (50, 80),
+        "value": (50, 80),
+        "combo": (30, 60),
+        "collection": (30, 60),
+    }
+    MINING_TASK_BONUS = 50          # 全部完成额外奖励
+    # 矿洞天气系统（概率合计 100）
+    MINING_WEATHER_CONFIG = {
+        "sunny":     {"name": "☀️ 晴天",  "desc": "矿道干燥，正常挖矿（无加成）",
+                      "prob": 40, "advice": "普通的一天，适合日常挖矿"},
+        "rainy":     {"name": "🌧️ 雨天",  "desc": "稀有矿概率+10%",
+                      "prob": 20, "advice": "稀有矿出没！抓紧机会！", "tier": "稀有", "pct": 10},
+        "big_wave":  {"name": "🌊 大浪",  "desc": "地下水涌动，大型矿（价值+50%）概率15%",
+                      "prob": 15, "advice": "今天适合挖矿！大矿出没！", "bigore": 15},
+        "cold":      {"name": "❄️ 寒冷",  "desc": "普通矿减少，珍稀矿+8%",
+                      "prob": 10, "advice": "珍稀矿变多了，加油！", "tier": "珍稀", "pct": 8},
+        "foggy":     {"name": "🌫️ 雾天",  "desc": "矿道朦胧，传说矿概率+5%",
+                      "prob": 8, "advice": "传说矿出现概率提升！", "tier": "传说", "pct": 5},
+        "full_moon": {"name": "🌙 满月",  "desc": "矿脉共鸣，所有矿价值+30%",
+                      "prob": 5, "advice": "所有矿价值+30%！暴富机会！", "value_mult": 1.3},
+        "storm":     {"name": "⛈️ 暴风雪", "desc": "挖矿成功率-30%，大矿概率+50%",
+                      "prob": 2, "advice": "高风险高回报，谨慎挖矿！", "bigore": 50, "fail_pct": 30},
+    }
+    # 矿洞偷矿
+    MINING_STEAL_DAILY = 5         # 每日偷矿次数上限
+    MINING_STEAL_SPOT_PCT = 30     # 被发现的概率（%，被抓赔偿矿价×2）
+    # 挖矿组队
+    MINING_TEAM_MAX_SIZE = 4
+    MINING_TEAM_BONUS = {1: 0.0, 2: 0.05, 3: 0.10, 4: 0.15}
+    MINING_CAPTAIN_BONUS = 0.05
+
     # 钓鱼组队
     TEAM_MAX_SIZE = 4
     TEAM_BONUS = {1: 0.0, 2: 0.05, 3: 0.10, 4: 0.15}
@@ -834,6 +1008,7 @@ class PointGamesPlugin(Star):
         "enable_card_draw": True,
         "enable_user_red_packet": True,
         "enable_fish_shop": False,
+        "enable_mining": True,
         "enable_wallet": True,
     }
     FEATURE_COMMANDS = {
@@ -872,6 +1047,23 @@ class PointGamesPlugin(Star):
         "一键钓鱼": ("enable_fishing", "钓鱼系统"),
         "钓鱼排行": ("enable_fishing", "钓鱼系统"),
         "钓鱼统计": ("enable_fishing", "钓鱼系统"),
+        "买矿镐": ("enable_mining", "挖矿系统"),
+        "买体力": ("enable_mining", "挖矿系统"),
+        "挂机挖矿": ("enable_mining", "挖矿系统"),
+        "收矿": ("enable_mining", "挖矿系统"),
+        "矿仓": ("enable_mining", "挖矿系统"),
+        "卖矿": ("enable_mining", "挖矿系统"),
+        "矿图鉴": ("enable_mining", "挖矿系统"),
+        "矿镐列表": ("enable_mining", "挖矿系统"),
+        "修矿镐": ("enable_mining", "挖矿系统"),
+        "矿洞": ("enable_mining", "挖矿系统"),
+        "升级矿洞": ("enable_mining", "挖矿系统"),
+        "挖矿任务": ("enable_mining", "挖矿系统"),
+        "领取挖矿奖励": ("enable_mining", "挖矿系统"),
+        "挖矿天气": ("enable_mining", "挖矿系统"),
+        "挖矿排行": ("enable_mining", "挖矿系统"),
+        "挖矿统计": ("enable_mining", "挖矿系统"),
+        "偷矿": ("enable_mining", "挖矿系统"),
         "转账": ("enable_transfer", "积分转账"),
         "开户": ("enable_bank", "银行系统"),
         "存钱": ("enable_bank", "银行系统"),
@@ -1222,6 +1414,101 @@ class PointGamesPlugin(Star):
             source TEXT,
             remark TEXT,
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        # ---------- 挖矿系统 ----------
+        """CREATE TABLE IF NOT EXISTS mining_picks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            slot INTEGER,
+            status TEXT DEFAULT 'idle',
+            platform_id TEXT DEFAULT '',
+            group_id TEXT DEFAULT '',
+            created_at TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_mining_picks_user ON mining_picks(user_id)",
+        """CREATE TABLE IF NOT EXISTS mining_energy (
+            user_id TEXT PRIMARY KEY,
+            count INTEGER DEFAULT 0
+        )""",
+        """CREATE TABLE IF NOT EXISTS mining_inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            ore_name TEXT NOT NULL,
+            value_mult REAL DEFAULT 1,
+            count INTEGER DEFAULT 0,
+            UNIQUE(user_id, ore_name)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_mining_inv_user ON mining_inventory(user_id)",
+        """CREATE TABLE IF NOT EXISTS mining_pending (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            ore_name TEXT,
+            value_mult REAL DEFAULT 1,
+            catch_time TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_mining_pending_user ON mining_pending(user_id)",
+        """CREATE TABLE IF NOT EXISTS mining_stats (
+            user_id TEXT PRIMARY KEY,
+            total_caught INTEGER DEFAULT 0,
+            total_income INTEGER DEFAULT 0,
+            total_energy_used INTEGER DEFAULT 0,
+            lucky_day INTEGER DEFAULT 0,
+            lucky_day_expire TIMESTAMP,
+            storm_expire TIMESTAMP,
+            today_count INTEGER DEFAULT 0,
+            today_date TEXT,
+            today_success INTEGER DEFAULT 0,
+            current_combo INTEGER DEFAULT 0,
+            max_combo INTEGER DEFAULT 0,
+            cave_level INTEGER DEFAULT 1,
+            collection_count INTEGER DEFAULT 0,
+            total_ore_count INTEGER DEFAULT 0,
+            best_ore_name TEXT,
+            best_ore_value INTEGER DEFAULT 0
+        )""",
+        # 挖矿每日任务
+        """CREATE TABLE IF NOT EXISTS mining_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            task_date TEXT,
+            task_type TEXT,
+            task_target TEXT,
+            task_requirement INTEGER,
+            task_progress INTEGER DEFAULT 0,
+            task_reward INTEGER,
+            task_status TEXT DEFAULT 'pending',
+            bonus_claimed INTEGER DEFAULT 0
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_mining_tasks_user_date ON mining_tasks(user_id, task_date)",
+        # 挖矿天气（每天 0 点惰性生成当日天气，date 唯一）
+        """CREATE TABLE IF NOT EXISTS mining_weather (
+            date TEXT PRIMARY KEY,
+            weather TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        # 挖矿组队
+        """CREATE TABLE IF NOT EXISTS mining_teams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            captain_id TEXT,
+            members TEXT,
+            current_size INTEGER DEFAULT 1,
+            group_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_mt_members ON mining_teams(group_id, current_size)",
+        # 矿石图鉴收集（挖到过即记录，卖矿不影响图鉴进度）
+        """CREATE TABLE IF NOT EXISTS mining_collection (
+            user_id TEXT NOT NULL,
+            ore_name TEXT NOT NULL,
+            first_time TIMESTAMP,
+            PRIMARY KEY(user_id, ore_name)
+        )""",
+        # 偷矿每日次数
+        """CREATE TABLE IF NOT EXISTS mining_steal (
+            user_id TEXT NOT NULL,
+            date TEXT NOT NULL,
+            count INTEGER DEFAULT 0,
+            PRIMARY KEY(user_id, date)
         )""",
     ]
 
@@ -2039,6 +2326,23 @@ class PointGamesPlugin(Star):
             CronTrigger(hour=0, minute=0, timezone=TZ),
             id="fishing_weather_refresh", replace_existing=True,
         )
+        # 挖矿系统：每 30 分钟判定一次挂机矿镐 + 每天凌晨重置今日统计
+        self._scheduler.add_job(
+            self._mining_check,
+            CronTrigger(minute=f"*/{int(self.MINING_CHECK_INTERVAL)}", timezone=TZ),
+            id="mining_check", replace_existing=True,
+        )
+        self._scheduler.add_job(
+            self._mining_daily_reset,
+            CronTrigger(hour=self.MINING_RESET_HOUR, minute=self.MINING_RESET_MINUTE, timezone=TZ),
+            id="mining_daily_reset", replace_existing=True,
+        )
+        # 挖矿天气：每天 0 点预生成当日矿洞天气
+        self._scheduler.add_job(
+            self._mining_weather_refresh,
+            CronTrigger(hour=0, minute=1, timezone=TZ),
+            id="mining_weather_refresh", replace_existing=True,
+        )
         # 每日自动收税：凌晨 0 点对余额达标的用户扣 0.1%，流入手续费接收账户
         self._scheduler.add_job(
             self._daily_tax,
@@ -2720,6 +3024,7 @@ class PointGamesPlugin(Star):
             "钓鱼：/买鱼竿｜/买鱼饵｜/挂机钓鱼｜/收鱼｜/卖鱼｜/鱼图鉴",
             "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计｜/鱼塘",
             "　　　/一键钓鱼（20000积分通行证：自动收鱼+卖鱼+修竿+挂机）",
+            "挖矿：/买矿镐｜/买体力｜/挂机挖矿｜/收矿｜/卖矿｜/矿图鉴｜/矿洞",
             "签到：群发 签到 / jrzj / 今日座驾（附带今日运势）",
             "排行：/排行 或 /富豪榜（总资产TOP10，含银行存款与贷款）",
             "管理：/加积分 @玩家 数量｜/减积分 @玩家 数量",
@@ -10152,6 +10457,1577 @@ class PointGamesPlugin(Star):
             else:
                 lines.append("🎖 称号：暂无（钓到烛心/闲鱼或集齐图鉴可获得）")
             return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ============================================================
+    #  挖矿系统（v4.24.0）：矿镐挂机 + 矿洞养成 + 连击 + 任务 + 天气 + 组队 + 偷矿
+    # ============================================================
+    def _mining_roll_event(self) -> str:
+        """按 MINING_EVENTS 概率表随机判定一次挂机事件"""
+        roll = random.uniform(0, 100)
+        cumulative = 0.0
+        for name, prob in MINING_EVENTS:
+            cumulative += prob
+            if roll <= cumulative:
+                return name
+        return "空洞"
+
+    def _mining_pick_ore(self):
+        """按概率加权随机抽一块矿石，返回 (矿名, 售价, 稀有度, 单块概率%)。
+
+        roll 超出各档概率总和时兜底回落普通档（保证挖到必有收获）。
+        """
+        roll = random.uniform(0, ORE_PROB_TOTAL)
+        cumulative = 0.0
+        for name, (price, rarity, prob) in ORE_POOL.items():
+            cumulative += prob
+            if roll <= cumulative:
+                return name, price, rarity, prob
+        return self._mining_pick_ore_tier("普通")
+
+    def _mining_pick_ore_tier(self, tier: str):
+        """从指定稀有度档位随机抽一块矿石（保底必出）"""
+        _total, ores = ORE_TABLE.get(tier, ORE_TABLE["普通"])
+        name, price = random.choice(ores)
+        prob = ORE_POOL.get(name, (0, tier, 0.0))[2]
+        return name, price, tier, prob
+
+    def _mining_apply_cave_upgrade(self, picked, bonus: int):
+        """在每块矿石判定时应用矿洞加成，返回 (矿石, 是否由矿洞升级)。
+
+        普通矿按 bonus% 概率升级为稀有矿（矿洞等级 + 20 连击加成共用此入口）。
+        """
+        name, price, rarity, prob = picked
+        if rarity == "普通" and bonus > 0 and random.random() < (bonus / 100.0):
+            return self._mining_pick_ore_tier("稀有"), True
+        return picked, False
+
+    def _mining_combo_effect(self, combo: int):
+        """按连击数取效果，返回 (价值加成倍率, 额外积分, 保底档位或 None)
+
+        5连+10%｜10连+20%+10分｜20连+50%+30分+稀有率+10%｜
+        50连+100%+100分+必定稀有｜100连+200%+500分+必定传说
+        """
+        mult, bonus, force_tier = 1.0, 0, None
+        for need, m, b in self.MINING_COMBO_TIERS:
+            if combo >= need:
+                mult = m
+                bonus = b
+                break
+        if combo >= 100:
+            force_tier = "传说"
+        elif combo >= 50:
+            force_tier = "稀有"
+        return mult, bonus, force_tier
+
+    async def _mining_ensure_stats(self, session, user_id: str) -> None:
+        """确保挖矿统计行存在，并惰性重置过期计数（必须在事务内调用）"""
+        today = date.today().isoformat()
+        row = (await session.execute(
+            text("SELECT today_date FROM mining_stats WHERE user_id=:u"), {"u": user_id}
+        )).first()
+        if not row:
+            await session.execute(
+                text("INSERT INTO mining_stats(user_id, today_date, cave_level) VALUES(:u, :d, 1)"),
+                {"u": user_id, "d": today},
+            )
+        elif row[0] != today:
+            await session.execute(
+                text("UPDATE mining_stats SET today_count=0, today_success=0, today_date=:d "
+                     "WHERE user_id=:u"),
+                {"u": user_id, "d": today},
+            )
+
+    async def _mining_energy_count(self, session, user_id: str) -> int:
+        """查询当前体力数量（必须在事务内调用）"""
+        row = (await session.execute(
+            text("SELECT count FROM mining_energy WHERE user_id=:u"), {"u": user_id}
+        )).first()
+        return int(row[0] or 0) if row else 0
+
+    async def _mining_grant_titles(
+        self, session, user_id: str, collected: set[str]
+    ) -> list[str]:
+        """图鉴收集奖励判定（必须在事务内调用），返回奖励提示列表。
+
+        称号规则：
+        - 挖到烛心 → 烛心矿主；挖到闲鱼 → 闲鱼矿主（纯称号，无积分）
+        - 同时拥有烛心和闲鱼 → 额外 1000 积分 + 至高矿主（只发一次）
+        - 集齐全部矿石 → 5000 积分 + 万物矿主（只发一次）
+        """
+        rewards: list[str] = []
+        if {"烛心", "闲鱼"} <= collected:
+            already = (await session.execute(text(
+                "SELECT 1 FROM point_transactions WHERE user_id=:u AND operation='挖矿至高奖励'"
+            ), {"u": user_id})).first()
+            if not already:
+                await self._add_points(
+                    session, user_id, self.MINING_BOTH_LEGEND_REWARD, "挖矿至高奖励"
+                )
+                rewards.append(
+                    f"🏆 同时挖到烛心和闲鱼：获得「至高矿主」称号 "
+                    f"+{self.MINING_BOTH_LEGEND_REWARD} 积分！"
+                )
+        if len(collected) >= len(ORE_POOL):
+            already = (await session.execute(text(
+                "SELECT 1 FROM point_transactions WHERE user_id=:u AND operation='挖矿集齐奖励'"
+            ), {"u": user_id})).first()
+            if not already:
+                await self._add_points(
+                    session, user_id, self.MINING_FULL_REWARD, "挖矿集齐奖励"
+                )
+                rewards.append(
+                    f"👑 集齐全部 {len(ORE_POOL)} 种矿石：获得「万物矿主」称号 "
+                    f"+{self.MINING_FULL_REWARD} 积分！"
+                )
+        return rewards
+
+    async def _mining_check(self):
+        """定时任务：每 30 分钟判定一次所有挂机中的矿镐。
+
+        每把矿镐消耗 1 个体力后随机判定事件：
+        挖到的矿石先进 mining_pending，等玩家 /收矿 进矿仓；
+        高价值矿直接全群广播（真实 At 组件）。
+
+        休息时间：北京时间 0:00-7:00 不进行判定（矿工也要休息喵~）
+        """
+        bj_hour = datetime.now(self._beijing_tz).hour
+        if 0 <= bj_hour < 7:
+            return
+
+        async def fn(session):
+            picks = (await session.execute(text(
+                "SELECT p.id, p.user_id, p.slot, p.platform_id, p.group_id, "
+                "COALESCE(NULLIF(u.user_name, ''), p.user_id) "
+                "FROM mining_picks p LEFT JOIN users u ON u.user_id = p.user_id "
+                "WHERE p.status='mining'"
+            ))).all()
+            if not picks:
+                return False, "没有挂机中的矿镐", None
+            broadcasts: list[tuple[str, str, list]] = []   # (platform_id, group_id, 消息链)
+            notices: list[tuple[str, str, str]] = []       # (platform_id, group_id, 事件播报文本)
+            weather_key, weather_cfg = await self._mining_weather_today(session)
+            for pick in picks:
+                pid, uid, slot, platform_id, group_id, user_name = pick
+                group_id = str(group_id or "")
+
+                def notify(text_line: str):
+                    """本群事件播报（不艾特，只说谁遇到了什么事）"""
+                    if group_id:
+                        notices.append((platform_id, group_id, f"⛏️ {user_name} {text_line}"))
+
+                await self._mining_ensure_stats(session, uid)
+                st = (await session.execute(text(
+                    "SELECT lucky_day_expire, storm_expire, cave_level "
+                    "FROM mining_stats WHERE user_id=:u"
+                ), {"u": uid})).first()
+                # 暴风雪暂停：该玩家所有矿镐停工，跳过本次判定
+                if st and st[1] and float(st[1]) > time.time():
+                    continue
+                lucky_active = bool(st and st[0] and float(st[0]) > time.time())
+                cave_level = int(st[2] or 1) if st else 1
+                cave_rare_bonus = self.CAVE_RARE_BONUS.get(cave_level, 0)
+                # 判定前消耗 1 个体力，没体力自动收工
+                energy = await self._mining_energy_count(session, uid)
+                if energy <= 0:
+                    await session.execute(
+                        text("UPDATE mining_picks SET status='idle' WHERE id=:i"), {"i": pid}
+                    )
+                    notify("的体力用完了，矿镐自动收工休息啦~")
+                    continue
+                await session.execute(
+                    text("UPDATE mining_energy SET count=count-1 WHERE user_id=:u"), {"u": uid}
+                )
+                # 矿洞减耗效果：按减耗百分比有几率回补 1 体力
+                red_pct = self.CAVE_ENERGY_REDUCTION.get(cave_level, 0)
+                if red_pct > 0 and random.random() < (min(red_pct, 95) / 100.0):
+                    await session.execute(
+                        text("UPDATE mining_energy SET count=count+1 WHERE user_id=:u"),
+                        {"u": uid},
+                    )
+                # 本次判定统计（每次判定消耗 1 体力）
+                await session.execute(text(
+                    "UPDATE mining_stats SET total_energy_used=total_energy_used+1, "
+                    "today_count=today_count+1 WHERE user_id=:u"
+                ), {"u": uid})
+                event = self._mining_roll_event()
+                # 幸运日 buff：有效期内空洞视为挖到
+                if event == "空洞" and lucky_active:
+                    event = "正常挖到"
+                    notify("幸运日加持！空洞里居然也挖出了矿石！")
+                multi_map = {"正常挖到": 1, "双倍矿石": 2, "矿脉爆发": 1}
+                # 暴风雪天气：挖矿类事件 30% 概率化为空洞（挖矿成功率-30%）
+                if weather_cfg.get("fail_pct") and event in multi_map and \
+                        random.random() < weather_cfg["fail_pct"] / 100.0:
+                    event = "空洞"
+                    notify("暴风雪太猛了，矿道被迫封闭，白干一场…")
+                if event in multi_map:
+                    # 矿脉爆发：额外消耗 1 体力
+                    if event == "矿脉爆发":
+                        if (await self._mining_energy_count(session, uid)) > 0:
+                            await session.execute(
+                                text("UPDATE mining_energy SET count=count-1 WHERE user_id=:u"),
+                                {"u": uid},
+                            )
+                            await session.execute(text(
+                                "UPDATE mining_stats SET total_energy_used=total_energy_used+1 "
+                                "WHERE user_id=:u"
+                            ), {"u": uid})
+                            notify("触发矿脉爆发！额外消耗 1 体力，多挖出一块矿石！")
+                        else:
+                            notify("触发矿脉爆发！可惜没有多余体力，只能干瞪眼…")
+                    caught = multi_map[event]
+                    # 连击推进：连续成功挖到，空洞/断镐/塌方中断
+                    combo_row = (await session.execute(text(
+                        "SELECT current_combo FROM mining_stats WHERE user_id=:u"
+                    ), {"u": uid})).first()
+                    new_combo = int(combo_row[0] or 0) + 1
+                    await session.execute(text(
+                        "UPDATE mining_stats SET current_combo=:c, "
+                        "max_combo=MAX(max_combo, :c) WHERE user_id=:u"
+                    ), {"c": new_combo, "u": uid})
+                    combo_mult, combo_bonus, force_tier = self._mining_combo_effect(new_combo)
+                    if combo_bonus > 0:
+                        await self._add_points(session, uid, combo_bonus, "挖矿连击奖励")
+                    # 20 连击：本次稀有概率+10%
+                    catch_bonus = cave_rare_bonus + (10 if new_combo >= 20 else 0)
+                    ore_texts: list[str] = []
+                    for _ in range(caught):
+                        if force_tier:
+                            picked = self._mining_pick_ore_tier(force_tier)
+                        else:
+                            picked = self._mining_pick_ore()
+                        picked, cave_upgraded = self._mining_apply_cave_upgrade(
+                            picked, catch_bonus)
+                        name, price, rarity, prob = picked
+                        upgrade_tag = "·矿洞加成↑" if cave_upgraded else ""
+                        # 天气加成：雨天/寒冷/雾天把普通矿升级为稀有/珍稀/传说
+                        wtier = weather_cfg.get("tier")
+                        if wtier and rarity == "普通" and \
+                                random.random() < weather_cfg["pct"] / 100.0:
+                            name, price, rarity, prob = self._mining_pick_ore_tier(wtier)
+                            upgrade_tag = f"{upgrade_tag}·天气加成↑" if upgrade_tag else "·天气加成↑"
+                        # 天气大矿/满月价值乘数（随矿石保留到卖出）× 连击价值加成
+                        bigore = bool(weather_cfg.get("bigore")) and \
+                            random.random() < weather_cfg["bigore"] / 100.0
+                        value_mult = round(
+                            self._mining_weather_value_mult(weather_cfg, bigore) * combo_mult, 4)
+                        if bigore:
+                            upgrade_tag = f"{upgrade_tag}·🪨大矿" if upgrade_tag else "·🪨大矿"
+                        if combo_mult > 1.0:
+                            upgrade_tag = f"{upgrade_tag}·🔥{new_combo}连击"
+                        ore_texts.append(f"{name}（{price}积分{upgrade_tag}）")
+                        await session.execute(text(
+                            "INSERT INTO mining_pending(user_id, ore_name, value_mult, catch_time) "
+                            "VALUES(:u, :n, :m, :t)"
+                        ), {"u": uid, "n": name, "m": value_mult, "t": time.time()})
+                        await session.execute(text(
+                            "UPDATE mining_stats SET total_caught=total_caught+1 WHERE user_id=:u"
+                        ), {"u": uid})
+                        # 更新每日挖矿任务
+                        await self._mining_task_tick(session, uid, 1, name, price)
+                        # 全群广播：传说级及以上（售价 > 1000 也触发）
+                        if rarity in self.MINING_BROADCAST_RARITIES or price > self.MINING_BROADCAST_PRICE:
+                            chain = [At(qq=str(uid))]
+                            if rarity == "至高传说":
+                                chain.append(Plain(
+                                    f" 🌟🌟🌟 挖到了传说中的 {name}（价值{price}积分！"
+                                    f"概率{f'{prob:.6f}'.rstrip('0').rstrip('.')}%！！！）\n"
+                                    f"此乃万中无一之奇迹！"
+                                ))
+                            else:
+                                chain.append(Plain(
+                                    f" 🎉🎉🎉 挖到了 {name}（价值{price}积分！"
+                                    f"概率{f'{prob:.6f}'.rstrip('0').rstrip('.')}%！！！）"
+                                ))
+                            if group_id:
+                                broadcasts.append((platform_id, group_id, chain))
+                    notify(f"挖到了 {'、'.join(ore_texts)}，进矿仓啦！")
+                    await self._mining_task_streak(session, uid, broke=False)
+                elif event == "空洞":
+                    await session.execute(
+                        text("UPDATE mining_stats SET current_combo=0 WHERE user_id=:u"),
+                        {"u": uid},
+                    )
+                    notify("挖了半天只有一个空洞，体力白费…")
+                    await self._mining_task_streak(session, uid, broke=True)
+                elif event == "神秘宝箱":
+                    amount = random.randint(self.MINING_BOX_MIN, self.MINING_BOX_MAX)
+                    await self._add_points(session, uid, amount, "挖矿宝箱")
+                    notify(f"挖到一个神秘宝箱，开出 {amount} 积分！")
+                elif event == "矿镐断裂":
+                    await session.execute(
+                        text("UPDATE mining_picks SET status='broken' WHERE id=:i"), {"i": pid}
+                    )
+                    await session.execute(
+                        text("UPDATE mining_stats SET current_combo=0 WHERE user_id=:u"),
+                        {"u": uid},
+                    )
+                    notify("咔嚓！矿镐断了，记得 /修矿镐 哦~")
+                    await self._mining_task_streak(session, uid, broke=True)
+                elif event == "塌方":
+                    # 矿镐永久消失：整行删除
+                    await session.execute(
+                        text("DELETE FROM mining_picks WHERE id=:i"), {"i": pid}
+                    )
+                    await session.execute(
+                        text("UPDATE mining_stats SET current_combo=0 WHERE user_id=:u"),
+                        {"u": uid},
+                    )
+                    notify(f"矿道塌方！{int(slot)} 号矿镐被永远埋在了地下…默哀")
+                    await self._mining_task_streak(session, uid, broke=True)
+                elif event == "暴风雪":
+                    expire = time.time() + self.MINING_STORM_HOURS * 3600
+                    await session.execute(text(
+                        "UPDATE mining_stats SET storm_expire=:e WHERE user_id=:u"
+                    ), {"e": expire, "u": uid})
+                    notify(f"暴风雪来袭！所有矿镐暂停 {self.MINING_STORM_HOURS} 小时…")
+                elif event == "幸运日":
+                    expire = time.time() + self.MINING_LUCKY_HOURS * 3600
+                    await session.execute(text(
+                        "UPDATE mining_stats SET lucky_day=lucky_day+1, lucky_day_expire=:e "
+                        "WHERE user_id=:u"
+                    ), {"u": uid, "e": expire})
+                    notify(f"时来运转！获得 {self.MINING_LUCKY_HOURS} 小时幸运buff，"
+                           "期间空洞视为挖到、卖矿收入翻倍！")
+            return True, "判定完成", (broadcasts, notices)
+
+        ok, msg, data = await self._tx(fn)
+        if not ok or not data:
+            self.logger.info(f"挖矿判定未执行：{msg}")
+            return
+        broadcasts, notices = data
+        self.logger.info(f"挖矿判定完成：播报 {len(notices)} 条事件，{len(broadcasts)} 条高价广播")
+        # 事务外发送全群广播，避免阻塞数据库
+        for platform_id, group_id, chain in broadcasts:
+            await self._send_with_fallback(platform_id, group_id, chain, "挖矿高价广播")
+        # 事件播报：按群聚合所有人的播报，合并为一条文字消息
+        per_group: dict[tuple, list] = {}
+        for platform_id, group_id, text_line in notices:
+            per_group.setdefault((str(platform_id), str(group_id)), []).append(str(text_line))
+        for (platform_id, group_id), lines in per_group.items():
+            aggregate = "\n".join(lines)
+            await self._send_with_fallback(platform_id, group_id, [Plain(aggregate)], "挖矿播报")
+
+    async def _mining_daily_reset(self):
+        """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
+        async def fn(session):
+            await session.execute(text(
+                "UPDATE mining_stats SET today_count=0, today_success=0, today_date=:d"
+            ), {"d": date.today().isoformat()})
+            return True, "今日挖矿统计已重置", None
+
+        await self._tx(fn)
+
+    # ==================== 挖矿天气 ====================
+    async def _mining_weather_today(self, session) -> tuple[str, dict]:
+        """获取今日矿洞天气（无则按概率惰性生成，必须在事务内调用）。返回 (key, 配置)"""
+        today = date.today().isoformat()
+        row = (await session.execute(text(
+            "SELECT weather FROM mining_weather WHERE date=:d"
+        ), {"d": today})).first()
+        if not row:
+            keys = list(self.MINING_WEATHER_CONFIG.keys())
+            weights = [self.MINING_WEATHER_CONFIG[k]["prob"] for k in keys]
+            key = random.choices(keys, weights=weights)[0]
+            # 并发生成时后写方忽略，date 主键防重复
+            await session.execute(text(
+                "INSERT OR IGNORE INTO mining_weather(date, weather, created_at) "
+                "VALUES(:d, :w, :t)"
+            ), {"d": today, "w": key, "t": time.time()})
+            row = (await session.execute(text(
+                "SELECT weather FROM mining_weather WHERE date=:d"
+            ), {"d": today})).first()
+        key = str(row[0])
+        return key, self.MINING_WEATHER_CONFIG.get(key, self.MINING_WEATHER_CONFIG["sunny"])
+
+    def _mining_weather_value_mult(self, weather_cfg: dict, bigore: bool) -> float:
+        """矿石价值乘数：大型矿 ×1.5 ×（满月 ×1.3）"""
+        mult = self.FISHING_BIGFISH_MULT if bigore else 1.0
+        return round(mult * float(weather_cfg.get("value_mult", 1.0)), 4)
+
+    async def _mining_weather_refresh(self):
+        """每天 0 点预生成当日矿洞天气"""
+        try:
+            async def fn(session):
+                wkey, wcfg = await self._mining_weather_today(session)
+                return True, "ok", (wkey, wcfg)
+            ok, _msg, data = await self._tx(fn)
+            if ok and data:
+                self.logger.info(f"今日矿洞天气已生成：{data[1]['name']}")
+        except Exception:
+            self.logger.exception("挖矿天气刷新任务失败")
+
+    @filter.command("买矿镐")
+    async def mining_buy_pick(self, event: AstrMessageEvent):
+        """/买矿镐 —— 花费 200 积分购买一把矿镐（最多 5 把）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "买矿镐")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._ensure_user(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            cnt = (await session.execute(text(
+                "SELECT COUNT(*) FROM mining_picks WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if int(cnt[0]) >= self.MINING_MAX_PICKS:
+                raise _BizError(f"矿镐已经满 {self.MINING_MAX_PICKS} 把啦，不能再买了喵~")
+            slots = {int(r[0]) for r in (await session.execute(text(
+                "SELECT slot FROM mining_picks WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            slot = next(i for i in range(1, self.MINING_MAX_PICKS + 1) if i not in slots)
+            bal = await self._total_balance(session, user_id)
+            if bal < self.MINING_PICK_COST:
+                raise _BizError(
+                    f"积分不足喵~ 买矿镐需要 {self.MINING_PICK_COST} 积分，你只有 {bal} 积分"
+                )
+            await self._add_points(session, user_id, -self.MINING_PICK_COST, "buy_pick")
+            await session.execute(text(
+                "INSERT INTO mining_picks(user_id, slot, status, created_at) "
+                "VALUES(:u, :s, 'idle', :t)"
+            ), {"u": user_id, "s": slot, "t": time.time()})
+            owned = int(cnt[0]) + 1
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"⛏️ 矿镐购买成功！获得 {slot} 号矿镐，当前拥有 {owned}/{self.MINING_MAX_PICKS} 把，"
+                f"花费 {self.MINING_PICK_COST} 积分，当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("买体力")
+    async def mining_buy_energy(self, event: AstrMessageEvent):
+        """/买体力 [数量] —— 10 积分/个购买体力，不填数量默认买 1 个"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "买体力")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        count = 1
+        args = self._strip_command(event, "买体力")
+        if args:
+            try:
+                count = int(args.split()[0])
+                if count <= 0:
+                    raise ValueError
+            except ValueError:
+                yield event.plain_result("体力数量得是正整数喵~")
+                return
+
+        async def fn(session):
+            await self._ensure_user(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            cost = count * self.MINING_ENERGY_COST
+            bal = await self._total_balance(session, user_id)
+            if bal < cost:
+                raise _BizError(
+                    f"积分不足喵~ 买 {count} 个体力需要 {cost} 积分，你只有 {bal} 积分"
+                )
+            await self._add_points(session, user_id, -cost, "buy_energy")
+            await session.execute(text(
+                "INSERT INTO mining_energy(user_id, count) VALUES(:u, :c) "
+                "ON CONFLICT(user_id) DO UPDATE SET count=mining_energy.count+:c"
+            ), {"u": user_id, "c": count})
+            energy = await self._mining_energy_count(session, user_id)
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🔋 成功购买 {count} 个体力，共消耗 {cost} 积分，"
+                f"现有体力 {energy} 个，当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("挂机挖矿")
+    async def mining_start(self, event: AstrMessageEvent):
+        """/挂机挖矿 [编号] —— 让矿镐开始挂机，不填编号则全部待机矿镐一起开工"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "挂机挖矿")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        args = self._strip_command(event, "挂机挖矿")
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            picks = (await session.execute(text(
+                "SELECT id, slot, status FROM mining_picks WHERE user_id=:u ORDER BY slot"
+            ), {"u": user_id})).all()
+            if not picks:
+                raise _BizError("你还没有矿镐，先 /买矿镐 喵~")
+            # 选出目标矿镐
+            if args:
+                try:
+                    slot = int(args.split()[0])
+                except ValueError:
+                    raise _BizError("矿镐编号得是数字喵~")
+                matched = [p for p in picks if int(p[1]) == slot]
+                if not matched:
+                    raise _BizError(f"没有 {slot} 号矿镐喵~ 发 /矿镐列表 查看你的矿镐")
+                pick = matched[0]
+                if pick[2] == "mining":
+                    raise _BizError(f"{slot} 号矿镐已经在挂机啦喵~")
+                if pick[2] == "broken":
+                    raise _BizError(f"{slot} 号矿镐断了，先 /修矿镐 {slot} 喵~")
+                targets = [pick]
+            else:
+                targets = [p for p in picks if p[2] == "idle"]
+                if not targets:
+                    raise _BizError("没有待机的矿镐喵~（挂机中或损坏的镐不能用）")
+            energy = await self._mining_energy_count(session, user_id)
+            if energy <= 0:
+                raise _BizError("没有体力啦，先 /买体力 再来挖矿喵~")
+            weather_key, weather_cfg = await self._mining_weather_today(session)
+            # 体力不足以全覆盖时只启动部分矿镐（每次判定每镐消耗 1 个体力）
+            start_n = min(len(targets), energy)
+            for pick in targets[:start_n]:
+                await session.execute(text(
+                    "UPDATE mining_picks SET status='mining', platform_id=:p, group_id=:g "
+                    "WHERE id=:i"
+                ), {"p": platform_id, "g": group_id, "i": pick[0]})
+            msg = (
+                f"⛏️ 今日矿洞天气{weather_cfg['name']}！{weather_cfg['desc']}！\n"
+                f"{start_n} 把矿镐已开工！每 {self.MINING_CHECK_INTERVAL} 分钟来收一次，"
+                f"每次消耗 1 个体力，挖到的矿用 /收矿 收取喵~"
+            )
+            if start_n < len(targets):
+                msg += f"\n（体力只够 {start_n} 把镐，剩下的先补体力喵~）"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("收矿")
+    async def mining_collect(self, event: AstrMessageEvent):
+        """/收矿 —— 把 pending 里的矿石收进矿仓，并记录图鉴/判定收集奖励"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "收矿")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            pending = (await session.execute(text(
+                "SELECT ore_name, value_mult, COUNT(*) FROM mining_pending WHERE user_id=:u "
+                "GROUP BY ore_name, value_mult"
+            ), {"u": user_id})).all()
+            if not pending:
+                raise _BizError("还没挖到矿喵~ 挂机中的矿镐每 30 分钟判定一次，等等再来")
+            total = 0
+            new_species: list[str] = []
+            details: list[str] = []
+            for name, mult, cnt in pending:
+                name = str(name)
+                cnt = int(cnt)
+                mult = float(mult or 1)
+                total += cnt
+                price = int(ORE_POOL.get(name, (0,))[0] * mult)
+                rarity = ORE_POOL.get(name, (0, "未知", 0.0))[1]
+                # 并入矿仓（同矿同名合并，价值乘数取首见值）
+                await session.execute(text(
+                    "INSERT INTO mining_inventory(user_id, ore_name, value_mult, count) "
+                    "VALUES(:u, :n, :m, :c) "
+                    "ON CONFLICT(user_id, ore_name) DO UPDATE SET "
+                    "count=mining_inventory.count+:c"
+                ), {"u": user_id, "n": name, "m": mult, "c": cnt})
+                # 记录图鉴（挖到过即收集，卖矿不影响进度）
+                result = await session.execute(text(
+                    "INSERT OR IGNORE INTO mining_collection(user_id, ore_name, first_time) "
+                    "VALUES(:u, :n, :t)"
+                ), {"u": user_id, "n": name, "t": time.time()})
+                if result.rowcount == 1:
+                    new_species.append(f"{name}（{rarity}·{price}积分）")
+                details.append(f"{name}×{cnt}")
+            await session.execute(
+                text("DELETE FROM mining_pending WHERE user_id=:u"), {"u": user_id}
+            )
+            # 图鉴收集奖励判定（烛心/闲鱼/集齐）
+            collected = {str(r[0]) for r in (await session.execute(text(
+                "SELECT ore_name FROM mining_collection WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            rewards = await self._mining_grant_titles(session, user_id, collected)
+            await session.execute(text(
+                "UPDATE mining_stats SET collection_count=:c WHERE user_id=:u"
+            ), {"u": user_id, "c": len(collected)})
+            msg = f"📦 收矿成功！本次进仓 {total} 块：{'、'.join(details)}喵~"
+            if new_species:
+                msg += f"\n✨ 图鉴新收录：{'、'.join(new_species)}"
+            for line in rewards:
+                msg += f"\n{line}"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("矿仓")
+    async def mining_barn(self, event: AstrMessageEvent):
+        """/矿仓 —— 查看矿仓里所有矿石（按价值排序）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "矿仓")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            rows = (await session.execute(text(
+                "SELECT ore_name, value_mult, count FROM mining_inventory WHERE user_id=:u "
+                "ORDER BY count DESC"
+            ), {"u": user_id})).all()
+            if not rows:
+                raise _BizError("矿仓空空如也喵~ 发 /挂机挖矿 开工吧")
+            total_cnt = 0
+            total_value = 0
+            lines = ["📦 【矿仓】"]
+            for name, mult, cnt in rows:
+                name = str(name)
+                cnt = int(cnt or 0)
+                mult = float(mult or 1)
+                base_price = ORE_POOL.get(name, (0,))[0]
+                price = int(base_price * mult)
+                total_cnt += cnt
+                total_value += price * cnt
+                rarity = ORE_POOL.get(name, ("", "未知"))[1]
+                mark = "🪨" if mult >= self.FISHING_BIGFISH_MULT else ""
+                lines.append(f"• {mark}{name}（{rarity}）×{cnt}　{price}积分/块")
+            lines.append("─────────────")
+            lines.append(f"共 {len(rows)} 种 {total_cnt} 块，总价值约 {total_value} 积分")
+            lines.append("发 /卖矿 一键卖出")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("卖矿")
+    async def mining_sell(self, event: AstrMessageEvent):
+        """/卖矿 —— 一键卖出矿仓里所有矿石，按矿石售价换算积分"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "卖矿")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            rows = (await session.execute(text(
+                "SELECT ore_name, value_mult, count FROM mining_inventory WHERE user_id=:u"
+            ), {"u": user_id})).all()
+            if not rows:
+                raise _BizError("矿仓里没有矿石可以卖喵~ 先 /挂机挖矿 再来")
+            total = 0
+            ore_cnt = 0
+            details: list[str] = []
+            best_name, best_value = None, 0
+            for name, mult, cnt in rows:
+                name = str(name)
+                cnt = int(cnt or 0)
+                mult = float(mult or 1)
+                base_price = ORE_POOL.get(name, (0,))[0]
+                price = int(base_price * mult)
+                total += price * cnt
+                ore_cnt += cnt
+                details.append(f"{name}×{cnt}")
+                if base_price > best_value:
+                    best_name, best_value = name, base_price
+            # 幸运日 buff：24 小时内卖矿收入翻倍
+            st = (await session.execute(text(
+                "SELECT lucky_day_expire FROM mining_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            lucky_on = bool(st and st[0] and float(st[0]) > time.time())
+            if lucky_on:
+                total = total * 2
+            # 组队收益加成
+            team_mult = await self._mteam_bonus_mult(session, user_id)
+            if team_mult > 1.0:
+                total = int(total * team_mult)
+            await self._add_points(session, user_id, total, "sell_ore", earned=total)
+            await session.execute(text(
+                "UPDATE mining_stats SET total_income=total_income+:t, "
+                "total_ore_count=total_ore_count+:c WHERE user_id=:u"
+            ), {"u": user_id, "t": total, "c": ore_cnt})
+            # 维护最高价值矿
+            current_best = (await session.execute(text(
+                "SELECT best_ore_value FROM mining_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if best_name and (not current_best or best_value > int(current_best[0] or 0)):
+                await session.execute(text(
+                    "UPDATE mining_stats SET best_ore_name=:n, best_ore_value=:v WHERE user_id=:u"
+                ), {"u": user_id, "n": best_name, "v": best_value})
+            await session.execute(
+                text("DELETE FROM mining_inventory WHERE user_id=:u"), {"u": user_id}
+            )
+            new_bal = await self._balance(session, user_id)
+            msg = (f"💰 卖出所有矿石，共 {len(rows)} 种，获得 {total} 积分"
+                   f"{'（🔥幸运日翻倍）' if lucky_on else ''}\n"
+                   f"明细：{'、'.join(details)}\n"
+                   f"当前积分：{new_bal} 喵~")
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("矿图鉴")
+    async def mining_collection_cmd(self, event: AstrMessageEvent):
+        """/矿图鉴 —— 查看已收集矿石图鉴进度（按稀有度分组）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "矿图鉴")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            collected = {str(r[0]) for r in (await session.execute(text(
+                "SELECT ore_name FROM mining_collection WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            lines = [f"📔 【矿石图鉴】{len(collected)}/{len(ORE_POOL)} 种"]
+            for rarity, (_tp, ores) in ORE_TABLE.items():
+                names = list(dict.fromkeys(n for n, _p in ores))
+                owned = [n for n in names if n in collected]
+                lines.append(f"• {rarity}：{len(owned)}/{len(names)}")
+            if not collected:
+                lines.append("还没有收录任何矿石，发 /挂机挖矿 开挖吧喵~")
+            else:
+                lines.append("─────────────")
+                lines.append(f"已收录：{'、'.join(sorted(collected))}")
+            # 收集称号
+            titles: list[str] = []
+            if "烛心" in collected:
+                titles.append("烛心矿主")
+            if "闲鱼" in collected:
+                titles.append("闲鱼矿主")
+            if {"烛心", "闲鱼"} <= collected:
+                titles.append("至高矿主")
+            if len(collected) >= len(ORE_POOL):
+                titles.append("万物矿主")
+            if titles:
+                lines.append(f"🎖 称号：{'、'.join(titles)}")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("矿镐列表")
+    async def mining_pick_list(self, event: AstrMessageEvent):
+        """/矿镐列表 —— 查看每把矿镐状态与体力余量"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "矿镐列表")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        status_text = {"idle": "待机", "mining": "挂机中", "broken": "已损坏"}
+
+        async def fn(session):
+            picks = (await session.execute(text(
+                "SELECT slot, status FROM mining_picks WHERE user_id=:u ORDER BY slot"
+            ), {"u": user_id})).all()
+            if not picks:
+                raise _BizError("你还没有矿镐，先 /买矿镐 喵~")
+            energy = await self._mining_energy_count(session, user_id)
+            lines = [f"⛏️ 矿镐列表（体力余量：{energy} 个）"]
+            for slot, status in picks:
+                lines.append(f"{int(slot)} 号镐：{status_text.get(str(status), str(status))}")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("修矿镐")
+    async def mining_repair(self, event: AstrMessageEvent):
+        """/修矿镐 [编号] —— 修理损坏的矿镐（不带编号=一键修好全部）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "修矿镐")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        args = self._strip_command(event, "修矿镐").strip()
+
+        slot = None
+        if args:
+            try:
+                slot = int(args.split()[0])
+            except ValueError:
+                yield event.plain_result("矿镐编号得是数字喵~ 不带编号则一键修理全部")
+                return
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+
+            if slot is not None:
+                pick = (await session.execute(text(
+                    "SELECT id, status FROM mining_picks WHERE user_id=:u AND slot=:s"
+                ), {"u": user_id, "s": slot})).first()
+                if not pick:
+                    raise _BizError(f"没有 {slot} 号矿镐喵~ 发 /矿镐列表 查看你的矿镐")
+                if pick[1] != "broken":
+                    raise _BizError(f"{slot} 号矿镐没坏，不用修喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.MINING_REPAIR_COST:
+                    raise _BizError(
+                        f"积分不足喵~ 修矿镐需要 {self.MINING_REPAIR_COST} 积分，"
+                        f"你只有 {bal} 积分"
+                    )
+                await self._add_points(
+                    session, user_id, -self.MINING_REPAIR_COST, "repair_pick")
+                await session.execute(
+                    text("UPDATE mining_picks SET status='idle' WHERE id=:i"), {"i": pick[0]}
+                )
+                new_bal = await self._balance(session, user_id)
+                return True, (
+                    f"🔧 {slot} 号矿镐修好啦！花费 {self.MINING_REPAIR_COST} 积分，"
+                    f"当前积分：{new_bal} 喵~"
+                ), None
+
+            broken = (await session.execute(text(
+                "SELECT id, slot FROM mining_picks WHERE user_id=:u AND status='broken' "
+                "ORDER BY slot"
+            ), {"u": user_id})).all()
+            if not broken:
+                raise _BizError("没有损坏的矿镐喵~ 全部完好无损！")
+            cost = self.MINING_REPAIR_COST * len(broken)
+            bal = await self._total_balance(session, user_id)
+            if bal < cost:
+                raise _BizError(
+                    f"积分不足喵~ 修理 {len(broken)} 把矿镐需要 {cost} 积分"
+                    f"（{self.MINING_REPAIR_COST}/把），你只有 {bal} 积分"
+                )
+            for pick in broken:
+                await session.execute(
+                    text("UPDATE mining_picks SET status='idle' WHERE id=:i"), {"i": pick[0]}
+                )
+            await self._add_points(session, user_id, -cost, "repair_pick")
+            slots = "、".join(str(p[1]) for p in broken)
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🔧 一键修理完成！{slots} 号矿镐全部修好啦！\n"
+                f"共修理 {len(broken)} 把，花费 {cost} 积分，当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 矿洞养成 ====================
+    @filter.command("矿洞")
+    async def cave_status(self, event: AstrMessageEvent):
+        """/矿洞 —— 查看自己的矿洞等级与加成效果"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "矿洞")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            row = (await session.execute(text(
+                "SELECT cave_level FROM mining_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            level = int(row[0] or 1) if row else 1
+            energy_red = self.CAVE_ENERGY_REDUCTION.get(level, 0)
+            rare_bonus = self.CAVE_RARE_BONUS.get(level, 0)
+            max_hours = self.CAVE_BASE_HOURS + self.CAVE_EXTRA_HOURS.get(level, 0)
+            lines = [
+                "🕳️ 【矿洞状态】",
+                f"等级：{level}级",
+                f"体力消耗：-{energy_red}%",
+                f"稀有矿转化：普通矿有 {rare_bonus}% 概率升级为稀有矿",
+                f"挂机时间上限：{max_hours}小时",
+            ]
+            if level < self.CAVE_MAX_LEVEL:
+                nxt = level + 1
+                cost = self.CAVE_UPGRADE_COST.get(nxt, 0)
+                lines.append(f"升级到{nxt}级需要：{cost}积分")
+                lines.append("发送 /升级矿洞 升级！")
+            else:
+                lines.append("✅ 已满级，矿洞灯火通明！")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("升级矿洞")
+    async def cave_upgrade(self, event: AstrMessageEvent):
+        """/升级矿洞 —— 花费积分永久提升挖矿收益"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "升级矿洞")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            row = (await session.execute(text(
+                "SELECT cave_level FROM mining_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            level = int(row[0] or 1) if row else 1
+            if level >= self.CAVE_MAX_LEVEL:
+                raise _BizError(f"✅ 已满级！当前等级：{self.CAVE_MAX_LEVEL}级")
+            nxt = level + 1
+            cost = self.CAVE_UPGRADE_COST.get(nxt, 0)
+            bal = await self._total_balance(session, user_id)
+            if bal < cost:
+                raise _BizError(
+                    f"❌ 积分不足！升级需要 {cost} 积分，当前余额：{bal} 积分"
+                )
+            await self._add_points(session, user_id, -cost, "cave_upgrade", spent=cost)
+            await session.execute(
+                text("UPDATE mining_stats SET cave_level=:l WHERE user_id=:u"),
+                {"u": user_id, "l": nxt},
+            )
+            energy_red = self.CAVE_ENERGY_REDUCTION.get(nxt, 0)
+            rare_bonus = self.CAVE_RARE_BONUS.get(nxt, 0)
+            extra = self.CAVE_EXTRA_HOURS.get(nxt, 0)
+            new_bal = await self._balance(session, user_id)
+            add_effects = [f"体力消耗-{energy_red}%", f"稀有矿概率+{rare_bonus}%"]
+            if extra:
+                add_effects.append(f"挂机上限+{extra}小时")
+            return True, (
+                f"✅ 矿洞升级成功！当前等级：{nxt}级\n"
+                f"新增效果：{'，'.join(add_effects)}\n"
+                f"花费 {cost} 积分，当前积分：{new_bal} 喵~"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 挖矿每日任务 ====================
+    async def _ensure_daily_mining_tasks(self, session, user_id: str):
+        """为今日生成每日挖矿任务（已有今日任务则跳过）"""
+        today = date.today().isoformat()
+        exist = (await session.execute(text(
+            "SELECT 1 FROM mining_tasks WHERE user_id=:u AND task_date=:d LIMIT 1"
+        ), {"u": user_id, "d": today})).first()
+        if exist:
+            return
+        types = random.sample(self.MINING_TASK_TYPES, 3)
+        for t in types:
+            req_opts = self.MINING_TASK_REQUIREMENTS[t]
+            req = random.choice(req_opts)
+            lo, hi = self.MINING_TASK_REWARD_RANGES[t]
+            reward = random.randint(lo, hi)
+            target = str(req)
+            if t == "specific":
+                target = random.choice(list(ORE_POOL.keys()))
+            elif t == "value":
+                target = str(random.choice(self.MINING_TASK_REQUIREMENTS["value"]))
+            req = int(target) if str(target).isdigit() else 1
+            await session.execute(text(
+                "INSERT INTO mining_tasks(user_id, task_date, task_type, task_target, "
+                "task_requirement, task_reward) VALUES(:u,:d,:ty,:tg,:rq,:rw)"
+            ), {"u": user_id, "d": today, "ty": t, "tg": target,
+                "rq": req, "rw": reward})
+
+    async def _mining_task_tick(self, session, user_id: str,
+                                n_ore: int = 0, name: str = "", value: int = 0):
+        await self._ensure_daily_mining_tasks(session, user_id)
+        today = date.today().isoformat()
+        tasks = (await session.execute(text(
+            "SELECT id, task_type, task_target, task_requirement, task_progress, task_reward "
+            "FROM mining_tasks WHERE user_id=:u AND task_date=:d AND task_status='pending'"
+        ), {"u": user_id, "d": today})).all()
+        if not tasks:
+            return
+        for t in tasks:
+            tid, ty, tg, req, prog, reward = t
+            req = int(req); prog = int(prog or 0)
+            if ty == "collection":
+                cnt = (await session.execute(text(
+                    "SELECT COUNT(DISTINCT ore_name) FROM mining_collection WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                distinct = int(cnt[0] or 0) if cnt else 0
+                np = max(prog, min(distinct, req))
+                await session.execute(text(
+                    "UPDATE mining_tasks SET task_progress=:p WHERE id=:i"),
+                    {"p": np, "i": tid})
+                complete = distinct >= req
+            elif ty == "count":
+                np = min(prog + n_ore, req)
+                await session.execute(text(
+                    "UPDATE mining_tasks SET task_progress=:p WHERE id=:i"),
+                    {"p": np, "i": tid})
+                complete = np >= req
+            elif ty == "specific":
+                complete = name and name == tg and prog < 1
+                if complete:
+                    await session.execute(text(
+                        "UPDATE mining_tasks SET task_progress=1 WHERE id=:i"), {"i": tid})
+            elif ty == "value":
+                complete = prog < 1 and value >= int(tg)
+                if complete:
+                    await session.execute(text(
+                        "UPDATE mining_tasks SET task_progress=1 WHERE id=:i"), {"i": tid})
+            else:  # combo
+                complete = False
+            if complete:
+                await session.execute(text(
+                    "UPDATE mining_tasks SET task_status='completed' WHERE id=:i"), {"i": tid})
+                await self._add_points(session, user_id, int(reward), "mining_task")
+
+    async def _mining_task_streak(self, session, user_id: str, broke: bool):
+        """维护今日连续成功数并推进 combo 任务"""
+        today = date.today().isoformat()
+        row = (await session.execute(text(
+            "SELECT today_success FROM mining_stats WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        val = 0 if broke else (int(row[0] or 0) + 1)
+        await session.execute(text(
+            "UPDATE mining_stats SET today_success=:s WHERE user_id=:u"),
+            {"s": val, "u": user_id})
+        await self._ensure_daily_mining_tasks(session, user_id)
+        tasks = (await session.execute(text(
+            "SELECT id, task_target, task_requirement, task_progress, task_reward "
+            "FROM mining_tasks WHERE user_id=:u AND task_date=:d "
+            "AND task_type='combo' AND task_status='pending'"),
+            {"u": user_id, "d": today})).all()
+        for t in tasks:
+            tid, tg, req, prog, reward = t
+            req = int(req); nv = max(int(prog or 0), min(val, req))
+            await session.execute(text(
+                "UPDATE mining_tasks SET task_progress=:p WHERE id=:i"),
+                {"p": nv, "i": tid})
+            if nv >= req:
+                await session.execute(text(
+                    "UPDATE mining_tasks SET task_status='completed' WHERE id=:i"), {"i": tid})
+                if int(reward or 0) > 0:
+                    await self._add_points(session, user_id, int(reward), "mining_task")
+
+    @filter.command("挖矿任务")
+    async def mining_task_view(self, event: AstrMessageEvent):
+        """/挖矿任务 —— 查看今日挖矿任务"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "挖矿任务")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        today = date.today().isoformat()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            await self._ensure_daily_mining_tasks(session, user_id)
+            tasks = (await session.execute(text(
+                "SELECT task_type, task_target, task_requirement, task_progress, "
+                "task_reward, task_status FROM mining_tasks "
+                "WHERE user_id=:u AND task_date=:d ORDER BY id"),
+                {"u": user_id, "d": today})).all()
+            lines = ["📋 【今日挖矿任务】"]
+            done = 0
+            for ty, tg, req, prog, rwd, st in tasks:
+                req = int(req); p = int(prog or 0)
+                if ty == "count":
+                    disp = f"挖到{tg}块矿"
+                elif ty == "specific":
+                    disp = f"挖到 1 块「{tg}」"
+                elif ty == "value":
+                    disp = f"挖到价值>{tg}的矿"
+                elif ty == "combo":
+                    disp = f"连续挖到{req}次（不空洞）"
+                else:
+                    disp = f"挖到{req}种不同矿"
+                done += 1 if st == "completed" else 0
+                mark = " ✅ 已领取" if st == "completed" else ""
+                lines.append(f"• {disp}（{min(p,req)}/{req}）→ {rwd}积分{mark}")
+            lines.append("─────────────")
+            lines.append(f"完成进度：{done}/{len(tasks)}")
+            if done < len(tasks):
+                lines.append(f"还差 {len(tasks)-done} 个任务")
+            else:
+                bonus = (await session.execute(text(
+                    "SELECT bonus_claimed FROM mining_tasks WHERE user_id=:u "
+                    "AND task_date=:d LIMIT 1"), {"u": user_id, "d": today})).first()
+                if bonus and int(bonus[0] or 0):
+                    lines.append(f"✅ 全部完成！额外奖励 {self.MINING_TASK_BONUS} 积分已领取！")
+                else:
+                    lines.append(
+                        f"🎉 全部完成！发 /领取挖矿奖励 领额外 {self.MINING_TASK_BONUS} 积分！")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("领取挖矿奖励")
+    async def mining_task_claim(self, event: AstrMessageEvent):
+        """/领取挖矿奖励 —— 全部完成时发额外奖励"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "领取挖矿奖励")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        today = date.today().isoformat()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            await self._ensure_daily_mining_tasks(session, user_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            pend = (await session.execute(text(
+                "SELECT COUNT(*) FROM mining_tasks WHERE user_id=:u AND task_date=:d "
+                "AND task_status='pending'"), {"u": user_id, "d": today})).first()
+            if pend and int(pend[0] or 0) > 0:
+                raise _BizError(f"还有 {int(pend[0])} 个任务未完成，完成后再来喵~")
+            b = (await session.execute(text(
+                "SELECT bonus_claimed FROM mining_tasks WHERE user_id=:u "
+                "AND task_date=:d LIMIT 1"), {"u": user_id, "d": today})).first()
+            if b and int(b[0] or 0):
+                raise _BizError("今日额外奖励已领取喵~")
+            await session.execute(text(
+                "UPDATE mining_tasks SET bonus_claimed=1 WHERE user_id=:u AND task_date=:d"),
+                {"u": user_id, "d": today})
+            await self._add_points(
+                session, user_id, self.MINING_TASK_BONUS, "mining_task_bonus")
+            new_bal = await self._balance(session, user_id)
+            return True, (
+                f"🎉 全部完成！额外奖励 {self.MINING_TASK_BONUS} 积分已到账！\n"
+                f"当前积分：{new_bal} 喵~"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 挖矿天气 / 排行 / 统计 ====================
+    @filter.command("挖矿天气")
+    async def mining_weather_cmd(self, event: AstrMessageEvent):
+        """/挖矿天气 —— 查看今日矿洞天气与加成效果"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "挖矿天气")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+
+        async def fn(session):
+            wkey, wcfg = await self._mining_weather_today(session)
+            # 刷新倒计时：距明日 0 点
+            now = datetime.now(TZ)
+            tomorrow = (now + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0)
+            remain_h = int((tomorrow - now).total_seconds() // 3600)
+            remain_m = int(((tomorrow - now).total_seconds() % 3600) // 60)
+            lines = [
+                f"🌤️ 【今日矿洞天气】{wcfg['name']}",
+                f"效果：{wcfg['desc']}",
+                f"💡 {wcfg['advice']}",
+                f"（{remain_h}小时{remain_m}分后刷新）",
+            ]
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("挖矿排行")
+    async def mining_rank(self, event: AstrMessageEvent):
+        """/挖矿排行 [收入|数量|大矿|图鉴] —— 挖矿排行榜"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "挖矿排行")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        subcmd = self._strip_command(event, "挖矿排行").strip() or "收入"
+
+        async def fn(session):
+            medals = ["👑", "🥈", "🥉"] + \
+                [f"{i}." for i in range(4, self.MINING_RANK_SIZE + 1)]
+
+            if subcmd == "收入":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), "
+                    "s.total_income FROM mining_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.total_income > 0 ORDER BY s.total_income DESC LIMIT :n"
+                ), {"n": self.MINING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人卖矿收入喵~ 快去 /挂机挖矿 抢占榜首！")
+                lines = [f"📊 【挖矿排行·收入榜】TOP{len(rows)}"]
+                for i, (uid, name, income) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(income)} 积分")
+
+            elif subcmd == "数量":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), "
+                    "s.total_ore_count FROM mining_stats s "
+                    "LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.total_ore_count > 0 ORDER BY s.total_ore_count DESC LIMIT :n"
+                ), {"n": self.MINING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人卖过矿喵~ 快去挖矿吧！")
+                lines = [f"📊 【挖矿排行·数量榜】TOP{len(rows)}"]
+                for i, (uid, name, count) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(count)} 块")
+
+            elif subcmd == "大矿":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), "
+                    "s.best_ore_name, s.best_ore_value FROM mining_stats s "
+                    "LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.best_ore_value > 0 ORDER BY s.best_ore_value DESC LIMIT :n"
+                ), {"n": self.MINING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人挖到大矿喵~ 快去碰碰运气！")
+                lines = [f"📊 【挖矿排行·大矿榜】TOP{len(rows)}"]
+                for i, (uid, name, ore_name, ore_value) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{ore_name}（{int(ore_value)} 积分）")
+
+            elif subcmd == "图鉴":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), "
+                    "s.collection_count FROM mining_stats s "
+                    "LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.collection_count > 0 ORDER BY s.collection_count DESC LIMIT :n"
+                ), {"n": self.MINING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人收集过矿石图鉴喵~")
+                total_species = len(ORE_POOL)
+                lines = [f"📊 【挖矿排行·图鉴榜】TOP{len(rows)}"]
+                for i, (uid, name, count) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(count)}/{total_species} 种")
+
+            elif subcmd == "连击":
+                rows = (await session.execute(text(
+                    "SELECT s.user_id, COALESCE(NULLIF(u.user_name, ''), s.user_id), "
+                    "s.max_combo FROM mining_stats s LEFT JOIN users u ON u.user_id = s.user_id "
+                    "WHERE s.max_combo > 0 ORDER BY s.max_combo DESC LIMIT :n"
+                ), {"n": self.MINING_RANK_SIZE})).all()
+                if not rows:
+                    raise _BizError("还没有人触发过连击喵~")
+                lines = [f"📊 【挖矿排行·连击榜】TOP{len(rows)}"]
+                for i, (uid, name, combo) in enumerate(rows):
+                    lines.append(f"{medals[i]} {name}：{int(combo)} 连击")
+
+            else:
+                raise _BizError("用法：/挖矿排行 [收入|数量|大矿|图鉴|连击]")
+
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("挖矿统计")
+    async def mining_stats_cmd(self, event: AstrMessageEvent):
+        """/挖矿统计 —— 查看今日次数、体力消耗、累计收入、最高连击与称号"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "挖矿统计")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            row = (await session.execute(text(
+                "SELECT total_caught, total_income, total_energy_used, today_count, "
+                "lucky_day_expire, current_combo, max_combo, storm_expire, cave_level "
+                "FROM mining_stats WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            collected = {str(r[0]) for r in (await session.execute(text(
+                "SELECT ore_name FROM mining_collection WHERE user_id=:u"
+            ), {"u": user_id})).all()}
+            best_line = "暂无"
+            if collected:
+                best = max(collected, key=lambda n: ORE_POOL.get(n, (0,))[0])
+                best_line = f"{best}（{ORE_POOL[best][0]}积分）"
+            titles: list[str] = []
+            if "烛心" in collected:
+                titles.append("烛心矿主")
+            if "闲鱼" in collected:
+                titles.append("闲鱼矿主")
+            if {"烛心", "闲鱼"} <= collected:
+                rewarded = (await session.execute(text(
+                    "SELECT 1 FROM point_transactions WHERE user_id=:u "
+                    "AND operation='挖矿至高奖励'"
+                ), {"u": user_id})).first()
+                if rewarded:
+                    titles.append("至高矿主")
+            if len(collected) >= len(ORE_POOL):
+                rewarded = (await session.execute(text(
+                    "SELECT 1 FROM point_transactions WHERE user_id=:u "
+                    "AND operation='挖矿集齐奖励'"
+                ), {"u": user_id})).first()
+                if rewarded:
+                    titles.append("万物矿主")
+            lines = [
+                "📊 挖矿统计",
+                f"今日挖矿：{int(row[3] or 0)} 次",
+                f"累计挖矿：{int(row[0] or 0)} 块（消耗体力 {int(row[2] or 0)} 个）",
+                f"累计卖矿收入：{int(row[1] or 0)} 积分",
+                f"当前连击：{int(row[5] or 0)}（最高 {int(row[6] or 0)}）",
+                f"矿洞等级：{int(row[8] or 1)} 级",
+                f"最高价值矿：{best_line}",
+                f"图鉴进度：{len(collected)}/{len(ORE_POOL)} 种",
+            ]
+            lucky_expire = float(row[4]) if row[4] else 0.0
+            if lucky_expire > time.time():
+                remain = int((lucky_expire - time.time()) / 60)
+                lines.append(f"🍀 幸运日 buff 剩余 {remain} 分钟（卖矿翻倍）")
+            storm_expire = float(row[7]) if row[7] else 0.0
+            if storm_expire > time.time():
+                remain = int((storm_expire - time.time()) / 60)
+                lines.append(f"⛈️ 暴风雪停工中，剩余 {remain} 分钟")
+            if titles:
+                lines.append(f"🎖 称号：{'、'.join(titles)}")
+            else:
+                lines.append("🎖 称号：暂无（挖到烛心/闲鱼或集齐图鉴可获得）")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 矿洞偷矿 ====================
+    @filter.command("偷矿")
+    async def mining_steal(self, event: AstrMessageEvent):
+        """/偷矿 @群友 —— 去别人的矿仓偷一块矿（30% 被发现，每天限 5 次）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "偷矿")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = str(event.get_sender_id()).strip()
+        args = self._strip_command(event, "偷矿").split()
+        target = self._extract_at(event)
+        if not target:
+            nums = [a for a in args if a.isdigit() and len(a) >= 5]
+            target = nums[0] if nums else None
+        if not target:
+            yield event.plain_result("❌ 请@要偷矿的群友，如：/偷矿 @张三")
+            return
+        target = str(target).strip()
+        if target == user_id:
+            yield event.plain_result("❌ 不能偷自己的矿喵！")
+            return
+        today = date.today().isoformat()
+
+        async def fn(session):
+            await self._mining_ensure_stats(session, user_id)
+            await self._mining_ensure_stats(session, target)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            # 每日次数
+            srow = (await session.execute(text(
+                "SELECT count FROM mining_steal WHERE user_id=:u AND date=:d"
+            ), {"u": user_id, "d": today})).first()
+            used = int(srow[0] or 0) if srow else 0
+            if used >= self.MINING_STEAL_DAILY:
+                raise _BizError(
+                    f"今日偷矿次数已用完（{self.MINING_STEAL_DAILY}次/天），明天再来喵~")
+            # 目标矿仓
+            rows = (await session.execute(text(
+                "SELECT ore_name, value_mult, count FROM mining_inventory WHERE user_id=:u"
+            ), {"u": target})).all()
+            if not rows:
+                raise _BizError("对方的矿仓是空的，没啥可偷喵~")
+            # 按数量加权随机挑一块
+            names = [str(r[0]) for r in rows]
+            weights = [max(int(r[2] or 0), 1) for r in rows]
+            ore_name = random.choices(names, weights=weights)[0]
+            vrow = (await session.execute(text(
+                "SELECT value_mult, count FROM mining_inventory WHERE user_id=:u AND ore_name=:n"
+            ), {"u": target, "n": ore_name})).first()
+            mult = float(vrow[0] or 1)
+            base_price = ORE_POOL.get(ore_name, (0,))[0]
+            price = int(base_price * mult)
+            spot = random.random() < (self.MINING_STEAL_SPOT_PCT / 100.0)
+            await session.execute(text(
+                "INSERT INTO mining_steal(user_id, date, count) VALUES(:u, :d, 1) "
+                "ON CONFLICT(user_id, date) DO UPDATE SET count=mining_steal.count+1"
+            ), {"u": user_id, "d": today})
+            if spot:
+                # 被发现：矿没偷到，按矿价 2 倍赔偿失主（最低 50）
+                fine = max(50, price * 2)
+                bal = await self._total_balance(session, user_id)
+                if bal < fine:
+                    raise _BizError(
+                        f"被当场抓住了！赔偿需要 {fine} 积分，但你的积分不够赔喵…")
+                await self._add_points(session, user_id, -fine, "steal_caught",
+                                       spent=fine)
+                await self._add_points(session, target, fine, "steal_compensation",
+                                       earned=fine)
+                tname = await self._user_name(session, target)
+                return True, (
+                    f"🚨 你摸进 {tname} 的矿仓，刚碰到 {ore_name} 就被当场抓住！\n"
+                    f"矿没偷到，还倒赔 {fine} 积分给对方…（今日已偷 {used + 1}/{self.MINING_STEAL_DAILY} 次）"
+                ), None
+            # 偷窃成功：从失主矿仓扣 1 块，进小偷矿仓
+            await session.execute(text(
+                "UPDATE mining_inventory SET count=count-1 WHERE user_id=:u AND ore_name=:n"
+            ), {"u": target, "n": ore_name})
+            await session.execute(text(
+                "DELETE FROM mining_inventory WHERE user_id=:u AND ore_name=:n AND count<=0"
+            ), {"u": target, "n": ore_name})
+            await session.execute(text(
+                "INSERT INTO mining_inventory(user_id, ore_name, value_mult, count) "
+                "VALUES(:u, :n, :m, 1) "
+                "ON CONFLICT(user_id, ore_name) DO UPDATE SET "
+                "count=mining_inventory.count+1"
+            ), {"u": user_id, "n": ore_name, "m": mult})
+            tname = await self._user_name(session, target)
+            return True, (
+                f"🥷 得手！从 {tname} 的矿仓顺走了一块 {ore_name}（{price}积分），已藏进自己的矿仓~\n"
+                f"（今日已偷 {used + 1}/{self.MINING_STEAL_DAILY} 次，30% 概率被发现哦）"
+            ), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _user_name(self, session, user_id: str) -> str:
+        row = (await session.execute(text(
+            "SELECT COALESCE(NULLIF(user_name, ''), user_id) FROM users WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        return str(row[0]) if row else str(user_id)
+
+    # ==================== 挖矿组队 ====================
+    async def _mteam_for(self, session, user_id: str):
+        """返回 用户所在挖矿队伍 row 或 None"""
+        return (await session.execute(text(
+            "SELECT id, captain_id, members, current_size, group_id FROM mining_teams "
+            "WHERE members LIKE :like ESCAPE '\\' LIMIT 1"
+        ), {"like": f'%"{user_id}"%'})).first()
+
+    async def _mteam_bonus_mult(self, session, user_id: str) -> float:
+        """用户挖矿收益加成倍率（队伍加成），默认 1.0"""
+        row = await self._mteam_for(session, user_id)
+        if not row:
+            return 1.0
+        _id, captain, members_json, size, _g = row
+        base = self.MINING_TEAM_BONUS.get(int(size or 1), 0.0)
+        if str(user_id) == str(captain):
+            base += self.MINING_CAPTAIN_BONUS
+        return 1.0 + base
+
+    @filter.command("创建矿队")
+    async def mteam_create(self, event: AstrMessageEvent):
+        """/创建矿队 —— 组成挖矿小队（2-4人共享收益）"""
+        user_id = str(event.get_sender_id() or "").strip()
+        group_id = str(event.get_group_id() or "").strip() or "PM"
+
+        async def fn(session):
+            if await self._mteam_for(session, user_id):
+                raise _BizError("你已在矿队中喵~")
+            await session.execute(text(
+                "INSERT INTO mining_teams(captain_id, members, current_size, group_id) "
+                "VALUES(:c,:m,1,:g)"), {
+                "c": user_id, "m": json.dumps([user_id]), "g": group_id})
+            return True, ("⛏️ 矿队创建成功！\n当前队伍：1/4人\n"
+                          "收益加成：0%（需2人以上）\n队友发送 /加入矿队 加入"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("加入矿队")
+    async def mteam_join(self, event: AstrMessageEvent):
+        """/加入矿队 —— 加入本群已有挖矿小队"""
+        user_id = str(event.get_sender_id() or "").strip()
+        group_id = str(event.get_group_id() or "").strip() or "PM"
+
+        async def fn(session):
+            if await self._mteam_for(session, user_id):
+                raise _BizError("你已在矿队中喵~")
+            row = (await session.execute(text(
+                "SELECT id, captain_id, current_size FROM mining_teams "
+                "WHERE group_id=:g AND current_size < :m ORDER BY id LIMIT 1"
+            ), {"g": group_id, "m": self.MINING_TEAM_MAX_SIZE})).first()
+            if not row:
+                raise _BizError("本群没有可加入的矿队，先 /创建矿队 喵~")
+            tid, captain, size = int(row[0]), row[1], int(row[2] or 1)
+            cur = (await session.execute(text(
+                "SELECT members FROM mining_teams WHERE id=:i"), {"i": tid})).first()
+            members = json.loads(cur[0] or "[]")
+            if user_id in members:
+                raise _BizError("你已在矿队中喵~")
+            members.append(user_id)
+            await session.execute(text(
+                "UPDATE mining_teams SET members=:m, current_size=:s WHERE id=:i"),
+                {"m": json.dumps(members), "s": size + 1, "i": tid})
+            full = (size + 1) >= self.MINING_TEAM_MAX_SIZE
+            base = int(self.MINING_TEAM_BONUS.get(size + 1, 0) * 100)
+            cap = base + int(self.MINING_CAPTAIN_BONUS * 100)
+            tail = "（已满员）" if full else ""
+            return True, (f"✅ {user_id} 加入矿队！当前：{size+1}/4人{tail}\n"
+                          f"收益加成：成员+{base}%，队长+{cap}%"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("矿队状态")
+    async def mteam_status(self, event: AstrMessageEvent):
+        """/矿队状态 —— 查看矿队成员与加成"""
+        user_id = str(event.get_sender_id() or "").strip()
+
+        async def fn(session):
+            row = await self._mteam_for(session, user_id)
+            if not row:
+                raise _BizError("你不在任何矿队中喵~")
+            tid, captain, members_json, size, g = row
+            members = json.loads(members_json or "[]")
+            full = int(size) >= self.MINING_TEAM_MAX_SIZE
+            base = int(self.MINING_TEAM_BONUS.get(int(size), 0) * 100)
+            cap = base + int(self.MINING_CAPTAIN_BONUS * 100)
+            ct = "（队长）" if str(user_id) == str(captain) else ""
+            txt = [f"⛏️ 【矿队状态】队长：{captain}",
+                   f"成员：{'、'.join(members)}（{size}/4人）",
+                   f"收益加成：队长+{cap}%，其余+{base}%",
+                   f"状态：✅ 已满员" if full else f"状态：欢迎加入（{self.MINING_TEAM_MAX_SIZE-int(size)}个空位）{ct}"]
+            return True, "\n".join(txt), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("退出矿队")
+    async def mteam_leave(self, event: AstrMessageEvent):
+        """/退出矿队 —— 主动离开小队（队长退出即解散）"""
+        user_id = str(event.get_sender_id() or "").strip()
+
+        async def fn(session):
+            row = await self._mteam_for(session, user_id)
+            if not row:
+                raise _BizError("你不在任何矿队中喵~")
+            tid, captain, members_json, size, g = row
+            members = json.loads(members_json or "[]")
+            if str(user_id) == str(captain):
+                await session.execute(text("DELETE FROM mining_teams WHERE id=:i"),
+                                       {"i": int(tid)})
+                return True, "⛏️ 矿队已解散（队长离开）", None
+            members.remove(user_id)
+            n = int(size) - 1
+            if n <= 0:
+                await session.execute(text("DELETE FROM mining_teams WHERE id=:i"),
+                                       {"i": int(tid)})
+                return True, "⛏️ 矿队已解散", None
+            await session.execute(text(
+                "UPDATE mining_teams SET members=:m,current_size=:s WHERE id=:i"),
+                {"m": json.dumps(members), "s": n, "i": int(tid)})
+            return True, f"✅ 已退出矿队，剩余 {n} 人", None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("解散矿队")
+    async def mteam_disband(self, event: AstrMessageEvent):
+        """/解散矿队 —— 队长解散"""
+        user_id = str(event.get_sender_id() or "").strip()
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT id FROM mining_teams WHERE captain_id=:c"), {"c": user_id})).first()
+            if not row:
+                raise _BizError("你不是矿队队长或无队伍喵~")
+            await session.execute(text("DELETE FROM mining_teams WHERE id=:i"),
+                                   {"i": int(row[0])})
+            return True, "⛏️ 矿队已解散", None
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)

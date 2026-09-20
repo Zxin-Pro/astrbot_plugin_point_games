@@ -4,7 +4,7 @@
 
 **AstrBot 积分游戏合集插件**
 
-幸运转盘 · 闯关答题 · BOSS战 · 大乐透 · 谁是卧底 · 数字炸弹 · 速算挑战 · 抽卡 · 钓鱼 · 银行 · 转账 · 收税 · WebUI 面板
+幸运转盘 · 闯关答题 · BOSS战 · 大乐透 · 谁是卧底 · 数字炸弹 · 速算挑战 · 抽卡 · 钓鱼 · 挖矿 · 银行 · 转账 · 收税 · WebUI 面板
 
 版本：v2.18.6 ｜ 全群数据互通 ｜ 支持 WebUI 可视化管理
 
@@ -73,6 +73,27 @@
 | `/修鱼竿 [编号]` | 50积分修理损坏的鱼竿 |
 | `/钓鱼排行` | 累计卖鱼收入前十名 |
 | `/钓鱼统计` | 查看自己的钓鱼数据与称号 |
+
+### ⛏️ 挖矿系统
+
+| 指令 | 说明 |
+|---|---|
+| `/买矿镐` | 200积分购买矿镐（最多5把） |
+| `/买体力 [数量]` | 10积分/个购买体力 |
+| `/挂机挖矿 [编号]` | 矿镐挂机，每30分钟判定一次，每次判定消耗1体力 |
+| `/收矿` | 收取挂机挖到的矿石进矿仓 |
+| `/矿仓` | 查看矿仓里的矿石（按种类统计） |
+| `/卖矿` | 一键卖出矿仓里所有矿石 |
+| `/矿图鉴` | 查看矿石收集进度（8档170种） |
+| `/矿镐列表` | 查看每把矿镐状态 |
+| `/修矿镐 [编号]` | 50积分修理断裂的矿镐（不带编号一键全修） |
+| `/矿洞` / `/升级矿洞` | 矿洞养成：体力消耗-10%~-50%、稀有矿转化+5%~+20% |
+| `/挖矿任务` / `/领取挖矿奖励` | 每日3个随机任务+全部完成额外50分 |
+| `/挖矿天气` | 每日矿洞天气（雨天稀有+10%、满月全矿×1.3等） |
+| `/挖矿排行` | 排行榜（收入\|数量\|大矿\|图鉴\|连击） |
+| `/挖矿统计` | 查看自己的挖矿数据、连击与称号 |
+| `/偷矿 @玩家` | 去别人的矿仓偷矿（30%被抓赔2倍，每天5次） |
+| `/创建矿队` / `/加入矿队` | 2-4人组队共享收益加成（成员+5~15%，队长+10~20%） |
 
 ### 🏦 银行 / 转账 / 税收
 
@@ -149,6 +170,7 @@
 | `enable_math` | bool | `true` | 启用速算挑战 |
 | `enable_card` | bool | `true` | 启用抽卡系统 |
 | `enable_fishing` | bool | `true` | 启用钓鱼系统 |
+| `enable_mining` | bool | `true` | 启用挖矿系统 |
 | `enable_sign_in` | bool | `true` | 启用每日签到 |
 | `enable_ranking` | bool | `true` | 启用积分查询和排行榜 |
 | `enable_activity` | bool | `true` | 启用群活跃奖励 |
@@ -339,7 +361,7 @@
 
 ## 四、数据库结构
 
-数据存储于 AstrBot 数据目录下的 SQLite 数据库，共 25 张表：
+数据存储于 AstrBot 数据目录下的 SQLite 数据库，共 35 张表：
 
 | 表名 | 字段 | 说明 |
 |---|---|---|
@@ -368,6 +390,9 @@
 | `fishing_pending` | id, user_id, fish_name, catch_time | 挂机钓到待收取的鱼 |
 | `fishing_collection` | user_id+fish_name(PK), first_time | 鱼类图鉴收集进度 |
 | `fishing_stats` | user_id(PK), total_caught, total_income, total_baits_used, lucky_day, lucky_day_expire, today_count, today_date | 钓鱼统计与幸运日buff |
+| `mining_picks` / `mining_energy` / `mining_pending` / `mining_inventory` / `mining_collection` | 同钓鱼结构（竿→镐、饵→体力、鱼→矿） | 挖矿核心数据 |
+| `mining_stats` | user_id(PK), total_caught, total_income, total_energy_used, lucky_day_expire, storm_expire, current_combo, max_combo, cave_level 等 | 挖矿统计/连击/矿洞等级 |
+| `mining_tasks` / `mining_weather` / `mining_teams` / `mining_steal` | 同钓鱼任务/天气/组队结构 + 偷矿每日次数 | 挖矿任务/天气/组队/偷矿 |
 | `transfer_records` | id, from_user, to_user, amount, fee, total, create_time | 转账记录（含每日次数统计） |
 | `tax_records` | id, user_id, amount, date, create_time | 每日收税记录 |
 | `bank_accounts` | user_id(PK), current_balance, total_interest, created_at | 银行账户 |
@@ -438,6 +463,8 @@
 
 | 版本 | 主要更新 |
 |---|---|
+| v4.24.0 | 挖矿系统：矿镐/体力挂机挖矿、170种矿石图鉴、矿洞养成、连击、每日任务、矿洞天气、组队、偷矿 |
+| v4.23.2 | 钓鱼天气系统（雨天/寒冷/雾天稀有升级、大鱼×1.5、满月×1.3、暴风雨成功率-30%） |
 | v2.19.0 | 融合今日运势插件（jrys）：签到附带运势海报，同日固定、节假日高爆率、失败回退文字 |
 | v2.18.6 | 银行流水报告：新表 bank_transactions 存储存取/利息/管理员收益流水，每晚定时发送银行流水报告 |
 | v2.18.5 | 修复新玩家（先玩过其他玩法）领不到首签送竿的问题 |
