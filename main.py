@@ -5,11 +5,12 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.37
+作者：Zxin_Pro    版本：4.22.38
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
 import asyncio
+import base64
 import json
 import os
 import random
@@ -65,6 +66,53 @@ def _get_t2i_net_renderer():
         from astrbot.core.utils.t2i.network_strategy import NetworkRenderStrategy
         _T2I_NET_RENDERER = NetworkRenderStrategy()
     return _T2I_NET_RENDERER
+
+
+# 核心 t2i 策略 trust_env=True 会走系统代理，代理节点不稳时 connection reset；
+# _t2i_render_direct 先用 trust_env=False 直连绕过代理。
+T2I_DIRECT_ENDPOINTS = ["https://t2i.soulter.top/text2img"]
+
+
+async def _t2i_render_direct(tmpl: str, data: dict) -> bytes:
+    """绕过系统代理直连官方 t2i 端点渲染自定义模板，返回图片字节。
+
+    依次尝试 trust_env=False（直连）与 trust_env=True（走系统代理）。
+    """
+    try:
+        import aiohttp
+    except Exception:
+        raise RuntimeError("aiohttp 不可用，无法直连 t2i")
+    post = {
+        "tmpl": tmpl, "json": True, "tmpldata": data,
+        "options": {"full_page": True, "type": "jpeg", "quality": 70},
+    }
+    last_exc = None
+    for ep in T2I_DIRECT_ENDPOINTS:
+        for trust_env in (False, True):
+            try:
+                async with aiohttp.ClientSession(trust_env=trust_env) as session:
+                    async with session.post(
+                        f"{ep}/generate", json=post,
+                        headers={"User-Agent": "AstrBot/t2i"},
+                        timeout=aiohttp.ClientTimeout(total=90),
+                    ) as resp:
+                        if resp.status != 200:
+                            raise RuntimeError(f"HTTP {resp.status}")
+                        ret = await resp.json()
+                    img_url = f"{ep}/{ret['data']['id']}"
+                    async with session.get(
+                        img_url, headers={"User-Agent": "AstrBot/t2i"},
+                        timeout=aiohttp.ClientTimeout(total=60),
+                    ) as img_resp:
+                        if img_resp.status != 200:
+                            raise RuntimeError(f"HTTP {img_resp.status}")
+                        raw = await img_resp.read()
+                if raw:
+                    return raw
+                raise RuntimeError("t2i 返回空图片")
+            except Exception as e:
+                last_exc = e
+    raise last_exc or RuntimeError("t2i 直连渲染失败")
 
 # 时区（北京时间）
 try:
@@ -487,7 +535,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.37",
+    version="4.22.38",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -8036,17 +8084,22 @@ class PointGamesPlugin(Star):
                     ],
                 }
                 try:
-                    renderer = _get_t2i_net_renderer()
-                    ret = await renderer.render_custom_template(
-                        FISHING_T2I_TEMPLATE, tmpl_data, return_url=True,
-                    )
-                    if isinstance(ret, str) and ret.startswith("http"):
-                        img_chain = [Image.fromURL(ret)]
-                    else:
-                        raise RuntimeError(f"t2i 返回异常：{ret!r}")
+                    raw = await _t2i_render_direct(FISHING_T2I_TEMPLATE, tmpl_data)
+                    img_chain = [Image.fromBase64(base64.b64encode(raw).decode())]
                 except Exception:
-                    self.logger.exception("烛之播报模板 t2i 渲染失败，改用本地 PIL 海报")
+                    self.logger.exception("烛之播报直连 t2i 渲染失败，尝试平台 t2i 策略")
                     img_chain = None
+                if img_chain is None:
+                    try:
+                        renderer = _get_t2i_net_renderer()
+                        ret = await renderer.render_custom_template(
+                            FISHING_T2I_TEMPLATE, tmpl_data, return_url=True,
+                        )
+                        if isinstance(ret, str) and ret.startswith("http"):
+                            img_chain = [Image.fromURL(ret)]
+                    except Exception:
+                        self.logger.exception("烛之播报平台 t2i 策略也失败，改用本地 PIL 海报")
+                        img_chain = None
             # 其次：本地 PIL 汇总海报（自带字体，不依赖服务器环境）
             if img_chain is None and _render_fishing_batch is not None:
                 img_path = None

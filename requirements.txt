@@ -1,3 +1,4 @@
 Pillow
 aiohttp
 aiofiles
+aiohttp>=3.8
