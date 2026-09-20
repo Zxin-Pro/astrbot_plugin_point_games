@@ -210,7 +210,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -473,6 +473,7 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/收鱼", "钓鱼系统：收取挂机钓到的鱼进鱼篓"),
     ("/卖鱼", "钓鱼系统：一键卖出鱼篓里所有鱼"),
     ("/鱼图鉴", "钓鱼系统：查看鱼类收集进度（共102种）"),
+    ("/钓鱼天气", "钓鱼系统：查看今日天气与加成效果"),
     ("/鱼竿列表", "钓鱼系统：查看每根鱼竿状态"),
     ("/修鱼竿 [编号]", "钓鱼系统：50积分修理损坏的鱼竿"),
     ("/一键钓鱼 购买", "钓鱼系统：20000积分购买一键钓鱼通行证（永久）"),
@@ -539,7 +540,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.23.1",
+    version="4.23.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -716,6 +717,24 @@ class PointGamesPlugin(Star):
         (50, 1000, "闪光传说"),
         (100, 3000, "闪光之王"),
     )
+    # ---------- 钓鱼天气系统 ----------
+    FISHING_BIGFISH_MULT = 1.5         # 大型鱼价值倍率
+    WEATHER_CONFIG = {
+        "sunny":     {"name": "☀️ 晴天",  "desc": "风平浪静，普通钓鱼（无加成）",
+                      "prob": 40, "advice": "普通的一天，适合日常钓鱼"},
+        "rainy":     {"name": "🌧️ 雨天",  "desc": "稀有鱼概率+10%",
+                      "prob": 20, "advice": "稀有鱼出没！抓紧机会！", "tier": "稀有", "pct": 10},
+        "big_wave":  {"name": "🌊 大浪",  "desc": "大型鱼（价值+50%）概率15%",
+                      "prob": 15, "advice": "今天适合钓鱼！大鱼出没！", "bigfish": 15},
+        "cold":      {"name": "❄️ 寒冷",  "desc": "珍稀鱼概率+8%",
+                      "prob": 10, "advice": "珍稀鱼变多了，加油！", "tier": "珍稀", "pct": 8},
+        "foggy":     {"name": "🌫️ 雾天",  "desc": "传说鱼概率+5%",
+                      "prob": 8, "advice": "传说鱼出现概率提升！", "tier": "传说", "pct": 5},
+        "full_moon": {"name": "🌙 满月",  "desc": "所有鱼价值+30%",
+                      "prob": 5, "advice": "所有鱼价值+30%！暴富机会！", "value_mult": 1.3},
+        "storm":     {"name": "⛈️ 暴风雨", "desc": "钓鱼成功率-30%，大型鱼概率50%",
+                      "prob": 2, "advice": "高风险高回报，谨慎钓鱼！", "bigfish": 50, "fail_pct": 30},
+    }
     FISHING_RESET_HOUR = 0          # 今日统计重置小时
     FISHING_RESET_MINUTE = 0        # 今日统计重置分钟
     FISHING_RANK_SIZE = 10          # 钓鱼排行显示人数
@@ -847,6 +866,7 @@ class PointGamesPlugin(Star):
         "收鱼": ("enable_fishing", "钓鱼系统"),
         "卖鱼": ("enable_fishing", "钓鱼系统"),
         "鱼图鉴": ("enable_fishing", "钓鱼系统"),
+        "钓鱼天气": ("enable_fishing", "钓鱼系统"),
         "鱼竿列表": ("enable_fishing", "钓鱼系统"),
         "修鱼竿": ("enable_fishing", "钓鱼系统"),
         "一键钓鱼": ("enable_fishing", "钓鱼系统"),
@@ -1042,6 +1062,7 @@ class PointGamesPlugin(Star):
             user_id TEXT NOT NULL,
             fish_name TEXT NOT NULL,
             is_shiny INTEGER DEFAULT 0,
+            value_mult REAL DEFAULT 1,
             count INTEGER DEFAULT 0,
             UNIQUE(user_id, fish_name, is_shiny)
         )""",
@@ -1050,6 +1071,7 @@ class PointGamesPlugin(Star):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
             fish_name TEXT,
+            value_mult REAL DEFAULT 1,
             catch_time TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_fishing_pending_user ON fishing_pending(user_id)",
@@ -1072,6 +1094,12 @@ class PointGamesPlugin(Star):
             user_id TEXT PRIMARY KEY,
             items TEXT DEFAULT '{}',
             updated_at TIMESTAMP
+        )""",
+        # 钓鱼天气（每天 0 点惰性生成当日天气，date 唯一）
+        """CREATE TABLE IF NOT EXISTS fishing_weather (
+            date TEXT PRIMARY KEY,
+            weather TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
         """CREATE TABLE IF NOT EXISTS fishing_teams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1859,6 +1887,7 @@ class PointGamesPlugin(Star):
                         "user_id TEXT NOT NULL, "
                         "fish_name TEXT NOT NULL, "
                         "is_shiny INTEGER DEFAULT 0, "
+                        "value_mult REAL DEFAULT 1, "
                         "count INTEGER DEFAULT 0, "
                         "UNIQUE(user_id, fish_name, is_shiny))"
                     ))
@@ -1870,6 +1899,18 @@ class PointGamesPlugin(Star):
                     await session.execute(text(
                         "CREATE INDEX IF NOT EXISTS idx_fishing_inv_user ON fishing_inventory(user_id)"
                     ))
+
+                # 钓鱼天气/大型鱼：pending 与 inventory 补 value_mult 列（大型鱼×1.5 / 满月×1.3 随渔获保留到卖出）
+                for tbl in ("fishing_pending", "fishing_inventory"):
+                    cols = {
+                        str(row[1]) for row in (
+                            await session.execute(text(f"PRAGMA table_info({tbl})"))
+                        ).all()
+                    }
+                    if "value_mult" not in cols:
+                        await session.execute(text(
+                            f"ALTER TABLE {tbl} ADD COLUMN value_mult REAL DEFAULT 1"
+                        ))
 
                 transaction_columns = {
                     str(row[1]) for row in (await session.execute(text("PRAGMA table_info(point_transactions)"))).all()
@@ -1991,6 +2032,12 @@ class PointGamesPlugin(Star):
             self._fishing_daily_reset,
             CronTrigger(hour=self.FISHING_RESET_HOUR, minute=self.FISHING_RESET_MINUTE, timezone=TZ),
             id="fishing_daily_reset", replace_existing=True,
+        )
+        # 钓鱼天气：每天 0 点预生成当日天气并通知钓鱼播报群
+        self._scheduler.add_job(
+            self._fishing_weather_refresh,
+            CronTrigger(hour=0, minute=0, timezone=TZ),
+            id="fishing_weather_refresh", replace_existing=True,
         )
         # 每日自动收税：凌晨 0 点对余额达标的用户扣 0.1%，流入手续费接收账户
         self._scheduler.add_job(
@@ -8147,6 +8194,8 @@ class PointGamesPlugin(Star):
             fishing_count = len(rods)  # 鱼群效应：当前全服挂机竿数
             broadcasts: list[tuple[str, str, list]] = []   # (platform_id, group_id, 消息链)
             notices: list[tuple[str, str, str]] = []       # (platform_id, group_id, 事件播报文本)
+            # 今日天气（全服统一，惰性生成，影响本判定所有鱼竿）
+            weather_key, weather_cfg = await self._weather_today(session)
             for rod in rods:
                 rid, uid, slot, platform_id, group_id, user_name = rod
                 group_id = str(group_id or "")
@@ -8210,6 +8259,11 @@ class PointGamesPlugin(Star):
                     "黄金鱼群": (2, None), "鱼汛大潮": (3, "普通"), "河水涨潮": (2, "普通"),
                     "传说召唤阵": (1, "传说"),
                 }
+                # 暴风雨：上钩类事件 30% 概率化为空钩（钓鱼成功率-30%）
+                if weather_cfg.get("fail_pct") and event in multi_map and \
+                        random.random() < weather_cfg["fail_pct"] / 100.0:
+                    event = "空钩"
+                    notify("暴风雨太猛了，到手的鱼脱钩跑掉了…")
                 if event in multi_map:
                     # 上钩：鱼先进入 pending，等 /收鱼（指定档位保底必出，普通档可能钓上杂物）
                     caught, force_tier = multi_map[event]
@@ -8226,6 +8280,18 @@ class PointGamesPlugin(Star):
                             continue  # 杂物
                         name, price, rarity, prob = picked
                         upgrade_tag = "·鱼塘加成↑" if pond_upgraded else ""
+                        # 天气加成：雨天/寒冷/雾天把普通鱼升级为稀有/珍稀/传说
+                        wtier = weather_cfg.get("tier")
+                        if wtier and rarity == "普通" and \
+                                random.random() < weather_cfg["pct"] / 100.0:
+                            name, price, rarity, prob = self._fishing_pick_fish_tier(wtier)
+                            upgrade_tag = f"{upgrade_tag}·天气加成↑" if upgrade_tag else "·天气加成↑"
+                        # 天气大型鱼/满月价值乘数（随渔获保留到卖出）
+                        bigfish = bool(weather_cfg.get("bigfish")) and \
+                            random.random() < weather_cfg["bigfish"] / 100.0
+                        value_mult = self._weather_value_mult(weather_cfg, bigfish)
+                        if bigfish:
+                            upgrade_tag = f"{upgrade_tag}·🐋大鱼" if upgrade_tag else "·🐋大鱼"
                         # 闪光判定：1% 概率为闪光版，售价 ×3（pending 以 ✨闪光 前缀名携带闪光标记）
                         if random.random() < self.FISHING_SHINY_RATE:
                             name = f"{self.FISHING_SHINY_PREFIX}{name}"
@@ -8233,9 +8299,9 @@ class PointGamesPlugin(Star):
                             upgrade_tag = f"{upgrade_tag}·闪光×3" if upgrade_tag else "·闪光×3"
                         fish_names.append(f"{name}（{price}积分{upgrade_tag}）")
                         await session.execute(text(
-                            "INSERT INTO fishing_pending(user_id, fish_name, catch_time) "
-                            "VALUES(:u, :n, :t)"
-                        ), {"u": uid, "n": name, "t": time.time()})
+                            "INSERT INTO fishing_pending(user_id, fish_name, value_mult, catch_time) "
+                            "VALUES(:u, :n, :m, :t)"
+                        ), {"u": uid, "n": name, "m": value_mult, "t": time.time()})
                         await session.execute(text(
                             "UPDATE fishing_stats SET total_caught=total_caught+1 WHERE user_id=:u"
                         ), {"u": uid})
@@ -8713,6 +8779,7 @@ class PointGamesPlugin(Star):
             bait = await self._fishing_bait_count(session, user_id)
             if bait <= 0:
                 raise _BizError("没有鱼饵啦，先 /买鱼饵 再来钓鱼喵~")
+            weather_key, weather_cfg = await self._weather_today(session)
             # 鱼饵不足以全覆盖时只启动部分鱼竿（每次判定每竿消耗 1 个鱼饵）
             start_n = min(len(targets), bait)
             for rod in targets[:start_n]:
@@ -8721,7 +8788,8 @@ class PointGamesPlugin(Star):
                     "WHERE id=:i"
                 ), {"p": platform_id, "g": group_id, "i": rod[0]})
             msg = (
-                f"🎣 {start_n} 根鱼竿开始挂机啦！每 {self.CHECK_INTERVAL} 分钟判定一次，"
+                f"🎣 今日天气{weather_cfg['name']}！{weather_cfg['desc']}！\n"
+                f"{start_n} 根鱼竿开始挂机啦！每 {self.CHECK_INTERVAL} 分钟判定一次，"
                 f"每次每竿消耗 1 个鱼饵，钓到的鱼用 /收鱼 收取喵~"
             )
             if start_n < len(targets):
@@ -8746,8 +8814,8 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             pending = (await session.execute(text(
-                "SELECT fish_name, COUNT(*) FROM fishing_pending WHERE user_id=:u "
-                "GROUP BY fish_name"
+                "SELECT fish_name, value_mult, COUNT(*) FROM fishing_pending WHERE user_id=:u "
+                "GROUP BY fish_name, value_mult"
             ), {"u": user_id})).all()
             if not pending:
                 raise _BizError("还没钓到鱼喵~ 挂机中的鱼竿每 30 分钟判定一次，等等再来")
@@ -8755,20 +8823,21 @@ class PointGamesPlugin(Star):
             new_species: list[str] = []
             details: list[str] = []
             new_shiny = 0
-            for name, cnt in pending:
+            for name, mult, cnt in pending:
                 name = str(name)
                 cnt = int(cnt)
+                mult = float(mult or 1)
                 total += cnt
                 base, is_shiny = self._shiny_split(name)
-                price = self._shiny_price(base, is_shiny)
+                price = int(self._shiny_price(base, is_shiny) * mult)
                 rarity = FISH_POOL.get(base, (0, "未知", 0.0))[1]
                 # 并入鱼篓（闪光版与普通版分行存放）
                 await session.execute(text(
-                    "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, count) "
-                    "VALUES(:u, :n, :s, :c) "
+                    "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, value_mult, count) "
+                    "VALUES(:u, :n, :s, :m, :c) "
                     "ON CONFLICT(user_id, fish_name, is_shiny) DO UPDATE SET "
                     "count=fishing_inventory.count+:c"
-                ), {"u": user_id, "n": base, "s": is_shiny, "c": cnt})
+                ), {"u": user_id, "n": base, "s": is_shiny, "m": mult, "c": cnt})
                 # 记录图鉴（钓到过即收集，卖鱼不影响进度；闪光版独立收录）
                 result = await session.execute(text(
                     "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
@@ -8821,22 +8890,25 @@ class PointGamesPlugin(Star):
             if remaining > 0:
                 raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
             rows = (await session.execute(text(
-                "SELECT fish_name, is_shiny, count FROM fishing_inventory WHERE user_id=:u"
+                "SELECT fish_name, is_shiny, value_mult, count FROM fishing_inventory WHERE user_id=:u"
             ), {"u": user_id})).all()
             if not rows:
                 raise _BizError("鱼篓里没有鱼可以卖喵~ 先 /挂机钓鱼 再来")
             total = 0
             fish_cnt = 0
             details: list[str] = []
-            for name, is_shiny, cnt in rows:
+            for name, is_shiny, mult, cnt in rows:
                 name = str(name)
                 cnt = int(cnt or 0)
                 is_shiny = int(is_shiny or 0)
-                # 闪光版售价 ×3
-                price = self._shiny_price(name, is_shiny)
+                mult = float(mult or 1)
+                # 闪光版 ×3，大型鱼/满月乘数随渔获保留
+                price = int(self._shiny_price(name, is_shiny) * mult)
                 total += price * cnt
                 fish_cnt += cnt
                 display = f"{self.FISHING_SHINY_PREFIX}{name}" if is_shiny else name
+                if mult >= self.FISHING_BIGFISH_MULT:
+                    display = f"🐋{display}"
                 details.append(f"{display}×{cnt}")
             # 卖鱼收入进账并记录流水（operation='sell_fish'），商店时效加成在此兑现
             shop = await self._get_shop_items(session, user_id)
@@ -8915,6 +8987,35 @@ class PointGamesPlugin(Star):
                     f"🎯 下一阶段奖励：收集 {next_tier[0]} 种闪光鱼 → +{next_tier[1]} 积分"
                 )
             return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("钓鱼天气")
+    async def fishing_weather_cmd(self, event: AstrMessageEvent):
+        """/钓鱼天气 —— 查看今日钓鱼天气、效果加成与刷新倒计时"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "钓鱼天气")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+
+        async def fn(session):
+            _wkey, wcfg = await self._weather_today(session)
+            now = datetime.now(self._beijing_tz)
+            tomorrow = (now + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            left = tomorrow - now
+            hours = left.seconds // 3600
+            minutes = (left.seconds % 3600) // 60
+            msg = (
+                "🌤️ 【今日钓鱼天气】\n"
+                f"天气：{wcfg['name']}\n"
+                f"效果：{wcfg['desc']}\n"
+                f"建议：{wcfg['advice']}\n"
+                f"距离下次刷新：{hours}小时{minutes}分钟"
+            )
+            return True, msg, None
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
@@ -9547,6 +9648,52 @@ class PointGamesPlugin(Star):
         await session.execute(text(
             "UPDATE fishing_stats SET onekey_fishing=1 WHERE user_id=:u"), {"u": user_id})
 
+    # ==================== 钓鱼天气系统 ====================
+    async def _weather_today(self, session) -> tuple[str, dict]:
+        """获取今日天气（无则按概率惰性生成，必须在事务内调用）。返回 (key, 配置)"""
+        today = date.today().isoformat()
+        row = (await session.execute(text(
+            "SELECT weather FROM fishing_weather WHERE date=:d"
+        ), {"d": today})).first()
+        if not row:
+            keys = list(self.WEATHER_CONFIG.keys())
+            weights = [self.WEATHER_CONFIG[k]["prob"] for k in keys]
+            key = random.choices(keys, weights=weights)[0]
+            # 并发生成时后写方忽略，date 主键防重复
+            await session.execute(text(
+                "INSERT OR IGNORE INTO fishing_weather(date, weather, created_at) "
+                "VALUES(:d, :w, :t)"
+            ), {"d": today, "w": key, "t": time.time()})
+            row = (await session.execute(text(
+                "SELECT weather FROM fishing_weather WHERE date=:d"
+            ), {"d": today})).first()
+        key = str(row[0])
+        return key, self.WEATHER_CONFIG.get(key, self.WEATHER_CONFIG["sunny"])
+
+    def _weather_value_mult(self, weather_cfg: dict, bigfish: bool) -> float:
+        """渔获价值乘数：大型鱼 ×1.5 ×（满月 ×1.3）"""
+        mult = self.FISHING_BIGFISH_MULT if bigfish else 1.0
+        return round(mult * float(weather_cfg.get("value_mult", 1.0)), 4)
+
+    async def _fishing_weather_refresh(self):
+        """每天 0 点预生成当日天气并通知钓鱼播报群"""
+        try:
+            async def fn(session):
+                wkey, wcfg = await self._weather_today(session)
+                return True, "ok", (wkey, wcfg)
+            ok, _msg, data = await self._tx(fn)
+            if not ok or not data:
+                return
+            _wkey, wcfg = data
+            chain = [Plain(f"🌤️ 今日钓鱼天气更新！{wcfg['name']}：{wcfg['desc']}")]
+            for gid in list(self.FISHING_BROADCAST_GROUPS or []):
+                try:
+                    await self._broadcast_to_group(str(gid), chain)
+                except Exception:
+                    self.logger.exception("钓鱼天气通知失败 group=%s", gid)
+        except Exception:
+            self.logger.exception("钓鱼天气刷新任务失败")
+
     # ==================== 闪光鱼系统 ====================
     def _shiny_split(self, name: str) -> tuple[str, int]:
         """拆分闪光前缀：返回 (基础鱼名, 是否闪光 is_shiny)"""
@@ -9594,23 +9741,24 @@ class PointGamesPlugin(Star):
     async def _fishing_auto_collect(self, session, user_id: str) -> int:
         """自动收鱼器：把 pending 渔获直接收进鱼篓（含图鉴/称号/统计），返回收取条数"""
         pending = (await session.execute(text(
-            "SELECT fish_name, COUNT(*) FROM fishing_pending WHERE user_id=:u "
-            "GROUP BY fish_name"
+            "SELECT fish_name, value_mult, COUNT(*) FROM fishing_pending WHERE user_id=:u "
+            "GROUP BY fish_name, value_mult"
         ), {"u": user_id})).all()
         if not pending:
             return 0
         total = 0
-        for name, cnt in pending:
+        for name, mult, cnt in pending:
             name = str(name)
             cnt = int(cnt)
+            mult = float(mult or 1)
             total += cnt
             base, is_shiny = self._shiny_split(name)
             await session.execute(text(
-                "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, count) "
-                "VALUES(:u, :n, :s, :c) "
+                "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, value_mult, count) "
+                "VALUES(:u, :n, :s, :m, :c) "
                 "ON CONFLICT(user_id, fish_name, is_shiny) DO UPDATE SET "
                 "count=fishing_inventory.count+:c"
-            ), {"u": user_id, "n": base, "s": is_shiny, "c": cnt})
+            ), {"u": user_id, "n": base, "s": is_shiny, "m": mult, "c": cnt})
             await session.execute(text(
                 "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
                 "VALUES(:u, :n, :t)"
@@ -9702,26 +9850,27 @@ class PointGamesPlugin(Star):
 
             # ① 收鱼：pending → 鱼篓 + 图鉴 + 收集奖励（同 /收鱼）
             pending = (await session.execute(text(
-                "SELECT fish_name, COUNT(*) FROM fishing_pending WHERE user_id=:u "
-                "GROUP BY fish_name"
+                "SELECT fish_name, value_mult, COUNT(*) FROM fishing_pending WHERE user_id=:u "
+                "GROUP BY fish_name, value_mult"
             ), {"u": user_id})).all()
             if pending:
                 total = 0
                 new_species: list[str] = []
                 new_shiny = 0
-                for name, cnt in pending:
+                for name, mult, cnt in pending:
                     name = str(name)
                     cnt = int(cnt)
+                    mult = float(mult or 1)
                     total += cnt
                     base, is_shiny = self._shiny_split(name)
-                    price = self._shiny_price(base, is_shiny)
+                    price = int(self._shiny_price(base, is_shiny) * mult)
                     rarity = FISH_POOL.get(base, (0, "未知", 0.0))[1]
                     await session.execute(text(
-                        "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, count) "
-                        "VALUES(:u, :n, :s, :c) "
+                        "INSERT INTO fishing_inventory(user_id, fish_name, is_shiny, value_mult, count) "
+                        "VALUES(:u, :n, :s, :m, :c) "
                         "ON CONFLICT(user_id, fish_name, is_shiny) DO UPDATE SET "
                         "count=fishing_inventory.count+:c"
-                    ), {"u": user_id, "n": base, "s": is_shiny, "c": cnt})
+                    ), {"u": user_id, "n": base, "s": is_shiny, "m": mult, "c": cnt})
                     result = await session.execute(text(
                         "INSERT OR IGNORE INTO fishing_collection(user_id, fish_name, first_time) "
                         "VALUES(:u, :n, :t)"
@@ -9753,14 +9902,14 @@ class PointGamesPlugin(Star):
 
             # ② 卖鱼：鱼篓全部出售换积分（商店/队伍加成同 /卖鱼）
             inv_rows = (await session.execute(text(
-                "SELECT fish_name, is_shiny, count FROM fishing_inventory WHERE user_id=:u"
+                "SELECT fish_name, is_shiny, value_mult, count FROM fishing_inventory WHERE user_id=:u"
             ), {"u": user_id})).all()
             if inv_rows:
                 total = 0
                 fish_cnt = 0
-                for name, is_shiny, cnt in inv_rows:
-                    # 闪光版售价 ×3
-                    price = self._shiny_price(str(name), int(is_shiny or 0))
+                for name, is_shiny, mult, cnt in inv_rows:
+                    # 闪光版 ×3，大型鱼/满月乘数随渔获保留
+                    price = int(self._shiny_price(str(name), int(is_shiny or 0)) * float(mult or 1))
                     total += price * int(cnt or 0)
                     fish_cnt += int(cnt or 0)
                 shop = await self._get_shop_items(session, user_id)
@@ -9780,7 +9929,8 @@ class PointGamesPlugin(Star):
                     "total_fish_count=total_fish_count+:c WHERE user_id=:u"
                 ), {"u": user_id, "t": eff_total, "c": fish_cnt})
                 best_name, best_value = max(
-                    ((str(n), self._shiny_price(str(n), int(s or 0))) for n, s, _ in inv_rows),
+                    ((str(n), int(self._shiny_price(str(n), int(s or 0)) * float(m or 1)))
+                     for n, s, m, _ in inv_rows),
                     key=lambda item: item[1], default=(None, 0)
                 )
                 current_best = (await session.execute(text(
