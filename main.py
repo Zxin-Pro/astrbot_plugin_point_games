@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.33
+作者：Zxin_Pro    版本：4.22.34
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -14,6 +14,7 @@ import json
 import os
 import random
 import re
+import tempfile
 import time
 from datetime import date, datetime, timedelta
 from string import Formatter
@@ -41,6 +42,12 @@ try:
 except Exception as _fortune_dep_err:  # Pillow/aiohttp/aiofiles 未安装等
     _FORTUNE_DEPS_OK = False
     _FORTUNE_DEPS_ERR = _fortune_dep_err
+
+# ---------- 钓鱼播报汇总图渲染（PIL，独立兜底） ----------
+try:
+    from .fishing_poster import render_fishing_batch as _render_fishing_batch
+except Exception:
+    _render_fishing_batch = None
 
 # 时区（北京时间）
 try:
@@ -463,7 +470,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.33",
+    version="4.22.34",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -7984,19 +7991,41 @@ class PointGamesPlugin(Star):
         # 事务外发送全群广播，避免阻塞数据库
         for platform_id, group_id, chain in broadcasts:
             await self._send_with_fallback(platform_id, group_id, chain, "钓鱼高价广播")
-        # 事件播报：按成员各自聚合，一人发一条消息（成员=用户名）
-        per_user: dict[tuple, list] = {}
+        # 事件播报：按群聚合所有人的播报，合并渲染成一张汇总图发送（渲染失败回退文字）
+        per_group: dict[tuple, list] = {}
         for platform_id, group_id, text_line in notices:
-            piece = str(text_line)
-            parts = piece.split(" ", 2)
-            who = parts[1] if len(parts) >= 2 and parts[0] == "🎣" else piece
-            key = (str(platform_id), str(group_id), who)
-            per_user.setdefault(key, []).append(piece)
-        for (platform_id, group_id, who), lines in per_user.items():
-            aggregate = "\n".join(lines)
-            await self._send_with_fallback(
-                platform_id, group_id, [Plain(aggregate)], f"钓鱼播报-{who}"
-            )
+            per_group.setdefault((str(platform_id), str(group_id)), []).append(str(text_line))
+        for (platform_id, group_id), lines in per_group.items():
+            img_path = None
+            if _render_fishing_batch is not None:
+                try:
+                    fd, img_path = tempfile.mkstemp(prefix="fishing_bcast_", suffix=".png")
+                    os.close(fd)
+                    _render_fishing_batch(lines, img_path)
+                except Exception:
+                    self.logger.exception("钓鱼播报汇总图渲染失败，本次回退文字播报")
+                    if img_path and os.path.exists(img_path):
+                        try:
+                            os.remove(img_path)
+                        except OSError:
+                            pass
+                    img_path = None
+            if img_path:
+                try:
+                    await self._send_with_fallback(
+                        platform_id, group_id,
+                        [Image.fromFileSystem(img_path)], "钓鱼播报汇总图",
+                    )
+                finally:
+                    try:
+                        if os.path.exists(img_path):
+                            os.remove(img_path)
+                    except OSError:
+                        pass
+            else:
+                await self._send_with_fallback(
+                    platform_id, group_id, [Plain("\n".join(lines))], "钓鱼播报"
+                )
 
     async def _fishing_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
