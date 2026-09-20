@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.32
+作者：Zxin_Pro    版本：4.22.33
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -463,7 +463,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.32",
+    version="4.22.33",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -3695,32 +3695,35 @@ class PointGamesPlugin(Star):
                 "SELECT balance, loan_balance FROM users WHERE user_id=:u"
             ), {"u": user_id})).first()
             normal, loan_bal = int(row[0]), int(row[1])
+            # 注意：amount 是外层闭包变量，此处不得对它赋值，否则会变成 fn 局部变量导致 UnboundLocalError
             if deposit_all:
-                amount = normal
-                if amount <= 0:
+                deposit_amt = normal
+                if deposit_amt <= 0:
                     hint = (f"（贷款余额 {loan_bal} 积分不可用于存银行）"
                             if loan_bal > 0 else "当前没有积分可存喵~")
                     raise _BizError(f"❌ 普通余额为 0，没得存{hint}")
-            if normal < amount:
+            else:
+                deposit_amt = amount
+            if normal < deposit_amt:
                 hint = (f"\n（贷款余额 {loan_bal} 积分不可用于存银行）"
                         if loan_bal > 0 else "")
                 raise _BizError(
-                    f"❌ 积分不足！需要 {amount} 积分，当前普通余额：{normal}积分{hint}")
+                    f"❌ 积分不足！需要 {deposit_amt} 积分，当前普通余额：{normal}积分{hint}")
             # 钱包原子扣款（只用普通余额），存入银行
-            await self._add_points(session, user_id, -amount, "bank_deposit",
-                                   earned=0, spent=amount, force_normal=True)
+            await self._add_points(session, user_id, -deposit_amt, "bank_deposit",
+                                   earned=0, spent=deposit_amt, force_normal=True)
             await session.execute(text(
                 "UPDATE bank_accounts SET current_balance=current_balance+:a WHERE user_id=:u"
-            ), {"a": amount, "u": user_id})
+            ), {"a": deposit_amt, "u": user_id})
             # 银行流水：存款
             await session.execute(text(
                 "INSERT INTO bank_transactions(user_id, type, amount, create_time) "
                 "VALUES(:u, 'deposit', :a, :t)"
-            ), {"u": user_id, "a": amount, "t": time.time()})
+            ), {"u": user_id, "a": deposit_amt, "t": time.time()})
             bank = await self._get_bank(session, user_id)
             estimate = int(bank[0] * self.CURRENT_INTEREST_RATE)
             return True, (
-                f"💰 存入 {amount} 积分到活期账户成功！\n"
+                f"💰 存入 {deposit_amt} 积分到活期账户成功！\n"
                 f"当前活期余额：{bank[0]}积分\n"
                 f"预计每日收益：{estimate}积分"
             ), None
