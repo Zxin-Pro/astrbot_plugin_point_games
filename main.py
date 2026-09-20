@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.35
+作者：Zxin_Pro    版本：4.22.36
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -48,6 +48,12 @@ try:
     from .fishing_poster import render_fishing_batch as _render_fishing_batch
 except Exception:
     _render_fishing_batch = None
+
+# ---------- 钓鱼播报自定义 t2i 模板（烛之播报） ----------
+try:
+    from .fishing_t2i_template import FISHING_T2I_TEMPLATE
+except Exception:
+    FISHING_T2I_TEMPLATE = None
 
 # 时区（北京时间）
 try:
@@ -470,7 +476,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.35",
+    version="4.22.36",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -8000,16 +8006,45 @@ class PointGamesPlugin(Star):
         for (platform_id, group_id), lines in per_group.items():
             aggregate = "\n".join(lines)
             img_chain = None
-            try:
-                ret = await self.text_to_image(aggregate, return_url=True)
-                if isinstance(ret, str) and ret:
-                    if ret.startswith("http"):
+            # 首选：自定义「烛之播报」模板走 t2i 服务（成员分卡、每条动态一行）
+            if FISHING_T2I_TEMPLATE:
+                members_d: dict[str, list] = {}
+                m_order: list[str] = []
+                for line in lines:
+                    parts = line.split(" ", 2)
+                    who = parts[1] if len(parts) >= 2 and parts[0] == "🎣" else "未知"
+                    ev = parts[2] if len(parts) >= 3 else line
+                    if who not in members_d:
+                        members_d[who] = []
+                        m_order.append(who)
+                    members_d[who].append(ev)
+                tmpl_data = {
+                    "date": datetime.now(TZ).strftime("%m月%d日 %H:%M"),
+                    "members": [
+                        {"name": w, "events": members_d[w]} for w in m_order
+                    ],
+                }
+                try:
+                    ret = await self.html_render(
+                        FISHING_T2I_TEMPLATE, tmpl_data, return_url=True,
+                    )
+                    if isinstance(ret, str) and ret.startswith("http"):
                         img_chain = [Image.fromURL(ret)]
-                    elif os.path.exists(ret):
-                        img_chain = [Image.fromFileSystem(ret)]
-            except Exception:
-                self.logger.exception("t2i 渲染钓鱼播报失败，改用本地 PIL 海报")
-                img_chain = None
+                except Exception:
+                    self.logger.exception("烛之播报模板 t2i 渲染失败，改用本地 PIL 海报")
+                    img_chain = None
+            # 其次：默认 t2i 模板
+            if img_chain is None:
+                try:
+                    ret = await self.text_to_image(aggregate, return_url=True)
+                    if isinstance(ret, str) and ret:
+                        if ret.startswith("http"):
+                            img_chain = [Image.fromURL(ret)]
+                        elif os.path.exists(ret):
+                            img_chain = [Image.fromFileSystem(ret)]
+                except Exception:
+                    self.logger.exception("t2i 渲染钓鱼播报失败，改用本地 PIL 海报")
+                    img_chain = None
             if img_chain is None and _render_fishing_batch is not None:
                 img_path = None
                 try:
