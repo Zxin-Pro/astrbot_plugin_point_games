@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.34
+作者：Zxin_Pro    版本：4.22.35
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -470,7 +470,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.34",
+    version="4.22.35",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -7991,40 +7991,57 @@ class PointGamesPlugin(Star):
         # 事务外发送全群广播，避免阻塞数据库
         for platform_id, group_id, chain in broadcasts:
             await self._send_with_fallback(platform_id, group_id, chain, "钓鱼高价广播")
-        # 事件播报：按群聚合所有人的播报，合并渲染成一张汇总图发送（渲染失败回退文字）
+        # 事件播报：按群聚合所有人的播报，合并渲染成一张图发送
+        # 渲染优先级：平台 t2i 服务（text_to_image，网络失败自动落 Playwright）
+        #           → 本地 PIL 汇总海报（fishing_poster）→ 纯文字兜底
         per_group: dict[tuple, list] = {}
         for platform_id, group_id, text_line in notices:
             per_group.setdefault((str(platform_id), str(group_id)), []).append(str(text_line))
         for (platform_id, group_id), lines in per_group.items():
-            img_path = None
-            if _render_fishing_batch is not None:
+            aggregate = "\n".join(lines)
+            img_chain = None
+            try:
+                ret = await self.text_to_image(aggregate, return_url=True)
+                if isinstance(ret, str) and ret:
+                    if ret.startswith("http"):
+                        img_chain = [Image.fromURL(ret)]
+                    elif os.path.exists(ret):
+                        img_chain = [Image.fromFileSystem(ret)]
+            except Exception:
+                self.logger.exception("t2i 渲染钓鱼播报失败，改用本地 PIL 海报")
+                img_chain = None
+            if img_chain is None and _render_fishing_batch is not None:
+                img_path = None
                 try:
                     fd, img_path = tempfile.mkstemp(prefix="fishing_bcast_", suffix=".png")
                     os.close(fd)
                     _render_fishing_batch(lines, img_path)
+                    img_chain = [Image.fromFileSystem(img_path)]
                 except Exception:
                     self.logger.exception("钓鱼播报汇总图渲染失败，本次回退文字播报")
+                    img_chain = None
                     if img_path and os.path.exists(img_path):
                         try:
                             os.remove(img_path)
                         except OSError:
                             pass
-                    img_path = None
-            if img_path:
+            if img_chain is not None:
                 try:
                     await self._send_with_fallback(
-                        platform_id, group_id,
-                        [Image.fromFileSystem(img_path)], "钓鱼播报汇总图",
+                        platform_id, group_id, img_chain, "钓鱼播报汇总图",
                     )
                 finally:
-                    try:
-                        if os.path.exists(img_path):
-                            os.remove(img_path)
-                    except OSError:
-                        pass
+                    # 清理本地临时文件（仅本地渲染路径产生的 mkstemp 文件）
+                    for c in img_chain:
+                        try:
+                            fp = str(getattr(c, "path", "") or "")
+                            if fp.startswith(tempfile.gettempdir()) and "fishing_bcast_" in fp and os.path.exists(fp):
+                                os.remove(fp)
+                        except Exception:
+                            pass
             else:
                 await self._send_with_fallback(
-                    platform_id, group_id, [Plain("\n".join(lines))], "钓鱼播报"
+                    platform_id, group_id, [Plain(aggregate)], "钓鱼播报"
                 )
 
     async def _fishing_daily_reset(self):
