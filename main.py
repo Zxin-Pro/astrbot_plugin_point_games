@@ -210,7 +210,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -495,6 +495,10 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("每日红包", "每日随机时间在指定群发拼手气红包，发送「抢」参与"),
     ("/发红包 [总积分] [份数]", "自掏腰包发红包给群友（10-10000积分，60秒超时退回）"),
     ("每日收税", "凌晨0点自动收取余额0.1%税款（余额≥1000才扣，自动执行）"),
+    ("/系统", "系统钱包：查看中央资金池余额"),
+    ("/系统 存 [积分]", "管理员：从自己余额存入系统钱包（仅管理员）"),
+    ("/系统 取 [积分]", "管理员：从系统钱包取出到自己的余额（仅管理员）"),
+    ("/系统 流水 [页数]", "管理员：查看系统钱包流水（每页50条，仅管理员）"),
     ("/赞助", "查看赞助积分方式（仅私聊）"),
     ("/赞助审核", "提交赞助申请（引用订单截图，仅私聊）"),
     ("/赞助通过 [QQ] [积分]", "管理员审核通过"),
@@ -535,7 +539,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.22.38",
+    version="4.23.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -605,6 +609,13 @@ class PointGamesPlugin(Star):
     BANK_REPORT_GROUP = []          # 流水报告发送群聊ID列表（空则不发送）
     # 红包系统
     RED_PACKET_TOTAL = 500          # 每日红包总额
+    RED_PACKET_COUNT = 20           # 每日红包份数
+    # 系统钱包
+    FISHING_REWARD_CHANCE = 20.0    # 钓鱼奖池抽成触发概率（%）
+    FISHING_REWARD_MIN = 0.01       # 抽取比例下限（%）
+    FISHING_REWARD_MAX = 10.0       # 抽取比例上限（%）
+    REDPACKET_FROM_WALLET = True    # 每日红包是否从系统钱包支出
+    WALLET_LOG_PAGE_SIZE = 50       # 流水每页条数
     RED_PACKET_COUNT = 20           # 每日红包份数
     RED_PACKET_TIMEOUT = 10         # 抢红包有效时间（分钟），超时剩余回收
     RED_PACKET_WINDOW = (8, 0, 23, 0)  # 随机触发时间窗口 (起时,起分,止时,止分)
@@ -794,6 +805,7 @@ class PointGamesPlugin(Star):
         "enable_card_draw": True,
         "enable_user_red_packet": True,
         "enable_fish_shop": False,
+        "enable_wallet": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -843,6 +855,7 @@ class PointGamesPlugin(Star):
         "猜数字": ("enable_guess_number", "猜数字"),
         "十连": ("enable_card_draw", "十连抽卡"),
         "发红包": ("enable_user_red_packet", "群友发红包"),
+        "系统": ("enable_wallet", "系统钱包"),
     }
 
     # ---------- 表结构定义 ----------
@@ -1154,6 +1167,21 @@ class PointGamesPlugin(Star):
             total_loans INTEGER DEFAULT 0,
             on_time_payments INTEGER DEFAULT 0
         )""",
+        """CREATE TABLE IF NOT EXISTS system_wallet (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            balance INTEGER DEFAULT 0,
+            total_inflow INTEGER DEFAULT 0,
+            total_outflow INTEGER DEFAULT 0,
+            last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS system_wallet_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            amount INTEGER,
+            source TEXT,
+            remark TEXT,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -1348,6 +1376,26 @@ class PointGamesPlugin(Star):
         self.RED_PACKET_TOTAL = integer("red_packet_total", self.RED_PACKET_TOTAL, 1)
         self.RED_PACKET_COUNT = integer("red_packet_count", self.RED_PACKET_COUNT, 1)
         self.RED_PACKET_TIMEOUT = integer("red_packet_timeout", self.RED_PACKET_TIMEOUT, 1)
+        # 系统钱包配置
+        self.REDPACKET_FROM_WALLET = bool(config.get("redpacket_from_wallet", self.REDPACKET_FROM_WALLET))
+        try:
+            chance = float(config.get("fishing_reward_chance", self.FISHING_REWARD_CHANCE))
+            self.FISHING_REWARD_CHANCE = chance if 0 <= chance <= 100 else self.FISHING_REWARD_CHANCE
+        except (TypeError, ValueError):
+            pass
+        try:
+            pct_min = float(config.get("fishing_reward_min", self.FISHING_REWARD_MIN))
+            self.FISHING_REWARD_MIN = pct_min if 0 < pct_min <= 100 else self.FISHING_REWARD_MIN
+        except (TypeError, ValueError):
+            pass
+        try:
+            pct_max = float(config.get("fishing_reward_max", self.FISHING_REWARD_MAX))
+            self.FISHING_REWARD_MAX = pct_max if 0 < pct_max <= 100 else self.FISHING_REWARD_MAX
+        except (TypeError, ValueError):
+            pass
+        if self.FISHING_REWARD_MIN > self.FISHING_REWARD_MAX:
+            self.FISHING_REWARD_MIN, self.FISHING_REWARD_MAX = (
+                self.FISHING_REWARD_MAX, self.FISHING_REWARD_MIN)
         def _parse_hhmm(value, default):
             try:
                 h, m = str(value).strip().split(":")
@@ -1664,6 +1712,14 @@ class PointGamesPlugin(Star):
             {"u": user_id, "a": amount, "op": operation,
              "e": earned, "s": spent, "b": current_balance, "t": time.time()},
         )
+        # 系统钱包：玩家净支出等额流入资金池（税收/银行/贷款/管理员/转账本金除外，
+        # 各自走独立入账路径）；操作名大写场景用 lower() 兜底
+        if amount < 0 and spent > 0 and not str(operation).lower().startswith(
+            self.WALLET_SPEND_EXCLUDE_PREFIX
+        ):
+            await self._wallet_inflow_s(
+                session, spent, str(operation), f"{user_id} 支出流入"
+            )
 
     async def _check_spend_reward(self, session, user_id: str, group_id: str = None):
         return False
@@ -2192,6 +2248,109 @@ class PointGamesPlugin(Star):
             for target_platform in targets:
                 await self._send_group_chain(target_platform, str(group_id), broadcast_chain)
 
+    # ============================================================
+    #  系统钱包：中央资金池（所有玩家支出/税收/利息流入，红包/奖池流出）
+    # ============================================================
+    # 支出流水不进入系统钱包的操作前缀：税收(单独入账)、银行存取、贷款、
+    # 管理员调整、转账本金(手续费单独入账)
+    WALLET_SPEND_EXCLUDE_PREFIX = ("tax", "bank", "loan", "admin", "transfer", "fee")
+
+    async def _wallet_ensure(self, session):
+        """确保 system_wallet 至少有一行，返回该行 (balance, total_inflow, total_outflow)。"""
+        row = (await session.execute(text(
+            "SELECT balance, total_inflow, total_outflow FROM system_wallet LIMIT 1"
+        ))).first()
+        if not row:
+            await session.execute(text(
+                "INSERT INTO system_wallet (balance) VALUES (0)"
+            ))
+            return (0, 0, 0)
+        return (int(row[0]), int(row[1]), int(row[2]))
+
+    async def _wallet_inflow_s(self, session, amount: int, source: str, remark: str = ""):
+        """事务内流入：必须在外层 _tx 事务里调用，amount<=0 忽略。"""
+        amount = int(amount)
+        if amount <= 0:
+            return
+        await self._wallet_ensure(session)
+        await session.execute(text(
+            "UPDATE system_wallet SET balance=balance+:a, "
+            "total_inflow=total_inflow+:a, last_update=:t"
+        ), {"a": amount, "t": datetime.now(TZ).isoformat()})
+        await session.execute(text(
+            "INSERT INTO system_wallet_log(type, amount, source, remark, create_time) "
+            "VALUES('inflow', :a, :s, :r, :t)"
+        ), {"a": amount, "s": source, "r": remark, "t": time.time()})
+
+    async def _wallet_outflow_s(self, session, amount: int, source: str, remark: str = "") -> bool:
+        """事务内流出：余额不足返回 False（调用方决定如何处理），amount<=0 返回 False。"""
+        amount = int(amount)
+        if amount <= 0:
+            return False
+        row = (await session.execute(text(
+            "SELECT balance FROM system_wallet LIMIT 1"
+        ))).first()
+        balance = int(row[0]) if row else 0
+        if balance < amount:
+            return False
+        await self._wallet_ensure(session)
+        result = await session.execute(text(
+            "UPDATE system_wallet SET balance=balance-:a, "
+            "total_outflow=total_outflow+:a, last_update=:t WHERE balance>=:a"
+        ), {"a": amount, "t": datetime.now(TZ).isoformat()})
+        if result.rowcount != 1:
+            return False
+        await session.execute(text(
+            "INSERT INTO system_wallet_log(type, amount, source, remark, create_time) "
+            "VALUES('outflow', :a, :s, :r, :t)"
+        ), {"a": amount, "s": source, "r": remark, "t": time.time()})
+        return True
+
+    async def wallet_balance(self) -> int:
+        """独立查询当前系统钱包余额（自带事务）。"""
+        async def fn(session):
+            await self._wallet_ensure(session)
+            row = (await session.execute(text(
+                "SELECT balance FROM system_wallet LIMIT 1"
+            ))).first()
+            return True, "ok", int(row[0]) if row else 0
+        ok, _, data = await self._tx(fn)
+        return data if ok else 0
+
+    async def wallet_outflow(self, amount: int, source: str, remark: str = "") -> bool:
+        """独立流出（自带事务，供红包/奖池等非事务上下文调用）。"""
+        async def fn(session):
+            ok2 = await self._wallet_outflow_s(session, amount, source, remark)
+            if not ok2:
+                raise _BizError("余额不足")
+            return True, "ok", None
+        ok, _, _ = await self._tx(fn)
+        return ok
+
+    async def trigger_fishing_reward(self, session, user_id: str, user_name: str = ""):
+        """钓鱼奖池抽成：按概率从系统钱包抽比例积分给玩家。
+
+        必须在 _tx 事务内调用（session 复用），成功返回 (reward, percent)。
+        """
+        if random.random() > self.FISHING_REWARD_CHANCE / 100.0:
+            return None
+        row = (await session.execute(text(
+            "SELECT balance FROM system_wallet LIMIT 1"
+        ))).first()
+        balance = int(row[0]) if row else 0
+        if balance <= 0:
+            return None
+        percent = random.uniform(self.FISHING_REWARD_MIN, self.FISHING_REWARD_MAX)
+        reward = int(balance * percent / 100.0)
+        if reward <= 0:
+            return None
+        remark = f"{user_name or user_id} 奖池抽成 {percent:.2f}%"
+        if not await self._wallet_outflow_s(session, reward, "fishing_reward", remark):
+            return None
+        await self._add_points(session, str(user_id), reward, "fishing_reward",
+                               earned=reward, spent=0)
+        return (reward, percent)
+
     async def _daily_tax(self):
         """每日凌晨 0 点自动收税：余额≥门槛的用户扣余额的 0.1%（向下取整），转入 fee_receiver。
 
@@ -2199,9 +2358,6 @@ class PointGamesPlugin(Star):
         已开启玩法的群发送汇总消息。
         """
         if not self.feature_flags.get("enable_tax", True):
-            return
-        if not self.FEE_RECEIVER:
-            self.logger.warning("每日收税未执行：请在插件配置页设置 fee_receiver（或填写管理员QQ列表）")
             return
         tax_date = date.today().isoformat()
 
@@ -2224,8 +2380,8 @@ class PointGamesPlugin(Star):
                 if cash_take:
                     await self._add_points(session, str(uid), -cash_take, "tax",
                                            earned=0, spent=cash_take, force_normal=True)
-                    await self._add_points(session, self.FEE_RECEIVER, cash_take,
-                                           "tax_income", earned=cash_take, spent=0)
+                    await self._wallet_inflow_s(session, cash_take, "tax",
+                                                f"{uid} 每日税收（钱包部分）")
                 if bank_take > 0 and int(bank) > 0:
                     bd = min(bank_take, int(bank))
                     await session.execute(text(
@@ -2236,8 +2392,8 @@ class PointGamesPlugin(Star):
                         "INSERT INTO bank_transactions(user_id,type,amount,create_time) "
                         "VALUES(:u,'tax',:a,:t)"
                     ), {"u": str(uid), "a": -bd, "t": time.time()})
-                    await self._add_points(session, self.FEE_RECEIVER, bd,
-                                           "tax_income", earned=bd, spent=0)
+                    await self._wallet_inflow_s(session, bd, "tax",
+                                                f"{uid} 每日税收（银行部分）")
                 await session.execute(text(
                     "INSERT INTO tax_records(user_id, amount, date) VALUES(:u,:a,:d)"
                 ), {"u": str(uid), "a": tax, "d": tax_date})
@@ -2253,7 +2409,7 @@ class PointGamesPlugin(Star):
             "📊 今日税收汇总\n"
             f"共收取 {total_tax} 积分\n"
             f"共 {tax_count} 人纳税\n"
-            "已转入管理员账户"
+            "已转入系统钱包"
         )]
         # 广播到所有已开启玩法的群（与排行榜播报同一群来源）
         try:
@@ -2464,6 +2620,7 @@ class PointGamesPlugin(Star):
             "转账：/转账 @群友 [积分]（私聊用QQ号，手续费10%）",
             "银行：/开户｜/存钱 [积分]（不带金额存全部）｜/取钱 [积分]｜/我的银行（活期5%/天）",
             "贷款：/贷款 [积分]｜/还款｜/我的贷款（信用额度，逾期有惩罚）",
+            "系统钱包：/系统（余额）｜管理员 /系统 存|取 [积分]｜/系统 流水 [页数]",
             "彩票：/买彩票 [积分]｜/彩票奖池",
             "卧底：/卧底开始 [人数]｜/加入卧底｜/投票 @玩家｜/卧底结束",
             "炸弹：/炸弹开始｜/猜 [数字]（余额需满30）",
@@ -3640,14 +3797,12 @@ class PointGamesPlugin(Star):
             # 接收方到账 转账金额
             await self._add_points(session, target, amount, "transfer_in",
                                    earned=amount, spent=0)
-            # 手续费流入管理员账户；未配置 fee_receiver 时直接回收
+            # 手续费流入系统钱包（资金池），不再进管理员个人账户
             if fee > 0:
-                if self.FEE_RECEIVER:
-                    await self._add_points(session, self.FEE_RECEIVER, fee, "fee_income",
-                                           earned=fee, spent=0)
-                    fee_note = f"💸 手续费：{fee}积分（10%已转入管理员账户）\n"
-                else:
-                    fee_note = f"💸 手续费：{fee}积分\n"
+                await self._wallet_inflow_s(
+                    session, fee, "transfer_fee", f"{sender} → {target} 转账手续费"
+                )
+                fee_note = f"💸 手续费：{fee}积分（已存入系统钱包）\n"
             else:
                 fee_note = ""
             # 写转账记录（用北京时间时间戳，便于冷却/每日次数统计）
@@ -3914,6 +4069,12 @@ class PointGamesPlugin(Star):
                 admin_extra = int(int(balance) * extra_rate)
                 if admin_extra > 0:
                     total_admin_extra += admin_extra
+            # 银行利息同额注入系统钱包（玩家 +N，系统钱包 +N）
+            if total_interest > 0:
+                await self._wallet_inflow_s(
+                    session, total_interest, "bank_interest",
+                    f"银行日结利息同额注入（{len(rows)} 户）"
+                )
             # 汇总一次性发放给手续费接收账户（与收税同源，缺省第一个管理员）
             if total_admin_extra > 0 and receiver:
                 await self._add_points(session, receiver, total_admin_extra, "bank_admin_extra",
@@ -3930,7 +4091,7 @@ class PointGamesPlugin(Star):
             return
         broadcast_chain = [Plain(
             "🏦 银行日结完成！\n"
-            f"共发放玩家利息：{data[0]} 积分\n"
+            f"共发放玩家利息：{data[0]} 积分（同额注入系统钱包）\n"
             f"管理员额外收益：{data[1]} 积分"
         )]
         # 广播到所有已开启玩法的群（与排行榜播报同一群来源）
@@ -4001,10 +4162,11 @@ class PointGamesPlugin(Star):
                 "AND operation != 'bank_deposit'"
             ), {"t0": t0, "t1": t1})).first()
             total_expense = int(row[0])
-            # 今日转账手续费（管理员 fee_income 流水）
+            # 今日转账手续费（v4.23.0 起流入系统钱包，从钱包流水统计）
             row = (await session.execute(text(
-                "SELECT COALESCE(SUM(amount),0) FROM point_transactions "
-                "WHERE operation='fee_income' AND create_time >= :t0 AND create_time < :t1"
+                "SELECT COALESCE(SUM(amount),0) FROM system_wallet_log "
+                "WHERE source='transfer_fee' AND type='inflow' "
+                "AND create_time >= :t0 AND create_time < :t1"
             ), {"t0": t0, "t1": t1})).first()
             transfer_fee_total = int(row[0])
             # 今日税收（用户 tax 流水）
@@ -4202,6 +4364,32 @@ class PointGamesPlugin(Star):
         """在指定群发送拼手气红包，并注册超时结算任务。"""
         if not self.RED_PACKET_GROUP:
             return
+        # 系统钱包出资模式：先扣资金池，余额不足则取消本场并全群通知
+        if self.REDPACKET_FROM_WALLET:
+            total_pre = self.RED_PACKET_TOTAL
+            remark = f"每日红包 {datetime.now(TZ).strftime('%m-%d %H:%M')}"
+            if not await self.wallet_outflow(total_pre, "daily_redpacket", remark):
+                self.logger.warning(
+                    f"系统钱包余额不足（需 {total_pre}），本场每日红包取消"
+                )
+                cancel_chain = [Plain(
+                    f"😔 系统钱包余额不足，本场红包（{total_pre}积分）取消了…\n"
+                    "期待钱包回血后再来喵~"
+                )]
+                try:
+                    await self._broadcast_to_group(
+                        str(self.RED_PACKET_GROUP), cancel_chain
+                    )
+                except Exception:
+                    self.logger.exception("红包取消通知发送失败")
+                try:
+                    await self._notify_admins(
+                        f"⚠️ 系统钱包余额不足（需 {total_pre} 积分），"
+                        "本场每日红包已取消。可用 /系统 存 积分 充值资金池"
+                    )
+                except Exception:
+                    self.logger.exception("红包取消管理员通知失败")
+                return
         # 保险：上一场红包尚未结束时跳过本场（正常调度已保证不重叠）
         async with self._red_packet_lock:
             if self._red_packet and not self._red_packet["finished"]:
@@ -7738,6 +7926,159 @@ class PointGamesPlugin(Star):
         self.logger.warning(f"{tag}所有发送路径均失败（群号：{group_id or '空'}）")
         return False
 
+    # ============================================================
+    #  指令入口：系统钱包
+    # ============================================================
+    @filter.command("系统")
+    async def system_wallet_command(self, event: AstrMessageEvent):
+        """/系统 —— 查看系统钱包；管理员可 存/取/流水"""
+        gate_ok, gate_msg = await self._check_group_gate(event, "系统")
+        if not gate_ok:
+            yield event.plain_result(gate_msg)
+            return
+        sender = str(event.get_sender_id()).strip()
+        parts = self._strip_command(event, "系统").split()
+        subcmd = parts[0] if parts else ""
+
+        # ---- 无参数：所有人可查余额概况 ----
+        if not subcmd:
+            async def fn(session):
+                bal, t_in, t_out = await self._wallet_ensure(session)
+                return True, "ok", (bal, t_in, t_out)
+            ok, _, data = await self._tx(fn)
+            if not ok or data is None:
+                yield event.plain_result("数据库开小差了喵~ 稍后再试")
+                return
+            bal, t_in, t_out = data
+            yield event.plain_result(
+                "🏦 【系统钱包】\n"
+                f"💰 当前余额：{bal} 积分\n"
+                f"📈 累计流入：{t_in} 积分\n"
+                f"📉 累计流出：{t_out} 积分"
+            )
+            return
+
+        # ---- 以下子命令仅管理员可用 ----
+        if sender not in self.ADMIN_QQ:
+            yield event.plain_result("❌ 仅管理员可操作")
+            return
+
+        if subcmd in ("存", "取"):
+            if len(parts) < 2:
+                yield event.plain_result(f"❌ 格式：/系统 {subcmd} [积分]")
+                return
+            try:
+                amount = int(parts[1])
+            except ValueError:
+                yield event.plain_result("❌ 积分必须是整数喵~")
+                return
+            if amount < 1:
+                yield event.plain_result("❌ 积分必须大于 0")
+                return
+
+            if subcmd == "存":
+                async def fn(session):
+                    # 只扣普通余额（贷款余额不可充值资金池，防止套现）
+                    await self._ensure_user(session, sender)
+                    row = (await session.execute(text(
+                        "SELECT balance FROM users WHERE user_id=:u"
+                    ), {"u": sender})).first()
+                    bal = int(row[0]) if row else 0
+                    if bal < amount:
+                        raise _BizError(
+                            f"❌ 你的余额不足！当前余额：{bal} 积分"
+                        )
+                    await self._add_points(
+                        session, sender, -amount, "admin_wallet_deposit",
+                        earned=0, spent=amount, force_normal=True,
+                    )
+                    await self._wallet_inflow_s(
+                        session, amount, "admin_deposit",
+                        f"管理员 {sender} 存入"
+                    )
+                    new_bal = await self._wallet_ensure(session)
+                    return True, "ok", new_bal[0]
+                ok, msg, data = await self._tx(fn)
+                yield event.plain_result(
+                    f"✅ 已存入系统钱包 {amount} 积分！\n"
+                    f"当前系统钱包余额：{data}"
+                    if ok else msg
+                )
+                return
+
+            # 取
+            async def fn(session):
+                if not await self._wallet_outflow_s(
+                    session, amount, "admin_withdraw",
+                    f"管理员 {sender} 取出"
+                ):
+                    raise _BizError(
+                        "❌ 系统钱包余额不足！当前余额："
+                        f"{await self._wallet_balance_q(session)}"
+                    )
+                await self._add_points(
+                    session, sender, amount, "admin_wallet_withdraw",
+                    earned=amount, spent=0,
+                )
+                new_bal = await self._wallet_ensure(session)
+                return True, "ok", new_bal[0]
+            ok, msg, data = await self._tx(fn)
+            yield event.plain_result(
+                f"✅ 已取出 {amount} 积分到你的余额！\n"
+                f"当前系统钱包余额：{data}"
+                if ok else msg
+            )
+            return
+
+        if subcmd == "流水":
+            try:
+                page = int(parts[1]) if len(parts) > 1 else 1
+            except ValueError:
+                page = 1
+            page = max(1, page)
+            size = self.WALLET_LOG_PAGE_SIZE
+
+            async def fn(session):
+                total = int((await session.execute(text(
+                    "SELECT COUNT(*) FROM system_wallet_log"
+                ))).first()[0])
+                rows = (await session.execute(text(
+                    "SELECT type, amount, source, remark, create_time "
+                    "FROM system_wallet_log ORDER BY id DESC LIMIT :n OFFSET :o"
+                ), {"n": size, "o": (page - 1) * size})).all()
+                return True, "ok", (total, rows)
+            ok, _, data = await self._tx(fn)
+            if not ok or data is None:
+                yield event.plain_result("数据库开小差了喵~ 稍后再试")
+                return
+            total, rows = data
+            if not rows:
+                yield event.plain_result("📭 该页没有流水记录喵~")
+                return
+            total_pages = max(1, (total + size - 1) // size)
+            lines = [f"📒 系统钱包流水（第 {page}/{total_pages} 页，共 {total} 条）"]
+            for rtype, ramount, rsource, rremark, rtime in rows:
+                arrow = "↑" if rtype == "inflow" else "↓"
+                try:
+                    time_txt = datetime.fromtimestamp(float(rtime), TZ).strftime("%m-%d %H:%M")
+                except (TypeError, ValueError):
+                    time_txt = str(rtime)[:16]
+                lines.append(
+                    f"{arrow} {'+' if rtype == 'inflow' else '-'}{ramount} "
+                    f"[{rsource}] {rremark or ''} {time_txt}"
+                )
+            yield event.plain_result("\n".join(lines))
+            return
+
+        yield event.plain_result("❌ 可用子命令：存、取、流水（无参数=查看余额）")
+
+    async def _wallet_balance_q(self, session) -> int:
+        """事务内快捷读取钱包余额（不建行）。"""
+        row = (await session.execute(text(
+            "SELECT balance FROM system_wallet LIMIT 1"
+        ))).first()
+        return int(row[0]) if row else 0
+
     async def _fishing_check(self):
         """定时任务：每 30 分钟判定一次所有挂机中的鱼竿。
 
@@ -8045,6 +8386,15 @@ class PointGamesPlugin(Star):
                     got = await self._fishing_auto_collect(session, uid)
                     if got:
                         notify(f"的自动收鱼器把 {got} 条鱼收进了鱼篓")
+                # 系统钱包奖池抽成：上钩判定有概率从资金池抽比例积分奖励玩家
+                if event in multi_map:
+                    reward_info = await self.trigger_fishing_reward(session, uid, user_name)
+                    if reward_info:
+                        reward, percent = reward_info
+                        notify(
+                            f"🎉 触发系统奖池抽成！从资金池获得 {reward} 积分"
+                            f"（钱包的 {percent:.2f}%）"
+                        )
             return True, "判定完成", (broadcasts, notices)
 
         ok, msg, data = await self._tx(fn)
