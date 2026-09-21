@@ -95,6 +95,25 @@
 | `/偷矿 @玩家` | 去别人的矿仓偷矿（30%被抓赔2倍，每天5次） |
 | `/创建矿队` / `/加入矿队` | 2-4人组队共享收益加成（成员+5~15%，队长+10~20%） |
 
+### 🧙 修仙系统
+
+| 指令 | 说明 |
+|---|---|
+| `/修仙 信息` | 查看境界/修为/灵根/宗门/灵石等修仙信息 |
+| `/修仙 修炼` | 修炼获得修为（10积分，5分钟冷却） |
+| `/修仙 突破` | 小境界突破（100积分，修为满，85%成功率） |
+| `/修仙 渡劫` | 大境界渡劫（1000积分+渡劫丹，60%成功率，全群播报） |
+| `/修仙 灵根` | 觉醒灵根（首次免费，天灵根修炼×5） |
+| `/修仙 兑换 [积分]` | 积分⇄灵石双向兑换（10%手续费） |
+| `/修仙 功法` | 功法管理（抽取/修炼/装备，加速修炼） |
+| `/修仙 法宝` | 法宝管理（抽取/强化/装备，加卖鱼卖矿收益） |
+| `/修仙 炼丹 [丹名]` | 消耗积分+矿仓矿石炼丹（成功率70%） |
+| `/修仙 丹药 使用 [名]` | 服用丹药（修为/增益/突破加成） |
+| `/修仙 秘境` | 秘境探险（50积分，奖励随境界增长） |
+| `/修仙 宗门` | 宗门创建/加入/捐赠/升级/宗门战 |
+| `/修仙 灵兽` | 捕捉灵兽打工赚积分（最高40积分/小时） |
+| `/修仙 飞升` | 渡劫9层圆满后飞升成仙（10000积分+渡劫丹×3） |
+
 ### 🏦 银行 / 转账 / 税收
 
 | 指令 | 说明 |
@@ -171,6 +190,7 @@
 | `enable_card` | bool | `true` | 启用抽卡系统 |
 | `enable_fishing` | bool | `true` | 启用钓鱼系统 |
 | `enable_mining` | bool | `true` | 启用挖矿系统 |
+| `enable_xiuxian` | bool | `true` | 启用修仙系统 |
 | `enable_sign_in` | bool | `true` | 启用每日签到 |
 | `enable_ranking` | bool | `true` | 启用积分查询和排行榜 |
 | `enable_activity` | bool | `true` | 启用群活跃奖励 |
@@ -361,7 +381,7 @@
 
 ## 四、数据库结构
 
-数据存储于 AstrBot 数据目录下的 SQLite 数据库，共 35 张表：
+数据存储于 AstrBot 数据目录下的 SQLite 数据库，共 42 张表：
 
 | 表名 | 字段 | 说明 |
 |---|---|---|
@@ -390,6 +410,9 @@
 | `fishing_pending` | id, user_id, fish_name, catch_time | 挂机钓到待收取的鱼 |
 | `fishing_collection` | user_id+fish_name(PK), first_time | 鱼类图鉴收集进度 |
 | `fishing_stats` | user_id(PK), total_caught, total_income, total_baits_used, lucky_day, lucky_day_expire, today_count, today_date | 钓鱼统计与幸运日buff |
+| `xiuxian_players` | user_id(PK), realm, realm_level, cultivation, spirit_root, constitution, sect_id, spirit_stones, buff 字段等 | 修仙玩家档案 |
+| `xiuxian_techniques` / `xiuxian_artifacts` / `xiuxian_pills` | user_id, name, grade, level, equipped, count 等 | 功法/法宝/丹药 |
+| `xiuxian_sects` / `xiuxian_spirits` / `xiuxian_records` | 宗门(资金/成员/等级)/灵兽(打工状态)/修仙事件流水 | 宗门/灵兽/记录 |
 | `mining_picks` / `mining_energy` / `mining_pending` / `mining_inventory` / `mining_collection` | 同钓鱼结构（竿→镐、饵→体力、鱼→矿） | 挖矿核心数据 |
 | `mining_stats` | user_id(PK), total_caught, total_income, total_energy_used, lucky_day_expire, storm_expire, current_combo, max_combo, cave_level 等 | 挖矿统计/连击/矿洞等级 |
 | `mining_tasks` / `mining_weather` / `mining_teams` / `mining_steal` | 同钓鱼任务/天气/组队结构 + 偷矿每日次数 | 挖矿任务/天气/组队/偷矿 |
@@ -463,6 +486,7 @@
 
 | 版本 | 主要更新 |
 |---|---|
+| v4.25.0 | 修仙系统：15大境界修炼突破渡劫、灵石双向兑换、功法法宝炼丹、秘境宗门灵兽、境界加成接入卖鱼卖矿 |
 | v4.24.0 | 挖矿系统：矿镐/体力挂机挖矿、170种矿石图鉴、矿洞养成、连击、每日任务、矿洞天气、组队、偷矿 |
 | v4.23.2 | 钓鱼天气系统（雨天/寒冷/雾天稀有升级、大鱼×1.5、满月×1.3、暴风雨成功率-30%） |
 | v2.19.0 | 融合今日运势插件（jrys）：签到附带运势海报，同日固定、节假日高爆率、失败回退文字 |

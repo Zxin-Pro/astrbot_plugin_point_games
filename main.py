@@ -210,7 +210,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|修仙|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -523,6 +523,85 @@ MINING_EVENTS: list[tuple[str, float]] = [
 # 长期期望 ≈ -1.185 积分/次（略亏），纯看脸搏高价值矿。
 
 # ============================================================
+#  修仙系统数据（v4.25.0）
+# ============================================================
+# 境界体系：15 大境界；小境界突破需要修为满 + 100 积分，
+# 每层修为上限 = base × mult^level；渡劫（大境界突破）需 1000 积分 + 渡劫丹
+XIUXIAN_REALMS: list[dict] = [
+    {"name": "凡人", "levels": 9, "base": 100, "mult": 1.5},
+    {"name": "练气", "levels": 9, "base": 500, "mult": 1.8},
+    {"name": "筑基", "levels": 9, "base": 2000, "mult": 2.0},
+    {"name": "金丹", "levels": 9, "base": 8000, "mult": 2.2},
+    {"name": "元婴", "levels": 9, "base": 30000, "mult": 2.5},
+    {"name": "化神", "levels": 9, "base": 100000, "mult": 2.8},
+    {"name": "炼虚", "levels": 9, "base": 300000, "mult": 3.0},
+    {"name": "合体", "levels": 9, "base": 1000000, "mult": 3.5},
+    {"name": "大乘", "levels": 9, "base": 3000000, "mult": 4.0},
+    {"name": "渡劫", "levels": 9, "base": 10000000, "mult": 5.0},
+    {"name": "散仙", "levels": 9, "base": 30000000, "mult": 6.0},
+    {"name": "真仙", "levels": 9, "base": 100000000, "mult": 8.0},
+    {"name": "金仙", "levels": 9, "base": 300000000, "mult": 10.0},
+    {"name": "大罗", "levels": 9, "base": 1000000000, "mult": 15.0},
+    {"name": "道祖", "levels": 1, "base": 5000000000, "mult": 20.0},
+]
+XIUXIAN_REALM_INDEX: dict[str, int] = {r["name"]: i for i, r in enumerate(XIUXIAN_REALMS)}
+
+# 灵根体系（觉醒概率与修炼速度倍率）
+SPIRIT_ROOTS: dict[str, dict] = {
+    "天灵根": {"rarity": 0.01, "speed": 5.0, "desc": "万中无一，修炼速度×5"},
+    "单灵根": {"rarity": 0.05, "speed": 3.0, "desc": "天赋异禀，修炼速度×3"},
+    "双灵根": {"rarity": 0.15, "speed": 2.0, "desc": "资质上佳，修炼速度×2"},
+    "三灵根": {"rarity": 0.30, "speed": 1.5, "desc": "资质尚可，修炼速度×1.5"},
+    "四灵根": {"rarity": 0.30, "speed": 1.0, "desc": "资质平平，修炼速度×1"},
+    "杂灵根": {"rarity": 0.19, "speed": 0.5, "desc": "资质驽钝，修炼速度×0.5"},
+}
+
+# 体质（觉醒灵根时附带）：(概率%, 渡劫成功率加成%)
+XIUXIAN_CONSTITUTIONS: dict[str, tuple[float, float]] = {
+    "凡胎": (50.0, 0.0), "灵体": (30.0, 3.0), "道体": (15.0, 6.0),
+    "圣体": (4.0, 10.0), "仙体": (1.0, 15.0),
+}
+
+# 功法体系：品阶 → 修炼速度加成；抽取权重 黄60/玄30/地9/天1
+XIUXIAN_TECH_GRADES: dict[str, float] = {"黄阶": 0.05, "玄阶": 0.10, "地阶": 0.20, "天阶": 0.35}
+XIUXIAN_TECH_WEIGHTS: list[float] = [60, 30, 9, 1]
+XIUXIAN_TECH_NAMES: list[str] = [
+    "长春功", "吐纳诀", "凝神诀", "紫气东来诀", "太虚炼形诀",
+    "周天搬运功", "九转玄功", "大衍诀", "混沌养神篇", "太上忘情录",
+]
+
+# 法宝体系：品阶 → 卖鱼/卖矿收益加成；抽取权重 法60/宝30/灵9/仙1
+XIUXIAN_ARTIFACT_GRADES: dict[str, float] = {"法器": 0.03, "宝器": 0.06, "灵器": 0.10, "仙器": 0.15}
+XIUXIAN_ARTIFACT_WEIGHTS: list[float] = [60, 30, 9, 1]
+XIUXIAN_ARTIFACT_NAMES: list[str] = [
+    "飞云剑", "青霜扇", "八卦镜", "缚灵索", "紫金葫芦",
+    "山河扇", "诛仙剑图", "东皇钟", "混沌铃", "太极图",
+]
+
+# 灵兽体系：品阶 → 每小时打工工资（积分）；抽取权重 凡60/灵30/妖9/仙1
+XIUXIAN_SPIRIT_GRADES: dict[str, float] = {"凡兽": 5, "灵兽": 10, "妖兽": 20, "仙兽": 40}
+XIUXIAN_SPIRIT_WEIGHTS: list[float] = [60, 30, 9, 1]
+XIUXIAN_SPIRIT_NAMES: list[str] = [
+    "灵猴", "玉兔", "火狐", "雷鹰", "玄龟", "白泽",
+    "貔貅", "九尾狐", "青龙", "凤凰", "麒麟", "鲲鹏",
+]
+
+# 丹方：材料 ore=指定矿石 / rarity=指定稀有度任意矿石（矿石来自矿仓，与挖矿联动）
+XIUXIAN_PILL_RECIPES: dict[str, dict] = {
+    "回气丹": {"cost": 100, "ores": {"ore": "煤矿", "count": 5},
+               "desc": "服用立即获得 300×境界倍率 修为"},
+    "灵气丹": {"cost": 300, "ores": {"ore": "石英", "count": 8},
+               "desc": "24小时内修炼收益+50%"},
+    "破境丹": {"cost": 500, "ores": {"rarity": "稀有", "count": 5},
+               "desc": "下一次小境界突破成功率+25%（可叠加）"},
+    "福缘丹": {"cost": 800, "ores": {"rarity": "稀有", "count": 3},
+               "desc": "24小时内秘境积分+50%"},
+    "渡劫丹": {"cost": 2000, "ores": {"rarity": "珍稀", "count": 5},
+               "desc": "渡劫必备丹药（每次渡劫消耗1颗）"},
+}
+XIUXIAN_ALCHEMY_RATE = 70   # 炼丹成功率 %
+
+# ============================================================
 #  玩法帮助注册表
 #  【扩展玩法】以后新增玩法时：
 #   1. 在下方 COMMAND_HELP 加一行 (指令, 说明)
@@ -583,6 +662,12 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/挖矿排行", "挖矿系统：排行榜（收入|数量|大矿|图鉴|连击）"),
     ("/挖矿统计", "挖矿系统：查看自己的挖矿数据与称号"),
     ("/偷矿 @玩家", "挖矿系统：去别人的矿仓偷矿（30%被抓，每天5次）"),
+    ("/修仙", "修仙系统：修炼突破渡劫，境界提升全玩法收益+5%/大境界"),
+    ("/修仙 修炼|突破|渡劫|灵根", "修仙系统：修炼(10分)/小突破(100分)/渡劫(1000分+丹)/觉醒灵根"),
+    ("/修仙 兑换 [积分]", "修仙系统：积分⇄灵石双向兑换（10%手续费）"),
+    ("/修仙 功法|法宝", "修仙系统：功法加修炼速度，法宝加卖鱼卖矿收益"),
+    ("/修仙 炼丹|丹药", "修仙系统：消耗积分+矿仓矿石炼丹，丹药多种增益"),
+    ("/修仙 秘境|宗门|灵兽|飞升", "修仙系统：秘境(50分)/宗门(5000分建)/灵兽打工/飞升成仙"),
     ("/转账 @群友 [积分]", "向群友或指定QQ转账（1-5000，10%手续费）"),
     ("/开户", "银行系统：开通银行账户（免费，享每日5%活期利息）"),
     ("/存钱 [积分]", "银行系统：将钱包积分存入银行（不带金额默认存入全部）"),
@@ -642,7 +727,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.24.0",
+    version="4.25.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1009,6 +1094,7 @@ class PointGamesPlugin(Star):
         "enable_user_red_packet": True,
         "enable_fish_shop": False,
         "enable_mining": True,
+        "enable_xiuxian": True,
         "enable_wallet": True,
     }
     FEATURE_COMMANDS = {
@@ -1064,6 +1150,7 @@ class PointGamesPlugin(Star):
         "挖矿排行": ("enable_mining", "挖矿系统"),
         "挖矿统计": ("enable_mining", "挖矿系统"),
         "偷矿": ("enable_mining", "挖矿系统"),
+        "修仙": ("enable_xiuxian", "修仙系统"),
         "转账": ("enable_transfer", "积分转账"),
         "开户": ("enable_bank", "银行系统"),
         "存钱": ("enable_bank", "银行系统"),
@@ -1079,6 +1166,38 @@ class PointGamesPlugin(Star):
         "发红包": ("enable_user_red_packet", "群友发红包"),
         "系统": ("enable_wallet", "系统钱包"),
     }
+
+    # ---------- 修仙系统 ----------
+    XIUXIAN_CULTIVATE_COST = 10       # 修炼消耗积分
+    XIUXIAN_CULTIVATE_COOLDOWN = 300  # 修炼冷却（秒）
+    XIUXIAN_BREAK_COST = 100          # 小境界突破消耗积分
+    XIUXIAN_BREAK_RATE = 85           # 小境界突破基础成功率 %
+    XIUXIAN_TRIB_COST = 1000          # 渡劫（大境界突破）消耗积分
+    XIUXIAN_TRIB_RATE = 60            # 渡劫基础成功率 %
+    XIUXIAN_EXCHANGE_FEE = 10         # 积分/灵石双向兑换手续费 %
+    XIUXIAN_MAX_TECHS = 5             # 功法持有上限
+    XIUXIAN_MAX_ARTIFACTS = 3         # 法宝持有上限
+    XIUXIAN_TECH_DRAW_COST = 500      # 功法抽取消耗积分
+    XIUXIAN_ARTIFACT_DRAW_COST = 800  # 法宝抽取消耗积分
+    XIUXIAN_TECH_UP_COST = 200        # 功法升级消耗灵石 ×等级
+    XIUXIAN_ARTIFACT_UP_COST = 300    # 法宝强化消耗积分 ×等级
+    XIUXIAN_SECT_CREATE_COST = 5000   # 创建宗门消耗积分
+    XIUXIAN_SECT_MAX_LEVEL = 10       # 宗门最高等级
+    XIUXIAN_SECT_UP_COST = 5000       # 宗门升级消耗宗门资金 ×等级
+    XIUXIAN_SECT_MEMBER_BONUS = 0.015 # 宗门每级成员收益加成（钓鱼/挖矿）
+    XIUXIAN_SECT_WAR_COST = 1000      # 发起宗门战消耗积分
+    XIUXIAN_SECT_WAR_COOLDOWN = 3600  # 宗门战冷却（秒）
+    XIUXIAN_SPIRIT_CATCH_COST = 200   # 捕捉灵兽消耗积分
+    XIUXIAN_SPIRIT_UP_COST = 150      # 灵兽升级消耗积分 ×等级
+    XIUXIAN_SPIRIT_WORK_CAP = 8       # 灵兽打工结算上限（小时）
+    XIUXIAN_SECRET_COST = 50          # 秘境探险消耗积分
+    XIUXIAN_SECRET_COOLDOWN = 600     # 秘境冷却（秒）
+    XIUXIAN_ASCEND_COST = 10000       # 飞升消耗积分
+    XIUXIAN_BONUS_PER_REALM = 0.05    # 每大境界积分收益加成 5%
+    XIUXIAN_BONUS_CAP = 2.0           # 加成上限 ×2（+100%）
+    # 触发全群广播的大境界（渡劫成功时）
+    XIUXIAN_REALM_BROADCAST = ("金丹", "元婴", "化神", "炼虚", "合体", "大乘",
+                               "渡劫", "散仙", "真仙", "金仙", "大罗", "道祖")
 
     # ---------- 表结构定义 ----------
     TABLE_DDL = [
@@ -1510,6 +1629,93 @@ class PointGamesPlugin(Star):
             count INTEGER DEFAULT 0,
             PRIMARY KEY(user_id, date)
         )""",
+        # ---------- 修仙系统 ----------
+        """CREATE TABLE IF NOT EXISTS xiuxian_players (
+            user_id TEXT PRIMARY KEY,
+            realm TEXT DEFAULT '凡人',
+            realm_level INTEGER DEFAULT 0,
+            cultivation INTEGER DEFAULT 0,
+            max_cultivation INTEGER DEFAULT 100,
+            spirit_root TEXT,
+            constitution TEXT,
+            sect_id INTEGER DEFAULT 0,
+            sect_position TEXT DEFAULT '散修',
+            spirit_stones INTEGER DEFAULT 0,
+            total_breakthrough INTEGER DEFAULT 0,
+            fail_count INTEGER DEFAULT 0,
+            cultivate_buff REAL DEFAULT 0,
+            secret_buff REAL DEFAULT 0,
+            break_bonus INTEGER DEFAULT 0,
+            platform_id TEXT DEFAULT '',
+            group_id TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_cultivate TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS xiuxian_techniques (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            name TEXT,
+            grade TEXT,
+            level INTEGER DEFAULT 1,
+            exp INTEGER DEFAULT 0,
+            equipped INTEGER DEFAULT 0,
+            attributes TEXT,
+            skills TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_xiuxian_tech_user ON xiuxian_techniques(user_id)",
+        """CREATE TABLE IF NOT EXISTS xiuxian_artifacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            name TEXT,
+            grade TEXT,
+            level INTEGER DEFAULT 1,
+            equipped INTEGER DEFAULT 0,
+            attributes TEXT,
+            skills TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_xiuxian_art_user ON xiuxian_artifacts(user_id)",
+        """CREATE TABLE IF NOT EXISTS xiuxian_pills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            name TEXT,
+            grade TEXT,
+            effect TEXT,
+            count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, name)
+        )""",
+        """CREATE TABLE IF NOT EXISTS xiuxian_sects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            founder_id TEXT,
+            level INTEGER DEFAULT 1,
+            funds INTEGER DEFAULT 0,
+            members TEXT,
+            skills TEXT,
+            last_war REAL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS xiuxian_spirits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            name TEXT,
+            grade TEXT,
+            level INTEGER DEFAULT 1,
+            exp INTEGER DEFAULT 0,
+            attributes TEXT,
+            skills TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS xiuxian_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            type TEXT,
+            detail TEXT,
+            create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_xiuxian_rec_user ON xiuxian_records(user_id)",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -3025,6 +3231,7 @@ class PointGamesPlugin(Star):
             "　　　/鱼竿列表｜/修鱼竿｜/钓鱼排行｜/钓鱼统计｜/鱼塘",
             "　　　/一键钓鱼（20000积分通行证：自动收鱼+卖鱼+修竿+挂机）",
             "挖矿：/买矿镐｜/买体力｜/挂机挖矿｜/收矿｜/卖矿｜/矿图鉴｜/矿洞",
+            "修仙：/修仙 信息｜修炼｜突破｜渡劫｜灵根｜兑换｜功法｜法宝｜炼丹｜秘境｜宗门｜灵兽",
             "签到：群发 签到 / jrzj / 今日座驾（附带今日运势）",
             "排行：/排行 或 /富豪榜（总资产TOP10，含银行存款与贷款）",
             "管理：/加积分 @玩家 数量｜/减积分 @玩家 数量",
@@ -9226,6 +9433,12 @@ class PointGamesPlugin(Star):
             team_mult = await self._team_bonus_mult(session, user_id)
             if team_mult > 1.0:
                 eff_total = int(eff_total * team_mult)
+            # 修仙加成：境界（每大境界+5%）+ 宗门（每级+1.5%）
+            x_realm_mult, x_sect_mult = await self._xiuxian_income_bonus(session, user_id)
+            if x_realm_mult > 1.0:
+                eff_total = int(eff_total * x_realm_mult)
+            if x_sect_mult > 1.0:
+                eff_total = int(eff_total * x_sect_mult)
             await self._add_points(session, user_id, eff_total, "sell_fish", earned=eff_total)
             await session.execute(text(
                 "UPDATE fishing_stats SET total_income=total_income+:t, "
@@ -11161,6 +11374,12 @@ class PointGamesPlugin(Star):
             team_mult = await self._mteam_bonus_mult(session, user_id)
             if team_mult > 1.0:
                 total = int(total * team_mult)
+            # 修仙加成：境界（每大境界+5%）+ 宗门（每级+1.5%）
+            x_realm_mult, x_sect_mult = await self._xiuxian_income_bonus(session, user_id)
+            if x_realm_mult > 1.0:
+                total = int(total * x_realm_mult)
+            if x_sect_mult > 1.0:
+                total = int(total * x_sect_mult)
             await self._add_points(session, user_id, total, "sell_ore", earned=total)
             await session.execute(text(
                 "UPDATE mining_stats SET total_income=total_income+:t, "
@@ -12031,6 +12250,1627 @@ class PointGamesPlugin(Star):
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
+
+    # ============================================================
+    #  修仙系统（v4.25.0）：境界修炼/突破渡劫/灵根/兑换/功法/法宝/炼丹/秘境/宗门/灵兽/飞升
+    # ============================================================
+    def _xiuxian_help(self) -> str:
+        return (
+            "📖 【修仙指令】\n"
+            "/修仙 信息 —— 查看修仙信息\n"
+            "/修仙 修炼 —— 修炼获得修为（10积分，5分钟冷却）\n"
+            "/修仙 突破 —— 小境界突破（100积分，修为满）\n"
+            "/修仙 渡劫 —— 大境界渡劫（1000积分+渡劫丹，满层满修为）\n"
+            "/修仙 灵根 —— 觉醒灵根（首次免费，重醒500积分）\n"
+            "/修仙 兑换 [积分] —— 积分→灵石（10%手续费）\n"
+            "/修仙 兑换 灵石 [数量] —— 灵石→积分\n"
+            "/修仙 功法 —— 功法管理（抽取/修炼/装备）\n"
+            "/修仙 法宝 —— 法宝管理（抽取/强化/装备）\n"
+            "/修仙 炼丹 [丹名] —— 消耗积分+矿石炼丹\n"
+            "/修仙 丹药 —— 丹药管理（使用）\n"
+            "/修仙 秘境 —— 秘境探险（50积分）\n"
+            "/修仙 宗门 —— 宗门管理（创建/加入/捐赠/升级/战/退出）\n"
+            "/修仙 灵兽 —— 灵兽管理（捕捉/打工/收取/升级）\n"
+            "/修仙 飞升 —— 渡劫9层满修为后飞升成仙"
+        )
+
+    def _xiuxian_max_cultivation(self, realm: str, level: int) -> int:
+        """某境界某层的修为上限：base × mult^level"""
+        idx = XIUXIAN_REALM_INDEX.get(realm, 0)
+        r = XIUXIAN_REALMS[idx]
+        return int(r["base"] * (r["mult"] ** int(level)))
+
+    async def _xiuxian_ensure_player(self, session, user_id: str,
+                                     platform_id: str = "", group_id: str = ""):
+        """确保修仙玩家档案存在，并刷新活跃平台/群（必须在事务内调用）"""
+        row = (await session.execute(text(
+            "SELECT user_id FROM xiuxian_players WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        if not row:
+            await session.execute(text(
+                "INSERT INTO xiuxian_players(user_id, realm, realm_level, cultivation, "
+                "max_cultivation) VALUES(:u, '凡人', 0, 0, :m)"
+            ), {"u": user_id, "m": self._xiuxian_max_cultivation("凡人", 0)})
+        if platform_id or group_id:
+            await session.execute(text(
+                "UPDATE xiuxian_players SET platform_id=:p, group_id=:g WHERE user_id=:u"
+            ), {"p": platform_id, "g": group_id, "u": user_id})
+
+    async def _xiuxian_player(self, session, user_id: str):
+        """读取修仙玩家档案行（必须在事务内调用）"""
+        return (await session.execute(text(
+            "SELECT realm, realm_level, cultivation, max_cultivation, spirit_root, "
+            "constitution, sect_id, sect_position, spirit_stones, total_breakthrough, "
+            "fail_count, cultivate_buff, secret_buff, break_bonus, last_cultivate "
+            "FROM xiuxian_players WHERE user_id=:u"
+        ), {"u": user_id})).first()
+
+    async def _xiuxian_income_bonus(self, session, user_id: str) -> tuple[float, float]:
+        """修仙收益加成（卖鱼/卖矿等处调用），返回 (境界倍率, 宗门倍率)。
+
+        - 每提升一个大境界 +5%，封顶 +100%
+        - 宗门每级成员 +1.5%
+        """
+        row = (await session.execute(text(
+            "SELECT realm FROM xiuxian_players WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        realm_mult = 1.0
+        if row:
+            idx = XIUXIAN_REALM_INDEX.get(str(row[0]), 0)
+            realm_mult = min(1.0 + idx * self.XIUXIAN_BONUS_PER_REALM, self.XIUXIAN_BONUS_CAP)
+        sect_mult = 1.0
+        srow = (await session.execute(text(
+            "SELECT p.sect_id, s.level FROM xiuxian_players p "
+            "LEFT JOIN xiuxian_sects s ON s.id = p.sect_id WHERE p.user_id=:u"
+        ), {"u": user_id})).first()
+        if srow and srow[0] and srow[1]:
+            sect_mult = 1.0 + int(srow[1]) * self.XIUXIAN_SECT_MEMBER_BONUS
+        return realm_mult, sect_mult
+
+    def _xiuxian_root_speed(self, spirit_root) -> float:
+        return float(SPIRIT_ROOTS.get(spirit_root, {}).get("speed", 1.0))
+
+    async def _xiuxian_equipped_tech_bonus(self, session, user_id: str) -> float:
+        """已装备功法的修炼速度加成（品阶基础 + 每级2%）"""
+        row = (await session.execute(text(
+            "SELECT grade, level FROM xiuxian_techniques WHERE user_id=:u AND equipped=1"
+        ), {"u": user_id})).first()
+        if not row:
+            return 0.0
+        base = XIUXIAN_TECH_GRADES.get(str(row[0]), 0.0)
+        return base + 0.02 * (int(row[1] or 1) - 1)
+
+    async def _xiuxian_equipped_art_bonus(self, session, user_id: str) -> float:
+        """已装备法宝的收益加成（品阶基础 + 每级2%）"""
+        row = (await session.execute(text(
+            "SELECT grade, level FROM xiuxian_artifacts WHERE user_id=:u AND equipped=1"
+        ), {"u": user_id})).first()
+        if not row:
+            return 0.0
+        base = XIUXIAN_ARTIFACT_GRADES.get(str(row[0]), 0.0)
+        return base + 0.02 * (int(row[1] or 1) - 1)
+
+    @filter.command("修仙")
+    async def xiuxian_command(self, event: AstrMessageEvent):
+        """/修仙 —— 修仙系统主指令（信息/修炼/突破/渡劫/灵根/兑换/功法/法宝/炼丹/丹药/秘境/宗门/灵兽/飞升）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "修仙")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        args = self._strip_command(event, "修仙").strip().split()
+        sub = args[0] if args else "信息"
+        params = args[1:]
+        handlers = {
+            "信息": self._xiuxian_cmd_info, "状态": self._xiuxian_cmd_info,
+            "修炼": self._xiuxian_cmd_cultivate, "打坐": self._xiuxian_cmd_cultivate,
+            "突破": self._xiuxian_cmd_breakthrough,
+            "渡劫": self._xiuxian_cmd_tribulation,
+            "灵根": self._xiuxian_cmd_awaken, "觉醒": self._xiuxian_cmd_awaken,
+            "兑换": self._xiuxian_cmd_exchange,
+            "功法": self._xiuxian_cmd_techniques,
+            "法宝": self._xiuxian_cmd_artifacts,
+            "炼丹": self._xiuxian_cmd_alchemy,
+            "丹药": self._xiuxian_cmd_pills,
+            "秘境": self._xiuxian_cmd_secret, "探险": self._xiuxian_cmd_secret,
+            "宗门": self._xiuxian_cmd_sect,
+            "灵兽": self._xiuxian_cmd_spirit, "宠物": self._xiuxian_cmd_spirit,
+            "飞升": self._xiuxian_cmd_ascend,
+        }
+        handler = handlers.get(sub)
+        if handler is None:
+            yield event.plain_result(self._xiuxian_help())
+            return
+        async for res in handler(event, params):
+            yield res
+
+    @staticmethod
+    def _xiuxian_realm_display(realm: str, level: int) -> str:
+        return f"{realm}{int(level) + 1}层" if realm != "道祖" else "道祖"
+
+    async def _xiuxian_cmd_info(self, event: AstrMessageEvent, params: list):
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id)
+            p = await self._xiuxian_player(session, user_id)
+            (realm, level, cult, maxc, root, consti, sect_id, position,
+             stones, total_break, fails, cbuff, sbuff, bbonus, last_cult) = p
+            idx = XIUXIAN_REALM_INDEX.get(str(realm), 0)
+            speed = self._xiuxian_root_speed(root)
+            tech_bonus = await self._xiuxian_equipped_tech_bonus(session, user_id)
+            art_bonus = await self._xiuxian_equipped_art_bonus(session, user_id)
+            realm_mult = min(1.0 + idx * self.XIUXIAN_BONUS_PER_REALM, self.XIUXIAN_BONUS_CAP)
+            sect_row = None
+            if sect_id:
+                sect_row = (await session.execute(text(
+                    "SELECT name, level FROM xiuxian_sects WHERE id=:i"
+                ), {"i": int(sect_id)})).first()
+            lines = [
+                "🧙 【修仙信息】",
+                f"境界：{self._xiuxian_realm_display(str(realm), int(level))}"
+                f"（{str(realm)} · {len(XIUXIAN_REALMS)}大境界制）",
+                f"修为：{int(cult)}/{int(maxc)}"
+                + ("　✨ 可突破！" if int(cult) >= int(maxc) else ""),
+                f"灵根：{root or '未觉醒'}（{SPIRIT_ROOTS.get(root, {}).get('desc', '发送 /修仙 灵根 觉醒')}）",
+                f"体质：{consti or '凡胎'}",
+                f"修炼速度：×{speed:.1f}"
+                + (f" +功法{tech_bonus:.0%}" if tech_bonus > 0 else ""),
+                f"积分玩法收益：×{realm_mult:.2f}（境界加成）",
+            ]
+            if art_bonus > 0:
+                lines.append(f"法宝加成：卖鱼/卖矿收益 +{art_bonus:.0%}")
+            if sect_row:
+                lines.append(f"宗门：{sect_row[0]}（{position} · {int(sect_row[1])}级）")
+            else:
+                lines.append("宗门：散修（/修仙 宗门 创建|加入）")
+            lines.append(f"灵石：{int(stones or 0)}（/修仙 兑换 与积分双向兑换）")
+            lines.append(f"突破：累计 {int(total_break or 0)} 次，失败 {int(fails or 0)} 次")
+            if int(bbonus or 0) > 0:
+                lines.append(f"💊 破境丹加成：下次突破 +{int(bbonus) * 25}%")
+            now = time.time()
+            if cbuff and float(cbuff) > now:
+                lines.append(f"💊 灵气丹生效：修炼收益+50%（剩 {int((float(cbuff)-now)/60)} 分钟）")
+            if sbuff and float(sbuff) > now:
+                lines.append(f"💊 福缘丹生效：秘境积分+50%（剩 {int((float(sbuff)-now)/60)} 分钟）")
+            spirit = (await session.execute(text(
+                "SELECT name, grade, level, attributes FROM xiuxian_spirits "
+                "WHERE user_id=:u ORDER BY id LIMIT 1"
+            ), {"u": user_id})).first()
+            if spirit:
+                lines.append(f"灵兽：{spirit[0]}（{spirit[1]} · {int(spirit[2])}级）")
+            if str(realm) == "渡劫" and int(level) >= 8:
+                lines.append("🌟 渡劫9层修为圆满后可 /修仙 飞升！")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _xiuxian_cmd_cultivate(self, event: AstrMessageEvent, params: list):
+        """/修仙 修炼 —— 消耗10积分获得修为，5分钟冷却"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            p = await self._xiuxian_player(session, user_id)
+            realm, level, cult, maxc, root = p[0], p[1], p[2], p[3], p[4]
+            if int(cult) >= int(maxc):
+                raise _BizError("修为已圆满！发 /修仙 突破（或 /修仙 渡劫）冲击下一层喵~")
+            # 冷却 5 分钟（独立于全局指令冷却）
+            if p[14]:
+                wait = self.XIUXIAN_CULTIVATE_COOLDOWN - (time.time() - float(p[14]))
+                if wait > 0:
+                    raise _BizError(f"⏳ 气息未平复，{int(wait // 60)} 分 {int(wait % 60)} 秒后再修炼")
+            bal = await self._total_balance(session, user_id)
+            if bal < self.XIUXIAN_CULTIVATE_COST:
+                raise _BizError(
+                    f"❌ 积分不足！修炼需要 {self.XIUXIAN_CULTIVATE_COST} 积分，当前余额：{bal}"
+                )
+            await self._add_points(
+                session, user_id, -self.XIUXIAN_CULTIVATE_COST, "xiuxian_cultivate")
+            speed = self._xiuxian_root_speed(root)
+            tech_bonus = await self._xiuxian_equipped_tech_bonus(session, user_id)
+            base_gain = random.randint(10, 30)
+            gain = int(base_gain * speed * (1 + tech_bonus))
+            now = time.time()
+            buffed = p[11] and float(p[11]) > now
+            if buffed:
+                gain = int(gain * 1.5)
+            new_cult = min(int(maxc), int(cult) + gain)
+            await session.execute(text(
+                "UPDATE xiuxian_players SET cultivation=:c, last_cultivate=:t WHERE user_id=:u"
+            ), {"c": new_cult, "t": now, "u": user_id})
+            msg = (f"🧘 修炼成功！获得 {gain} 修为"
+                   f"{'（💊灵气丹×1.5）' if buffed else ''}\n"
+                   f"当前修为：{new_cult}/{int(maxc)}")
+            if new_cult >= int(maxc):
+                if int(level) < XIUXIAN_REALMS[XIUXIAN_REALM_INDEX.get(str(realm), 0)]["levels"] - 1:
+                    msg += "\n✨ 修为已满，发 /修仙 突破 冲击下一层！"
+                else:
+                    msg += "\n⚡ 此境界已至圆满，发 /修仙 渡劫 冲击大境界！"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _xiuxian_cmd_breakthrough(self, event: AstrMessageEvent, params: list):
+        """/修仙 突破 —— 小境界突破：100积分，修为满才可突破"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            p = await self._xiuxian_player(session, user_id)
+            realm, level, cult, maxc = str(p[0]), int(p[1]), int(p[2]), int(p[3])
+            idx = XIUXIAN_REALM_INDEX.get(realm, 0)
+            r = XIUXIAN_REALMS[idx]
+            if realm == "道祖":
+                raise _BizError("👑 你已证道祖之位，诸天万界再无更高处！")
+            if cult < maxc:
+                raise _BizError(f"修为不足（{cult}/{maxc}），先 /修仙 修炼 积累修为喵~")
+            if level < r["levels"] - 1:
+                # ---- 小境界突破 ----
+                bal = await self._total_balance(session, user_id)
+                if bal < self.XIUXIAN_BREAK_COST:
+                    raise _BizError(
+                        f"❌ 积分不足！突破需要 {self.XIUXIAN_BREAK_COST} 积分，当前余额：{bal}"
+                    )
+                await self._add_points(
+                    session, user_id, -self.XIUXIAN_BREAK_COST, "xiuxian_break")
+                bonus_uses = int(p[13] or 0)
+                rate = min(100, self.XIUXIAN_BREAK_RATE + bonus_uses * 25)
+                if random.random() * 100 < rate:
+                    new_level = level + 1
+                    new_max = self._xiuxian_max_cultivation(realm, new_level)
+                    await session.execute(text(
+                        "UPDATE xiuxian_players SET realm_level=:l, cultivation=0, "
+                        "max_cultivation=:m, total_breakthrough=total_breakthrough+1, "
+                        "break_bonus=MAX(break_bonus-1, 0) WHERE user_id=:u"
+                    ), {"l": new_level, "m": new_max, "u": user_id})
+                    await session.execute(text(
+                        "INSERT INTO xiuxian_records(user_id, type, detail) "
+                        "VALUES(:u, 'breakthrough', :d)"
+                    ), {"u": user_id, "d": f"{realm}{level+1}层 → {realm}{new_level+1}层"})
+                    msg = (f"🌈 突破成功！进入 {self._xiuxian_realm_display(realm, new_level)}！\n"
+                           f"修为上限提升至 {new_max}，继续修炼吧！")
+                else:
+                    lost = cult // 2
+                    await session.execute(text(
+                        "UPDATE xiuxian_players SET cultivation=:c, "
+                        "fail_count=fail_count+1, break_bonus=MAX(break_bonus-1, 0) "
+                        "WHERE user_id=:u"
+                    ), {"c": cult - lost, "u": user_id})
+                    msg = (f"💢 突破失败！走火入魔损失 {lost} 修为…\n"
+                           f"当前修为：{cult - lost}/{maxc}（穿戴破境丹可提高成功率）")
+                return True, msg, None
+            raise _BizError("此境界已圆满！发 /修仙 渡劫 冲击大境界喵~")
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _xiuxian_cmd_tribulation(self, event: AstrMessageEvent, params: list):
+        """/修仙 渡劫 —— 大境界突破：1000积分+渡劫丹，成功率受体质影响"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            p = await self._xiuxian_player(session, user_id)
+            realm, level, cult, maxc, consti = str(p[0]), int(p[1]), int(p[2]), int(p[3]), p[5]
+            idx = XIUXIAN_REALM_INDEX.get(realm, 0)
+            r = XIUXIAN_REALMS[idx]
+            if realm == "道祖":
+                raise _BizError("👑 你已证道祖之位，诸天万界再无更高处！")
+            if level < r["levels"] - 1:
+                raise _BizError(f"尚未圆满（第{level+1}层），先把小境界修满再来渡劫喵~")
+            if cult < maxc:
+                raise _BizError(f"修为不足（{cult}/{maxc}），先 /修仙 修炼 圆满修为喵~")
+            # 渡劫丹检查
+            pill = (await session.execute(text(
+                "SELECT count FROM xiuxian_pills WHERE user_id=:u AND name='渡劫丹'"
+            ), {"u": user_id})).first()
+            if not pill or int(pill[0] or 0) < 1:
+                raise _BizError(
+                    "❌ 渡劫需要 1 颗【渡劫丹】！\n"
+                    "炼制：/修仙 炼丹 渡劫丹（2000积分 + 5块珍稀矿）")
+            bal = await self._total_balance(session, user_id)
+            if bal < self.XIUXIAN_TRIB_COST:
+                raise _BizError(
+                    f"❌ 积分不足！渡劫需要 {self.XIUXIAN_TRIB_COST} 积分，当前余额：{bal}"
+                )
+            await self._add_points(session, user_id, -self.XIUXIAN_TRIB_COST, "xiuxian_tribulation")
+            await session.execute(text(
+                "UPDATE xiuxian_pills SET count=count-1 WHERE user_id=:u AND name='渡劫丹'"
+            ), {"u": user_id})
+            await session.execute(text(
+                "DELETE FROM xiuxian_pills WHERE user_id=:u AND name='渡劫丹' AND count<=0"
+            ), {"u": user_id})
+            consti_bonus = XIUXIAN_CONSTITUTIONS.get(consti or "凡胎", (0, 0.0))[1]
+            rate = self.XIUXIAN_TRIB_RATE + consti_bonus
+            if random.random() * 100 < rate:
+                new_realm = XIUXIAN_REALMS[idx + 1]["name"]
+                new_max = self._xiuxian_max_cultivation(new_realm, 0)
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET realm=:r, realm_level=0, cultivation=0, "
+                    "max_cultivation=:m, total_breakthrough=total_breakthrough+1 "
+                    "WHERE user_id=:u"
+                ), {"r": new_realm, "m": new_max, "u": user_id})
+                await session.execute(text(
+                    "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'tribulation', :d)"
+                ), {"u": user_id, "d": f"{realm} → {new_realm}"})
+                msg = (f"⚡⚡⚡ 渡劫成功！天雷洗礼，肉身重塑！\n"
+                       f"🎉 你已踏入【{new_realm}】！修为上限 {new_max}\n"
+                       f"💰 所有积分玩法收益 +{(XIUXIAN_REALM_INDEX[new_realm]) * 5}%！")
+                broadcasts = None
+                if new_realm in self.XIUXIAN_REALM_BROADCAST:
+                    chain = [At(qq=str(user_id)), Plain(
+                        f" ⚡⚡⚡ 渡劫成功，晋入【{new_realm}】！"
+                        f"雷云散去，天地异象，众人皆惊！")]
+                    broadcasts = [(platform_id, group_id, chain)]
+                return True, msg, (broadcasts or [])
+            lost = int(cult * 0.6)
+            await session.execute(text(
+                "UPDATE xiuxian_players SET cultivation=:c, fail_count=fail_count+1 "
+                "WHERE user_id=:u"
+            ), {"c": lost, "u": user_id})
+            await session.execute(text(
+                "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'trib_fail', :d)"
+            ), {"u": user_id, "d": f"{realm} 渡劫失败"})
+            return True, (
+                f"💥 渡劫失败！天雷轰体，修为暴跌 {cult - lost} 点…\n"
+                f"当前修为：{lost}/{maxc}（提升体质或再接再厉！）"), []
+
+        ok, msg, data = await self._tx(fn)
+        yield event.plain_result(msg)
+        for platform, group, chain in (data or []):
+            await self._send_with_fallback(platform, group, chain, "修仙渡劫播报")
+
+    async def _xiuxian_cmd_awaken(self, event: AstrMessageEvent, params: list):
+        """/修仙 灵根 —— 觉醒灵根：首次免费，重新觉醒 500 积分"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            p = await self._xiuxian_player(session, user_id)
+            old_root, old_consti = p[4], p[5]
+            cost = 0 if not old_root else 500
+            if cost > 0:
+                bal = await self._total_balance(session, user_id)
+                if bal < cost:
+                    raise _BizError(
+                        f"❌ 重新觉醒需要 {cost} 积分洗练根骨，当前余额：{bal}")
+                await self._add_points(session, user_id, -cost, "xiuxian_awaken")
+            roots = list(SPIRIT_ROOTS.keys())
+            weights = [SPIRIT_ROOTS[k]["rarity"] for k in roots]
+            new_root = random.choices(roots, weights=weights)[0]
+            constis = list(XIUXIAN_CONSTITUTIONS.keys())
+            cweights = [XIUXIAN_CONSTITUTIONS[k][0] for k in constis]
+            new_consti = random.choices(constis, weights=cweights)[0]
+            await session.execute(text(
+                "UPDATE xiuxian_players SET spirit_root=:r, constitution=:c WHERE user_id=:u"
+            ), {"r": new_root, "c": new_consti, "u": user_id})
+            await session.execute(text(
+                "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'awaken', :d)"
+            ), {"u": user_id, "d": f"{new_root}/{new_consti}"})
+            msg = (f"🔮 灵根觉醒！测出【{new_root}】\n"
+                   f"{SPIRIT_ROOTS[new_root]['desc']}\n"
+                   f"附带体质：【{new_consti}】（渡劫成功率+{XIUXIAN_CONSTITUTIONS[new_consti][1]:.0f}%）")
+            if cost > 0:
+                msg = f"（洗练根骨消耗 {cost} 积分，原灵根：{old_root}）\n" + msg
+            else:
+                msg = "（首次觉醒免费）\n" + msg
+            if new_root in ("天灵根", "单灵根"):
+                msg += "\n🌟 此等资质，百年难遇！"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _xiuxian_cmd_exchange(self, event: AstrMessageEvent, params: list):
+        """/修仙 兑换 [积分] —— 积分→灵石；/修仙 兑换 灵石 [数量] —— 灵石→积分（10%手续费）"""
+        user_id = event.get_sender_id()
+        # 方向：默认积分→灵石；第一个参数为"灵石"时反向
+        direction = "points"
+        rest = list(params)
+        if rest and rest[0] in ("灵石", "积分"):
+            direction = "stones" if rest[0] == "灵石" else "points"
+            rest = rest[1:]
+        nums = [x for x in rest if x.isdigit()]
+        if not nums:
+            yield event.plain_result("❌ 格式：/修仙 兑换 [积分数量] 或 /修仙 兑换 灵石 [灵石数量]")
+            return
+        amount = int(nums[-1])
+        if amount <= 0:
+            yield event.plain_result("❌ 数量必须大于0")
+            return
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            fee = int(amount * self.XIUXIAN_EXCHANGE_FEE / 100)
+            got = amount - fee
+            if direction == "points":
+                bal = await self._total_balance(session, user_id)
+                if bal < amount:
+                    raise _BizError(f"❌ 积分不足！当前余额：{bal}")
+                await self._add_points(session, user_id, -amount, "xiuxian_exchange",
+                                       spent=amount)
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET spirit_stones=spirit_stones+:s WHERE user_id=:u"
+                ), {"s": got, "u": user_id})
+                return True, (
+                    f"💎 兑换成功！\n消耗积分：{amount}（手续费{fee}）\n"
+                    f"获得灵石：{got}"), None
+            # 灵石 → 积分
+            p = await self._xiuxian_player(session, user_id)
+            stones = int(p[8] or 0)
+            if stones < amount:
+                raise _BizError(f"❌ 灵石不足！当前灵石：{stones}")
+            await session.execute(text(
+                "UPDATE xiuxian_players SET spirit_stones=spirit_stones-:s WHERE user_id=:u"
+            ), {"s": amount, "u": user_id})
+            await self._add_points(session, user_id, got, "xiuxian_exchange_in",
+                                   earned=got)
+            return True, (
+                f"💎 兑换成功！\n消耗灵石：{amount}（手续费{fee}）\n"
+                f"获得积分：{got}"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 功法 ====================
+    async def _xiuxian_cmd_techniques(self, event: AstrMessageEvent, params: list):
+        """/修仙 功法 —— 查看；抽取（500积分）；修炼 [编号]（200×等级灵石）；装备 [编号]"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        sub = params[0] if params else ""
+
+        if sub == "抽取":
+            async def fn_draw(session):
+                await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                cnt = (await session.execute(text(
+                    "SELECT COUNT(*) FROM xiuxian_techniques WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                if int(cnt[0]) >= self.XIUXIAN_MAX_TECHS:
+                    raise _BizError(f"功法已满 {self.XIUXIAN_MAX_TECHS} 本，无法再参悟新的喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.XIUXIAN_TECH_DRAW_COST:
+                    raise _BizError(
+                        f"❌ 积分不足！参悟功法需要 {self.XIUXIAN_TECH_DRAW_COST} 积分")
+                await self._add_points(
+                    session, user_id, -self.XIUXIAN_TECH_DRAW_COST, "xiuxian_tech_draw")
+                grades = list(XIUXIAN_TECH_GRADES.keys())
+                grade = random.choices(grades, weights=XIUXIAN_TECH_WEIGHTS)[0]
+                name = random.choice(XIUXIAN_TECH_NAMES)
+                dup = (await session.execute(text(
+                    "SELECT 1 FROM xiuxian_techniques WHERE user_id=:u AND name=:n"
+                ), {"u": user_id, "n": name})).first()
+                if dup:
+                    name = name + "·改"
+                await session.execute(text(
+                    "INSERT INTO xiuxian_techniques(user_id, name, grade, level, equipped, "
+                    "attributes) VALUES(:u, :n, :g, 1, 0, :a)"
+                ), {"u": user_id, "n": name, "g": grade,
+                    "a": f"修炼速度+{XIUXIAN_TECH_GRADES[grade]:.0%}"})
+                return True, (
+                    f"📜 参悟成功！获得【{grade} · {name}】\n"
+                    f"效果：修炼速度+{XIUXIAN_TECH_GRADES[grade]:.0%}（升级每级+2%）\n"
+                    f"发 /修仙 功法 装备 [编号] 装备"), None
+            ok, msg, _ = await self._tx(fn_draw)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "装备":
+            if not params[1:]:
+                yield event.plain_result("❌ 格式：/修仙 功法 装备 [编号]")
+                return
+            try:
+                tid = int(params[1])
+            except ValueError:
+                yield event.plain_result("❌ 编号得是数字喵~")
+                return
+
+            async def fn_eq(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                row = (await session.execute(text(
+                    "SELECT id, name, grade FROM xiuxian_techniques "
+                    "WHERE user_id=:u AND id=:i"
+                ), {"u": user_id, "i": tid})).first()
+                if not row:
+                    raise _BizError(f"没有编号 {tid} 的功法，发 /修仙 功法 查看")
+                await session.execute(text(
+                    "UPDATE xiuxian_techniques SET equipped=0 WHERE user_id=:u"
+                ), {"u": user_id})
+                await session.execute(text(
+                    "UPDATE xiuxian_techniques SET equipped=1 WHERE id=:i"
+                ), {"i": tid})
+                return True, f"📖 已装备【{row[2]} · {row[1]}】，修炼事半功倍！", None
+            ok, msg, _ = await self._tx(fn_eq)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "修炼":
+            if not params[1:]:
+                yield event.plain_result("❌ 格式：/修仙 功法 修炼 [编号]（消耗 200×当前等级 灵石）")
+                return
+            try:
+                tid = int(params[1])
+            except ValueError:
+                yield event.plain_result("❌ 编号得是数字喵~")
+                return
+
+            async def fn_up(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                row = (await session.execute(text(
+                    "SELECT id, name, grade, level FROM xiuxian_techniques "
+                    "WHERE user_id=:u AND id=:i"
+                ), {"u": user_id, "i": tid})).first()
+                if not row:
+                    raise _BizError(f"没有编号 {tid} 的功法，发 /修仙 功法 查看")
+                level = int(row[3])
+                if level >= 9:
+                    raise _BizError("此功法已臻大成（9级），无法再精进喵~")
+                cost = self.XIUXIAN_TECH_UP_COST * level
+                p = await self._xiuxian_player(session, user_id)
+                stones = int(p[8] or 0)
+                if stones < cost:
+                    raise _BizError(
+                        f"❌ 灵石不足！参悟需要 {cost} 灵石（/修仙 兑换 用积分换灵石）")
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET spirit_stones=spirit_stones-:s WHERE user_id=:u"
+                ), {"s": cost, "u": user_id})
+                await session.execute(text(
+                    "UPDATE xiuxian_techniques SET level=:l, exp=exp+100 WHERE id=:i"
+                ), {"l": level + 1, "i": tid})
+                return True, (
+                    f"📖 【{row[2]} · {row[1]}】参悟至 {level + 1} 层！\n"
+                    f"修炼速度加成：{XIUXIAN_TECH_GRADES.get(row[2], 0):.0%}+"
+                    f"{(level) * 2}%（共消耗 {cost} 灵石）"), None
+            ok, msg, _ = await self._tx(fn_up)
+            yield event.plain_result(msg)
+            return
+
+        # 默认：查看
+        async def fn_view(session):
+            await self._xiuxian_ensure_player(session, user_id)
+            rows = (await session.execute(text(
+                "SELECT id, name, grade, level, equipped FROM xiuxian_techniques "
+                "WHERE user_id=:u ORDER BY id"
+            ), {"u": user_id})).all()
+            if not rows:
+                return True, (
+                    "📜 你还没有功法喵~\n"
+                    f"发 /修仙 功法 抽取 参悟（{self.XIUXIAN_TECH_DRAW_COST} 积分，"
+                    f"黄阶+5%/玄阶+10%/地阶+20%/天阶+35% 修炼速度）"), None
+            lines = ["📜 【功法列表】"]
+            for tid, name, grade, level, eq in rows:
+                mark = "✅装备中" if int(eq or 0) else ""
+                lines.append(f"{tid}. 【{grade} · {name}】{level}级 {mark}")
+            lines.append("抽取/修炼/装备：/修仙 功法 抽取｜修炼 [编号]｜装备 [编号]")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn_view)
+        yield event.plain_result(msg)
+
+    # ==================== 法宝 ====================
+    async def _xiuxian_cmd_artifacts(self, event: AstrMessageEvent, params: list):
+        """/修仙 法宝 —— 查看；抽取（800积分）；强化 [编号]（300×等级积分）；装备 [编号]"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        sub = params[0] if params else ""
+
+        if sub == "抽取":
+            async def fn_draw(session):
+                await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                cnt = (await session.execute(text(
+                    "SELECT COUNT(*) FROM xiuxian_artifacts WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                if int(cnt[0]) >= self.XIUXIAN_MAX_ARTIFACTS:
+                    raise _BizError(f"法宝已满 {self.XIUXIAN_MAX_ARTIFACTS} 件，无法再收纳喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.XIUXIAN_ARTIFACT_DRAW_COST:
+                    raise _BizError(
+                        f"❌ 积分不足！祭炼法宝需要 {self.XIUXIAN_ARTIFACT_DRAW_COST} 积分")
+                await self._add_points(
+                    session, user_id, -self.XIUXIAN_ARTIFACT_DRAW_COST, "xiuxian_art_draw")
+                grades = list(XIUXIAN_ARTIFACT_GRADES.keys())
+                grade = random.choices(grades, weights=XIUXIAN_ARTIFACT_WEIGHTS)[0]
+                name = random.choice(XIUXIAN_ARTIFACT_NAMES)
+                dup = (await session.execute(text(
+                    "SELECT 1 FROM xiuxian_artifacts WHERE user_id=:u AND name=:n"
+                ), {"u": user_id, "n": name})).first()
+                if dup:
+                    name = name + "·伪"
+                await session.execute(text(
+                    "INSERT INTO xiuxian_artifacts(user_id, name, grade, level, equipped, "
+                    "attributes) VALUES(:u, :n, :g, 1, 0, :a)"
+                ), {"u": user_id, "n": name, "g": grade,
+                    "a": f"卖鱼卖矿收益+{XIUXIAN_ARTIFACT_GRADES[grade]:.0%}"})
+                return True, (
+                    f"⚔️ 祭炼成功！获得【{grade} · {name}】\n"
+                    f"效果：卖鱼/卖矿收益+{XIUXIAN_ARTIFACT_GRADES[grade]:.0%}"
+                    f"（强化每级+2%）\n"
+                    f"发 /修仙 法宝 装备 [编号] 装备"), None
+            ok, msg, _ = await self._tx(fn_draw)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "装备":
+            if not params[1:]:
+                yield event.plain_result("❌ 格式：/修仙 法宝 装备 [编号]")
+                return
+            try:
+                aid = int(params[1])
+            except ValueError:
+                yield event.plain_result("❌ 编号得是数字喵~")
+                return
+
+            async def fn_eq(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                row = (await session.execute(text(
+                    "SELECT id, name, grade FROM xiuxian_artifacts "
+                    "WHERE user_id=:u AND id=:i"
+                ), {"u": user_id, "i": aid})).first()
+                if not row:
+                    raise _BizError(f"没有编号 {aid} 的法宝，发 /修仙 法宝 查看")
+                await session.execute(text(
+                    "UPDATE xiuxian_artifacts SET equipped=0 WHERE user_id=:u"
+                ), {"u": user_id})
+                await session.execute(text(
+                    "UPDATE xiuxian_artifacts SET equipped=1 WHERE id=:i"
+                ), {"i": aid})
+                return True, f"⚔️ 已祭出【{row[2]} · {row[1]}】，收益加成生效！", None
+            ok, msg, _ = await self._tx(fn_eq)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "强化":
+            if not params[1:]:
+                yield event.plain_result("❌ 格式：/修仙 法宝 强化 [编号]（消耗 300×当前等级 积分）")
+                return
+            try:
+                aid = int(params[1])
+            except ValueError:
+                yield event.plain_result("❌ 编号得是数字喵~")
+                return
+
+            async def fn_up(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                row = (await session.execute(text(
+                    "SELECT id, name, grade, level FROM xiuxian_artifacts "
+                    "WHERE user_id=:u AND id=:i"
+                ), {"u": user_id, "i": aid})).first()
+                if not row:
+                    raise _BizError(f"没有编号 {aid} 的法宝，发 /修仙 法宝 查看")
+                level = int(row[3])
+                if level >= 9:
+                    raise _BizError("此法宝已臻圆满（9级），无法再强化喵~")
+                cost = self.XIUXIAN_ARTIFACT_UP_COST * level
+                bal = await self._total_balance(session, user_id)
+                if bal < cost:
+                    raise _BizError(f"❌ 积分不足！强化需要 {cost} 积分")
+                await self._add_points(session, user_id, -cost, "xiuxian_art_up")
+                await session.execute(text(
+                    "UPDATE xiuxian_artifacts SET level=:l WHERE id=:i"
+                ), {"l": level + 1, "i": aid})
+                return True, (
+                    f"🔧 【{row[2]} · {row[1]}】强化至 {level + 1} 级！\n"
+                    f"收益加成：{XIUXIAN_ARTIFACT_GRADES.get(row[2], 0):.0%}+"
+                    f"{level * 2}%（共消耗 {cost} 积分）"), None
+            ok, msg, _ = await self._tx(fn_up)
+            yield event.plain_result(msg)
+            return
+
+        # 默认：查看
+        async def fn_view(session):
+            await self._xiuxian_ensure_player(session, user_id)
+            rows = (await session.execute(text(
+                "SELECT id, name, grade, level, equipped FROM xiuxian_artifacts "
+                "WHERE user_id=:u ORDER BY id"
+            ), {"u": user_id})).all()
+            if not rows:
+                return True, (
+                    "⚔️ 你还没有法宝喵~\n"
+                    f"发 /修仙 法宝 抽取 祭炼（{self.XIUXIAN_ARTIFACT_DRAW_COST} 积分，"
+                    f"法器+3%/宝器+6%/灵器+10%/仙器+15% 卖鱼卖矿收益）"), None
+            lines = ["⚔️ 【法宝列表】"]
+            for aid, name, grade, level, eq in rows:
+                mark = "✅装备中" if int(eq or 0) else ""
+                lines.append(f"{aid}. 【{grade} · {name}】{level}级 {mark}")
+            lines.append("抽取/强化/装备：/修仙 法宝 抽取｜强化 [编号]｜装备 [编号]")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn_view)
+        yield event.plain_result(msg)
+
+    # ==================== 炼丹 / 丹药 ====================
+    def _xiuxian_ore_material_text(self, ores: dict) -> str:
+        if "ore" in ores:
+            return f"{ores['ore']}×{ores['count']}"
+        return f"任意{ores['rarity']}矿石×{ores['count']}"
+
+    async def _xiuxian_consume_ores(self, session, user_id: str, ores: dict) -> int:
+        """从矿仓扣除炼丹材料（必须先检查足够），返回消耗块数。
+
+        ores 两种形态：{"ore": 名, "count": n} 指定矿；{"rarity": 档, "count": n} 按稀有度任意扣。
+        """
+        if "ore" in ores:
+            await session.execute(text(
+                "UPDATE mining_inventory SET count=count-:c WHERE user_id=:u AND ore_name=:n"
+            ), {"c": ores["count"], "u": user_id, "n": ores["ore"]})
+            await session.execute(text(
+                "DELETE FROM mining_inventory WHERE user_id=:u AND ore_name=:n AND count<=0"
+            ), {"u": user_id, "n": ores["ore"]})
+            return ores["count"]
+        # 按稀有度扣：逐行从便宜到贵扣
+        need = ores["count"]
+        rows = (await session.execute(text(
+            "SELECT ore_name, count FROM mining_inventory WHERE user_id=:u"
+        ), {"u": user_id})).all()
+        pool = []
+        for name, cnt in rows:
+            if ORE_POOL.get(str(name), ("", ""))[1] == ores["rarity"]:
+                pool.append([str(name), int(cnt or 0)])
+        total = sum(c for _, c in pool)
+        if total < need:
+            raise _BizError(
+                f"❌ 矿仓材料不足！需要任意{ores['rarity']}矿石×{ores['count']}，"
+                f"当前只有 {total} 块（/挂机挖矿 获取）")
+        consumed = 0
+        for name, cnt in pool:
+            if need <= 0:
+                break
+            take = min(cnt, need)
+            need -= take
+            consumed += take
+            await session.execute(text(
+                "UPDATE mining_inventory SET count=count-:c WHERE user_id=:u AND ore_name=:n"
+            ), {"c": take, "u": user_id, "n": name})
+            await session.execute(text(
+                "DELETE FROM mining_inventory WHERE user_id=:u AND ore_name=:n AND count<=0"
+            ), {"u": user_id, "n": name})
+        return consumed
+
+    async def _xiuxian_cmd_alchemy(self, event: AstrMessageEvent, params: list):
+        """/修仙 炼丹 [丹名] —— 消耗积分+矿仓矿石炼丹（成功率70%）"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        name = params[0] if params else ""
+
+        if not name or name not in XIUXIAN_PILL_RECIPES:
+            lines = ["⚗️ 【丹方列表】（/修仙 炼丹 [丹名]）"]
+            for pname, rec in XIUXIAN_PILL_RECIPES.items():
+                lines.append(
+                    f"• {pname}：{rec['cost']}积分 + {self._xiuxian_ore_material_text(rec['ores'])}")
+                lines.append(f"　└ {rec['desc']}")
+            yield event.plain_result("\n".join(lines))
+            return
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            rec = XIUXIAN_PILL_RECIPES[name]
+            bal = await self._total_balance(session, user_id)
+            if bal < rec["cost"]:
+                raise _BizError(f"❌ 积分不足！炼制【{name}】需要 {rec['cost']} 积分")
+            # 先扣积分再扣材料（材料不足抛错回滚积分）
+            await self._add_points(session, user_id, -rec["cost"], "xiuxian_alchemy")
+            used = await self._xiuxian_consume_ores(session, user_id, rec["ores"])
+            if random.random() * 100 < self.XIUXIAN_ALCHEMY_RATE:
+                await session.execute(text(
+                    "INSERT INTO xiuxian_pills(user_id, name, grade, effect, count) "
+                    "VALUES(:u, :n, '丹药', :e, 1) "
+                    "ON CONFLICT(user_id, name) DO UPDATE SET count=xiuxian_pills.count+1"
+                ), {"u": user_id, "n": name, "e": rec["desc"]})
+                return True, (
+                    f"⚗️ 开炉炼丹…丹香四溢！\n"
+                    f"✅ 炼制成功！获得【{name}】×1\n"
+                    f"效果：{rec['desc']}"), None
+            await session.execute(text(
+                "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'alchemy_fail', :d)"
+            ), {"u": user_id, "d": f"{name} 炉毁"})
+            return True, (
+                "💥 轰！炉毁丹废…火候差了那么一点点\n"
+                f"材料（{rec['cost']}积分 + {used}块矿）已化为灰烬，再接再厉！"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _xiuxian_cmd_pills(self, event: AstrMessageEvent, params: list):
+        """/修仙 丹药 —— 查看；使用 [丹名]"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        sub = params[0] if params else ""
+
+        if sub == "使用":
+            name = params[1] if len(params) > 1 else ""
+            if not name:
+                yield event.plain_result("❌ 格式：/修仙 丹药 使用 [丹名]")
+                return
+            if name == "渡劫丹":
+                yield event.plain_result("渡劫丹无法直接服用喵~ 渡劫时自动消耗（/修仙 渡劫）")
+                return
+
+            async def fn_use(session):
+                await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                row = (await session.execute(text(
+                    "SELECT id, count FROM xiuxian_pills WHERE user_id=:u AND name=:n"
+                ), {"u": user_id, "n": name})).first()
+                if not row or int(row[1] or 0) < 1:
+                    raise _BizError(f"你没有【{name}】喵~ 发 /修仙 丹药 查看丹药袋")
+                p = await self._xiuxian_player(session, user_id)
+                realm, level, cult, maxc = str(p[0]), int(p[1]), int(p[2]), int(p[3])
+                now = time.time()
+                if name == "回气丹":
+                    idx = XIUXIAN_REALM_INDEX.get(realm, 0)
+                    gain = int(300 * XIUXIAN_REALMS[idx]["mult"])
+                    new_cult = min(int(maxc), cult + gain)
+                    await session.execute(text(
+                        "UPDATE xiuxian_players SET cultivation=:c WHERE user_id=:u"
+                    ), {"c": new_cult, "u": user_id})
+                    effect = f"修为 +{gain}（当前 {new_cult}/{maxc}）"
+                elif name == "灵气丹":
+                    await session.execute(text(
+                        "UPDATE xiuxian_players SET cultivate_buff=:t WHERE user_id=:u"
+                    ), {"t": now + 24 * 3600, "u": user_id})
+                    effect = "24小时内修炼收益+50%"
+                elif name == "破境丹":
+                    await session.execute(text(
+                        "UPDATE xiuxian_players SET break_bonus=break_bonus+1 WHERE user_id=:u"
+                    ), {"u": user_id})
+                    effect = "下一次小境界突破成功率+25%"
+                elif name == "福缘丹":
+                    await session.execute(text(
+                        "UPDATE xiuxian_players SET secret_buff=:t WHERE user_id=:u"
+                    ), {"t": now + 24 * 3600, "u": user_id})
+                    effect = "24小时内秘境积分+50%"
+                else:
+                    raise _BizError(f"不认识【{name}】这味丹药喵~")
+                await session.execute(text(
+                    "UPDATE xiuxian_pills SET count=count-1 WHERE id=:i"
+                ), {"i": row[0]})
+                await session.execute(text(
+                    "DELETE FROM xiuxian_pills WHERE id=:i AND count<=0"
+                ), {"i": row[0]})
+                return True, f"💊 服用【{name}】！{effect}", None
+            ok, msg, _ = await self._tx(fn_use)
+            yield event.plain_result(msg)
+            return
+
+        # 默认：查看丹药袋
+        async def fn_view(session):
+            await self._xiuxian_ensure_player(session, user_id)
+            rows = (await session.execute(text(
+                "SELECT name, count, effect FROM xiuxian_pills WHERE user_id=:u "
+                "AND count>0 ORDER BY name"
+            ), {"u": user_id})).all()
+            if not rows:
+                return True, (
+                    "💊 丹药袋空空如也喵~\n"
+                    "发 /修仙 炼丹 查看丹方（消耗积分+矿仓矿石）"), None
+            lines = ["💊 【丹药袋】"]
+            for name, cnt, effect in rows:
+                lines.append(f"• {name}×{int(cnt)}　{effect}")
+            lines.append("服用：/修仙 丹药 使用 [丹名]（渡劫丹渡劫时自动消耗）")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn_view)
+        yield event.plain_result(msg)
+
+    # ==================== 秘境 ====================
+    async def _xiuxian_cmd_secret(self, event: AstrMessageEvent, params: list):
+        """/修仙 秘境 —— 50积分探险，境界越高奖励越高，福缘丹24h积分+50%"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            p = await self._xiuxian_player(session, user_id)
+            realm, level, cult, maxc = str(p[0]), int(p[1]), int(p[2]), int(p[3])
+            idx = XIUXIAN_REALM_INDEX.get(realm, 0)
+            # 冷却：查最近一次秘境记录
+            last = (await session.execute(text(
+                "SELECT create_time FROM xiuxian_records WHERE user_id=:u AND type='secret' "
+                "ORDER BY id DESC LIMIT 1"
+            ), {"u": user_id})).first()
+            if last and last[0]:
+                wait = self.XIUXIAN_SECRET_COOLDOWN - (time.time() - float(last[0]))
+                if wait > 0:
+                    raise _BizError(
+                        f"⏳ 秘境入口尚未重开，{int(wait // 60)} 分 {int(wait % 60)} 秒后再来")
+            bal = await self._total_balance(session, user_id)
+            if bal < self.XIUXIAN_SECRET_COST:
+                raise _BizError(
+                    f"❌ 积分不足！秘境探险需要 {self.XIUXIAN_SECRET_COST} 积分")
+            await self._add_points(
+                session, user_id, -self.XIUXIAN_SECRET_COST, "xiuxian_secret")
+            await session.execute(text(
+                "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'secret', :d)"
+            ), {"u": user_id, "d": f"{realm}{level+1}层"})
+            now = time.time()
+            buffed = p[12] and float(p[12]) > now
+            scenes = ["上古剑冢", "仙人洞府", "幽冥鬼窟", "龙宫遗址", "星辰古塔", "万象秘林"]
+            scene = random.choice(scenes)
+            if random.random() < 0.8:
+                # 通关：积分 = (20~60) × (1+境界序号) ×(福缘丹1.5) + 修为 + 材料概率
+                base = random.randint(20, 60) * (1 + idx)
+                reward = int(base * (1.5 if buffed else 1.0))
+                cult_gain = random.randint(20, 60) * (1 + idx // 3)
+                new_cult = min(maxc, cult + cult_gain)
+                await self._add_points(session, user_id, reward, "xiuxian_secret_reward",
+                                       earned=reward)
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET cultivation=:c WHERE user_id=:u"
+                ), {"c": new_cult, "u": user_id})
+                drops: list[str] = []
+                # 5% 掉落功法 / 5% 掉落法宝（自动入库）
+                if random.random() < 0.05:
+                    cnt = (await session.execute(text(
+                        "SELECT COUNT(*) FROM xiuxian_techniques WHERE user_id=:u"
+                    ), {"u": user_id})).first()
+                    if int(cnt[0]) < self.XIUXIAN_MAX_TECHS:
+                        grades = list(XIUXIAN_TECH_GRADES.keys())
+                        grade = random.choices(grades, weights=XIUXIAN_TECH_WEIGHTS)[0]
+                        name = random.choice(XIUXIAN_TECH_NAMES)
+                        await session.execute(text(
+                            "INSERT INTO xiuxian_techniques(user_id, name, grade, level, "
+                            "equipped, attributes) VALUES(:u, :n, :g, 1, 0, :a)"
+                        ), {"u": user_id, "n": name, "g": grade,
+                            "a": f"修炼速度+{XIUXIAN_TECH_GRADES[grade]:.0%}"})
+                        drops.append(f"📜 功法【{grade} · {name}】")
+                if random.random() < 0.05:
+                    cnt = (await session.execute(text(
+                        "SELECT COUNT(*) FROM xiuxian_artifacts WHERE user_id=:u"
+                    ), {"u": user_id})).first()
+                    if int(cnt[0]) < self.XIUXIAN_MAX_ARTIFACTS:
+                        grades = list(XIUXIAN_ARTIFACT_GRADES.keys())
+                        grade = random.choices(grades, weights=XIUXIAN_ARTIFACT_WEIGHTS)[0]
+                        name = random.choice(XIUXIAN_ARTIFACT_NAMES)
+                        await session.execute(text(
+                            "INSERT INTO xiuxian_artifacts(user_id, name, grade, level, "
+                            "equipped, attributes) VALUES(:u, :n, :g, 1, 0, :a)"
+                        ), {"u": user_id, "n": name, "g": grade,
+                            "a": f"卖鱼卖矿收益+{XIUXIAN_ARTIFACT_GRADES[grade]:.0%}"})
+                        drops.append(f"⚔️ 法宝【{grade} · {name}】")
+                # 30% 带回矿石（稀有档 1~2 块，进矿仓与挖矿联动）
+                if random.random() < 0.3:
+                    ore = self._mining_pick_ore_tier("稀有")
+                    take = random.randint(1, 2)
+                    await session.execute(text(
+                        "INSERT INTO mining_inventory(user_id, ore_name, value_mult, count) "
+                        "VALUES(:u, :n, 1, :c) "
+                        "ON CONFLICT(user_id, ore_name) DO UPDATE SET "
+                        "count=mining_inventory.count+:c"
+                    ), {"u": user_id, "n": ore[0], "c": take})
+                    drops.append(f"🪨 {ore[0]}×{take}（已入矿仓）")
+                msg = (f"🌀 你闯入了【{scene}】！\n"
+                       f"⚔️ 通关成功！获得 {reward} 积分"
+                       f"{'（💊福缘丹×1.5）' if buffed else ''}\n"
+                       f"🧘 修为 +{int(cult_gain)}（当前 {new_cult}/{int(maxc)}）")
+                if drops:
+                    msg += "\n🎁 意外收获：" + "、".join(drops)
+                return True, msg, None
+            # 失败：只捞到一点修为
+            cult_gain = random.randint(5, 15)
+            new_cult = min(maxc, cult + cult_gain)
+            await session.execute(text(
+                "UPDATE xiuxian_players SET cultivation=:c WHERE user_id=:u"
+            ), {"c": new_cult, "u": user_id})
+            return True, (
+                f"🌀 你闯入了【{scene}】…\n"
+                f"💨 迷失在秘境迷雾中，狼狈逃出！只悟得 {cult_gain} 修为"
+                f"（当前 {new_cult}/{int(maxc)}）"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    # ==================== 宗门 ====================
+    async def _xiuxian_cmd_sect(self, event: AstrMessageEvent, params: list):
+        """/修仙 宗门 —— 信息/创建 [名]/加入 [名]/捐赠 [积分]/升级/战 [宗门]/退出"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        sub = params[0] if params else ""
+
+        # ---- 创建 ----
+        if sub == "创建":
+            name = params[1] if len(params) > 1 else ""
+            if not name:
+                yield event.plain_result("❌ 格式：/修仙 宗门 创建 [宗门名]")
+                return
+            if len(name) > 12:
+                yield event.plain_result("❌ 宗门名最长 12 个字喵~")
+                return
+
+            async def fn_create(session):
+                await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                p = await self._xiuxian_player(session, user_id)
+                if p[6]:
+                    raise _BizError("你已有宗门，先退出再创建喵~")
+                exists = (await session.execute(text(
+                    "SELECT 1 FROM xiuxian_sects WHERE name=:n"
+                ), {"n": name})).first()
+                if exists:
+                    raise _BizError(f"「{name}」已存在，换个响亮点的名字喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.XIUXIAN_SECT_CREATE_COST:
+                    raise _BizError(
+                        f"❌ 积分不足！创建宗门需要 {self.XIUXIAN_SECT_CREATE_COST} 积分")
+                await self._add_points(
+                    session, user_id, -self.XIUXIAN_SECT_CREATE_COST, "xiuxian_sect_create")
+                cur = await session.execute(text(
+                    "INSERT INTO xiuxian_sects(name, founder_id, members) "
+                    "VALUES(:n, :f, :m)"
+                ), {"n": name, "f": user_id, "m": json.dumps([user_id])})
+                sid = cur.lastrowid
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET sect_id=:s, sect_position='宗主' "
+                    "WHERE user_id=:u"
+                ), {"s": sid, "u": user_id})
+                await session.execute(text(
+                    "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'sect', :d)"
+                ), {"u": user_id, "d": f"创建宗门 {name}"})
+                return True, (
+                    f"🏔️ 【{name}】开山立派！消耗 {self.XIUXIAN_SECT_CREATE_COST} 积分\n"
+                    f"你就是开派宗主！队友发 /修仙 宗门 加入 {name} 加入\n"
+                    f"宗门每升1级，成员钓鱼/挖矿收益 +1.5%"), None
+            ok, msg, _ = await self._tx(fn_create)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 加入 ----
+        if sub == "加入":
+            name = params[1] if len(params) > 1 else ""
+            if not name:
+                yield event.plain_result("❌ 格式：/修仙 宗门 加入 [宗门名]")
+                return
+
+            async def fn_join(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                p = await self._xiuxian_player(session, user_id)
+                if p[6]:
+                    raise _BizError("你已有宗门，先退出再加入喵~")
+                row = (await session.execute(text(
+                    "SELECT id, name, members FROM xiuxian_sects WHERE name=:n"
+                ), {"n": name})).first()
+                if not row:
+                    raise _BizError(f"没有叫「{name}」的宗门喵~")
+                members = json.loads(row[2] or "[]")
+                if len(members) >= 30:
+                    raise _BizError("该宗门人满为患（30人上限）喵~")
+                members.append(user_id)
+                await session.execute(text(
+                    "UPDATE xiuxian_sects SET members=:m WHERE id=:i"
+                ), {"m": json.dumps(members), "i": row[0]})
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET sect_id=:s, sect_position='弟子' "
+                    "WHERE user_id=:u"
+                ), {"s": row[0], "u": user_id})
+                return True, (
+                    f"⛰️ 你拜入【{row[1]}】门下，成为外门弟子！\n"
+                    f"宗门等级加成即刻生效，发 /修仙 宗门 查看详情"), None
+            ok, msg, _ = await self._tx(fn_join)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 捐赠 ----
+        if sub == "捐赠":
+            nums = [x for x in params[1:] if x.isdigit()]
+            if not nums:
+                yield event.plain_result("❌ 格式：/修仙 宗门 捐赠 [积分数量]")
+                return
+            amount = int(nums[-1])
+            if amount <= 0:
+                yield event.plain_result("❌ 数量必须大于0")
+                return
+
+            async def fn_donate(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                p = await self._xiuxian_player(session, user_id)
+                if not p[6]:
+                    raise _BizError("你是散修，无门可捐喵~（/修仙 宗门 加入 [名]）")
+                bal = await self._total_balance(session, user_id)
+                if bal < amount:
+                    raise _BizError(f"❌ 积分不足！当前余额：{bal}")
+                await self._add_points(session, user_id, -amount, "xiuxian_sect_donate")
+                await session.execute(text(
+                    "UPDATE xiuxian_sects SET funds=funds+:f WHERE id=:i"
+                ), {"f": amount, "i": int(p[6])})
+                srow = (await session.execute(text(
+                    "SELECT name, funds FROM xiuxian_sects WHERE id=:i"
+                ), {"i": int(p[6])})).first()
+                return True, (
+                    f"🙏 捐赠 {amount} 积分入【{srow[0]}】宗门账库！\n"
+                    f"当前宗门资金：{int(srow[1])}（宗主可用 /修仙 宗门 升级 提升宗门等级）"), None
+            ok, msg, _ = await self._tx(fn_donate)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 升级 ----
+        if sub == "升级":
+            async def fn_up(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                p = await self._xiuxian_player(session, user_id)
+                if not p[6]:
+                    raise _BizError("你是散修，无门可升喵~")
+                if p[7] != "宗主":
+                    raise _BizError("只有宗主可以升级宗门喵~")
+                srow = (await session.execute(text(
+                    "SELECT id, name, level, funds FROM xiuxian_sects WHERE id=:i"
+                ), {"i": int(p[6])})).first()
+                level = int(srow[2])
+                if level >= self.XIUXIAN_SECT_MAX_LEVEL:
+                    raise _BizError(
+                        f"✅ 【{srow[1]}】已至 {self.XIUXIAN_SECT_MAX_LEVEL} 级，天下第一门！")
+                cost = self.XIUXIAN_SECT_UP_COST * level
+                if int(srow[3]) < cost:
+                    raise _BizError(
+                        f"❌ 宗门资金不足！升到 {level + 1} 级需要 {cost} 资金"
+                        f"（当前 {int(srow[3])}，成员 /修仙 宗门 捐赠 [积分]）")
+                await session.execute(text(
+                    "UPDATE xiuxian_sects SET funds=funds-:f, level=:l WHERE id=:i"
+                ), {"f": cost, "l": level + 1, "i": int(p[6])})
+                bonus = int((level + 1) * self.XIUXIAN_SECT_MEMBER_BONUS * 100)
+                return True, (
+                    f"🎉 【{srow[1]}】升到 {level + 1} 级！消耗宗门资金 {cost}\n"
+                    f"全体成员钓鱼/挖矿收益 +{bonus}%！"), None
+            ok, msg, _ = await self._tx(fn_up)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 宗门战 ----
+        if sub == "战":
+            name = params[1] if len(params) > 1 else ""
+            if not name:
+                yield event.plain_result("❌ 格式：/修仙 宗门 战 [目标宗门名]")
+                return
+
+            async def fn_war(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                p = await self._xiuxian_player(session, user_id)
+                if not p[6]:
+                    raise _BizError("你是散修，无门可战喵~")
+                if p[7] != "宗主":
+                    raise _BizError("只有宗主可以发起宗门战喵~")
+                my_sect = (await session.execute(text(
+                    "SELECT id, name, level, members, last_war FROM xiuxian_sects WHERE id=:i"
+                ), {"i": int(p[6])})).first()
+                if my_sect[4] and (time.time() - float(my_sect[4])) < self.XIUXIAN_SECT_WAR_COOLDOWN:
+                    wait = self.XIUXIAN_SECT_WAR_COOLDOWN - (time.time() - float(my_sect[4]))
+                    raise _BizError(
+                        f"⏳ 宗门战冷却中，{int(wait // 60)} 分钟后再战")
+                if str(name) == str(my_sect[1]):
+                    raise _BizError("不能打自己宗门喵！")
+                enemy = (await session.execute(text(
+                    "SELECT id, name, level, members FROM xiuxian_sects WHERE name=:n"
+                ), {"n": name})).first()
+                if not enemy:
+                    raise _BizError(f"没有叫「{name}」的宗门喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.XIUXIAN_SECT_WAR_COST:
+                    raise _BizError(
+                        f"❌ 积分不足！宣战需要 {self.XIUXIAN_SECT_WAR_COST} 积分")
+                await self._add_points(
+                    session, user_id, -self.XIUXIAN_SECT_WAR_COST, "xiuxian_sect_war")
+
+                async def calc_power(members_json: str, level: int) -> int:
+                    members = json.loads(members_json or "[]")
+                    power = 0
+                    for m in members:
+                        r = (await session.execute(text(
+                            "SELECT realm FROM xiuxian_players WHERE user_id=:u"
+                        ), {"u": str(m)})).first()
+                        idx = XIUXIAN_REALM_INDEX.get(str(r[0]), 0) if r else 0
+                        power += (idx + 1) * 100
+                    return power + int(level) * 500 + random.randint(0, 800)
+                my_power = await calc_power(my_sect[3], my_sect[2])
+                enemy_power = await calc_power(enemy[3], enemy[2])
+                await session.execute(text(
+                    "UPDATE xiuxian_sects SET last_war=:t WHERE id=:i"
+                ), {"t": time.time(), "i": my_sect[0]})
+                await session.execute(text(
+                    "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'sect_war', :d)"
+                ), {"u": user_id, "d": f"{my_sect[1]} → {enemy[1]}"})
+                my_members = json.loads(my_sect[3] or "[]")
+                enemy_members = json.loads(enemy[3] or "[]")
+                if my_power >= enemy_power:
+                    # 胜：每名成员 +150 积分，并抢走对方 10% 资金
+                    for m in my_members:
+                        await self._add_points(session, str(m), 150, "sect_war_win",
+                                               earned=150)
+                    funds = (await session.execute(text(
+                        "SELECT funds FROM xiuxian_sects WHERE id=:i"
+                    ), {"i": enemy[0]})).first()
+                    loot = int(int(funds[0] or 0) * 0.1) if funds else 0
+                    if loot > 0:
+                        await session.execute(text(
+                            "UPDATE xiuxian_sects SET funds=funds-:f WHERE id=:i"
+                            ), {"f": loot, "i": enemy[0]})
+                        await session.execute(text(
+                            "UPDATE xiuxian_sects SET funds=funds+:f WHERE id=:i"
+                            ), {"f": loot, "i": my_sect[0]})
+                    return True, (
+                        f"⚔️ 【{my_sect[1]}】 vs 【{enemy[1]}】\n"
+                        f"战力：{my_power} vs {enemy_power}\n"
+                        f"🏆 大获全胜！全体成员 +150 积分，掠夺对方宗门资金 {loot}！"), None
+                # 败：对方宗门 +1000 资金
+                await session.execute(text(
+                    "UPDATE xiuxian_sects SET funds=funds+1000 WHERE id=:i"
+                ), {"i": enemy[0]})
+                return True, (
+                    f"⚔️ 【{my_sect[1]}】 vs 【{enemy[1]}】\n"
+                    f"战力：{my_power} vs {enemy_power}\n"
+                    f"💀 惨败！宣战费 {self.XIUXIAN_SECT_WAR_COST} 积分化为乌有，"
+                    f"对方宗门还获得 1000 资金…"), None
+            ok, msg, _ = await self._tx(fn_war)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 退出 ----
+        if sub == "退出":
+            async def fn_leave(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                p = await self._xiuxian_player(session, user_id)
+                if not p[6]:
+                    raise _BizError("你本来就是散修喵~")
+                srow = (await session.execute(text(
+                    "SELECT id, name, members, founder_id FROM xiuxian_sects WHERE id=:i"
+                ), {"i": int(p[6])})).first()
+                members = json.loads(srow[2] or "[]")
+                if user_id in members:
+                    members.remove(user_id)
+                is_founder = str(user_id) == str(srow[3])
+                if is_founder or not members:
+                    # 宗主退出或无人 → 解散
+                    await session.execute(text(
+                        "DELETE FROM xiuxian_sects WHERE id=:i"), {"i": int(p[6])})
+                    for m in members:
+                        await session.execute(text(
+                            "UPDATE xiuxian_players SET sect_id=0, sect_position='散修' "
+                            "WHERE user_id=:u"), {"u": str(m)})
+                    return True, f"🏚️ 【{srow[1]}】已解散（宗主退位）", None
+                await session.execute(text(
+                    "UPDATE xiuxian_sects SET members=:m WHERE id=:i"
+                ), {"m": json.dumps(members), "i": int(p[6])})
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET sect_id=0, sect_position='散修' "
+                    "WHERE user_id=:u"
+                ), {"u": user_id})
+                return True, f"🚪 你已退出【{srow[1]}】，重归散修行列", None
+            ok, msg, _ = await self._tx(fn_leave)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 默认：宗门信息 ----
+        async def fn_view(session):
+            await self._xiuxian_ensure_player(session, user_id)
+            p = await self._xiuxian_player(session, user_id)
+            if not p[6]:
+                return True, (
+                    "🏔️ 【宗门】你目前是散修\n"
+                    f"创建宗门：/修仙 宗门 创建 [名]（{self.XIUXIAN_SECT_CREATE_COST} 积分）\n"
+                    "加入宗门：/修仙 宗门 加入 [名]\n"
+                    "宗门每级：成员钓鱼/挖矿收益 +1.5%"), None
+            srow = (await session.execute(text(
+                "SELECT name, founder_id, level, funds, members FROM xiuxian_sects "
+                "WHERE id=:i"
+            ), {"i": int(p[6])})).first()
+            members = json.loads(srow[4] or "[]")
+            bonus = int(int(srow[2]) * self.XIUXIAN_SECT_MEMBER_BONUS * 100)
+            lines = [
+                f"🏔️ 【{srow[0]}】{int(srow[2])}级",
+                f"宗主：{srow[1]}　你的职位：{p[7]}",
+                f"成员：{len(members)} 人",
+                f"宗门资金：{int(srow[3])}（升级到 {int(srow[2])+1} 级需 {self.XIUXIAN_SECT_UP_COST * int(srow[2])}）",
+                f"成员加成：钓鱼/挖矿收益 +{bonus}%",
+                "捐赠：/修仙 宗门 捐赠 [积分]｜升级：/修仙 宗门 升级",
+                "宗门战：/修仙 宗门 战 [目标宗门名]（宗主，1000积分，1小时冷却）",
+            ]
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn_view)
+        yield event.plain_result(msg)
+
+    # ==================== 灵兽 ====================
+    async def _xiuxian_cmd_spirit(self, event: AstrMessageEvent, params: list):
+        """/修仙 灵兽 —— 信息/捕捉（200积分）/打工/收取/升级"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+        sub = params[0] if params else ""
+
+        if sub == "捕捉":
+            async def fn_catch(session):
+                await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                have = (await session.execute(text(
+                    "SELECT 1 FROM xiuxian_spirits WHERE user_id=:u"
+                ), {"u": user_id})).first()
+                if have:
+                    raise _BizError("你已有灵兽相伴，一心不可二用喵~")
+                bal = await self._total_balance(session, user_id)
+                if bal < self.XIUXIAN_SPIRIT_CATCH_COST:
+                    raise _BizError(
+                        f"❌ 积分不足！捕捉灵兽需要 {self.XIUXIAN_SPIRIT_CATCH_COST} 积分")
+                await self._add_points(
+                    session, user_id, -self.XIUXIAN_SPIRIT_CATCH_COST, "xiuxian_spirit_catch")
+                grades = list(XIUXIAN_SPIRIT_GRADES.keys())
+                grade = random.choices(grades, weights=XIUXIAN_SPIRIT_WEIGHTS)[0]
+                name = random.choice(XIUXIAN_SPIRIT_NAMES)
+                await session.execute(text(
+                    "INSERT INTO xiuxian_spirits(user_id, name, grade, level, attributes) "
+                    "VALUES(:u, :n, :g, 1, :a)"
+                ), {"u": user_id, "n": name, "g": grade,
+                    "a": json.dumps({"work_start": None})})
+                wage = int(XIUXIAN_SPIRIT_GRADES[grade])
+                return True, (
+                    f"🐾 契约成功！灵兽【{grade} · {name}】追随于你！\n"
+                    f"打工工资：{wage} 积分/小时（升级每级+10%，上限8小时/次）\n"
+                    f"发 /修仙 灵兽 打工 派它出门赚积分！"), None
+            ok, msg, _ = await self._tx(fn_catch)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "打工":
+            async def fn_work(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                row = (await session.execute(text(
+                    "SELECT id, name, grade, level, attributes FROM xiuxian_spirits "
+                    "WHERE user_id=:u ORDER BY id LIMIT 1"
+                ), {"u": user_id})).first()
+                if not row:
+                    raise _BizError(
+                        f"你还没有灵兽喵~（/修仙 灵兽 捕捉，{self.XIUXIAN_SPIRIT_CATCH_COST} 积分）")
+                attrs = json.loads(row[4] or "{}")
+                if attrs.get("work_start"):
+                    raise _BizError("灵兽已经在打工啦，发 /修仙 灵兽 收取 结算工钱")
+                attrs["work_start"] = time.time()
+                await session.execute(text(
+                    "UPDATE xiuxian_spirits SET attributes=:a WHERE id=:i"
+                ), {"a": json.dumps(attrs), "i": row[0]})
+                wage = int(XIUXIAN_SPIRIT_GRADES.get(row[2], 5) *
+                           (1 + 0.1 * (int(row[3]) - 1)))
+                return True, (
+                    f"🐾 【{row[1]}】背着小竹篓出门打工啦！\n"
+                    f"工资：{wage} 积分/小时，最多累计 {self.XIUXIAN_SPIRIT_WORK_CAP} 小时\n"
+                    f"发 /修仙 灵兽 收取 结算工钱"), None
+            ok, msg, _ = await self._tx(fn_work)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "收取":
+            async def fn_collect(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                row = (await session.execute(text(
+                    "SELECT id, name, grade, level, attributes FROM xiuxian_spirits "
+                    "WHERE user_id=:u ORDER BY id LIMIT 1"
+                ), {"u": user_id})).first()
+                if not row:
+                    raise _BizError("你还没有灵兽喵~")
+                attrs = json.loads(row[4] or "{}")
+                start = attrs.get("work_start")
+                if not start:
+                    raise _BizError("灵兽还没出门打工喵~（/修仙 灵兽 打工）")
+                elapsed = time.time() - float(start)
+                hours = min(elapsed / 3600, self.XIUXIAN_SPIRIT_WORK_CAP)
+                if hours < 1:
+                    wait = 3600 - elapsed
+                    raise _BizError(
+                        f"⏳ 灵兽刚出门，满 1 小时才结算（还差 {int(wait // 60)} 分钟）")
+                wage = XIUXIAN_SPIRIT_GRADES.get(row[2], 5) * (1 + 0.1 * (int(row[3]) - 1))
+                earned = int(wage * hours)
+                attrs["work_start"] = None
+                await session.execute(text(
+                    "UPDATE xiuxian_spirits SET attributes=:a, exp=exp+:e WHERE id=:i"
+                ), {"a": json.dumps(attrs), "e": int(hours * 10), "i": row[0]})
+                await self._add_points(session, user_id, earned, "xiuxian_spirit_wage",
+                                       earned=earned)
+                return True, (
+                    f"🐾 【{row[1]}】打工归来！工作 {hours:.1f} 小时\n"
+                    f"💰 工钱 {earned} 积分已到账！"), None
+            ok, msg, _ = await self._tx(fn_collect)
+            yield event.plain_result(msg)
+            return
+
+        if sub == "升级":
+            async def fn_up(session):
+                await self._xiuxian_ensure_player(session, user_id)
+                remaining = await self._enforce_cooldown(session, user_id)
+                if remaining > 0:
+                    raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+                row = (await session.execute(text(
+                    "SELECT id, name, grade, level FROM xiuxian_spirits "
+                    "WHERE user_id=:u ORDER BY id LIMIT 1"
+                ), {"u": user_id})).first()
+                if not row:
+                    raise _BizError("你还没有灵兽喵~")
+                level = int(row[3])
+                if level >= 10:
+                    raise _BizError("灵兽已修至 10 级圆满喵~")
+                cost = self.XIUXIAN_SPIRIT_UP_COST * level
+                bal = await self._total_balance(session, user_id)
+                if bal < cost:
+                    raise _BizError(f"❌ 积分不足！培养需要 {cost} 积分")
+                await self._add_points(session, user_id, -cost, "xiuxian_spirit_up")
+                await session.execute(text(
+                    "UPDATE xiuxian_spirits SET level=:l WHERE id=:i"
+                ), {"l": level + 1, "i": row[0]})
+                wage = int(XIUXIAN_SPIRIT_GRADES.get(row[2], 5) *
+                           (1 + 0.1 * level))
+                return True, (
+                    f"🐾 【{row[1]}】修为精进，升到 {level + 1} 级！\n"
+                    f"打工工资提升至 {wage} 积分/小时（消耗 {cost} 积分）"), None
+            ok, msg, _ = await self._tx(fn_up)
+            yield event.plain_result(msg)
+            return
+
+        # ---- 默认：灵兽信息 ----
+        async def fn_view(session):
+            await self._xiuxian_ensure_player(session, user_id)
+            row = (await session.execute(text(
+                "SELECT name, grade, level, attributes FROM xiuxian_spirits "
+                "WHERE user_id=:u ORDER BY id LIMIT 1"
+            ), {"u": user_id})).first()
+            if not row:
+                return True, (
+                    "🐾 你还没有灵兽喵~\n"
+                    f"捕捉：/修仙 灵兽 捕捉（{self.XIUXIAN_SPIRIT_CATCH_COST} 积分，"
+                    f"凡兽5/灵兽10/妖兽20/仙兽40 积分每小时）"), None
+            attrs = json.loads(row[3] or "{}")
+            wage = int(XIUXIAN_SPIRIT_GRADES.get(row[1], 5) *
+                       (1 + 0.1 * (int(row[2]) - 1)))
+            status = "🎨 打工中" if attrs.get("work_start") else "😌 休息中"
+            lines = [
+                f"🐾 【灵兽】{row[0]}（{row[1]} · {int(row[2])}级）",
+                f"打工工资：{wage} 积分/小时　状态：{status}",
+                "打工：/修仙 灵兽 打工｜收取：/修仙 灵兽 收取｜"
+                f"升级：/修仙 灵兽 升级（{self.XIUXIAN_SPIRIT_UP_COST * int(row[2])} 积分）",
+            ]
+            if attrs.get("work_start"):
+                elapsed = time.time() - float(attrs["work_start"])
+                lines.append(f"已外出 {min(elapsed, self.XIUXIAN_SPIRIT_WORK_CAP * 3600) / 3600:.1f} 小时")
+            return True, "\n".join(lines), None
+
+        ok, msg, _ = await self._tx(fn_view)
+        yield event.plain_result(msg)
+
+    # ==================== 飞升 ====================
+    async def _xiuxian_cmd_ascend(self, event: AstrMessageEvent, params: list):
+        """/修仙 飞升 —— 渡劫9层修为圆满：10000积分+渡劫丹×3，一念成仙"""
+        user_id = event.get_sender_id()
+        platform_id = str(event.get_platform_id() or "")
+        group_id = str(event.get_group_id() or "")
+
+        async def fn(session):
+            await self._xiuxian_ensure_player(session, user_id, platform_id, group_id)
+            remaining = await self._enforce_cooldown(session, user_id)
+            if remaining > 0:
+                raise _BizError(f"操作太频繁啦，请 {remaining} 秒后再试喵~")
+            p = await self._xiuxian_player(session, user_id)
+            realm, level, cult, maxc, consti = str(p[0]), int(p[1]), int(p[2]), int(p[3]), p[5]
+            if realm != "渡劫" or level < 8:
+                raise _BizError(
+                    "飞升之门只为渡劫九层圆满者敞开喵~（先把 /修仙 渡劫 打上去）")
+            if cult < maxc:
+                raise _BizError(f"修为未圆满（{cult}/{maxc}），先 /修仙 修炼")
+            pills = (await session.execute(text(
+                "SELECT count FROM xiuxian_pills WHERE user_id=:u AND name='渡劫丹'"
+            ), {"u": user_id})).first()
+            if not pills or int(pills[0] or 0) < 3:
+                raise _BizError(
+                    "❌ 飞升需要 3 颗【渡劫丹】！（/修仙 炼丹 渡劫丹）")
+            bal = await self._total_balance(session, user_id)
+            if bal < self.XIUXIAN_ASCEND_COST:
+                raise _BizError(
+                    f"❌ 积分不足！飞升需要 {self.XIUXIAN_ASCEND_COST} 积分")
+            await self._add_points(
+                session, user_id, -self.XIUXIAN_ASCEND_COST, "xiuxian_ascend")
+            await session.execute(text(
+                "UPDATE xiuxian_pills SET count=count-3 WHERE user_id=:u AND name='渡劫丹'"
+            ), {"u": user_id})
+            await session.execute(text(
+                "DELETE FROM xiuxian_pills WHERE user_id=:u AND name='渡劫丹' AND count<=0"
+            ), {"u": user_id})
+            consti_bonus = XIUXIAN_CONSTITUTIONS.get(consti or "凡胎", (0, 0.0))[1]
+            rate = self.XIUXIAN_TRIB_RATE + 5 + consti_bonus  # 飞升比普通渡劫更稳
+            if random.random() * 100 < rate:
+                new_realm = XIUXIAN_REALMS[XIUXIAN_REALM_INDEX["渡劫"] + 1]["name"]  # 散仙
+                new_max = self._xiuxian_max_cultivation(new_realm, 0)
+                await session.execute(text(
+                    "UPDATE xiuxian_players SET realm=:r, realm_level=0, cultivation=0, "
+                    "max_cultivation=:m, total_breakthrough=total_breakthrough+1 "
+                    "WHERE user_id=:u"
+                ), {"r": new_realm, "m": new_max, "u": user_id})
+                await session.execute(text(
+                    "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'ascend', :d)"
+                ), {"u": user_id, "d": f"渡劫 → {new_realm} 飞升"})
+                chain = [At(qq=str(user_id)), Plain(
+                    f" 🌟🌟🌟 九霄雷云散尽，霞光万道！{user_id} 渡劫飞升，"
+                    f"位列仙班【{new_realm}】！此乃天地异象，万古流芳！！！")]
+                return True, (
+                    "🌟🌟🌟 天门洞开，金光垂落！\n"
+                    f"🎉 飞升成功！你已褪去凡躯，位列仙班【{new_realm}】！\n"
+                    f"💰 所有积分玩法收益 +{XIUXIAN_REALM_INDEX[new_realm] * 5}%\n"
+                    "此界已无对手，向更高仙界继续修行吧！"), [(platform_id, group_id, chain)]
+            lost = int(cult * 0.5)
+            await session.execute(text(
+                "UPDATE xiuxian_players SET cultivation=:c, fail_count=fail_count+1 "
+                "WHERE user_id=:u"
+            ), {"c": lost, "u": user_id})
+            await session.execute(text(
+                "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'ascend_fail', :d)"
+            ), {"u": user_id, "d": "飞升失败"})
+            return True, (
+                "💥 天门轰然关闭！飞升失败，仙缘尚浅…\n"
+                f"修为损失 {cult - lost} 点（当前 {lost}/{maxc}），再攒攒气运！"), []
+
+        ok, msg, data = await self._tx(fn)
+        yield event.plain_result(msg)
+        for platform, group, chain in (data or []):
+            await self._send_with_fallback(platform, group, chain, "修仙飞升播报")
 
 
 # 依赖声明（AstrBot 插件规范：文件末尾声明额外依赖）
