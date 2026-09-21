@@ -733,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.3",
+    version="4.25.4",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -13314,7 +13314,16 @@ class PointGamesPlugin(Star):
                 "ORDER BY id DESC LIMIT 1"
             ), {"u": user_id})).first()
             if last and last[0]:
-                wait = self.XIUXIAN_SECRET_COOLDOWN - (time.time() - float(last[0]))
+                # create_time 兼容两种历史格式：epoch 浮点 / CURRENT_TIMESTAMP 字符串
+                try:
+                    last_ts = float(last[0])
+                except (TypeError, ValueError):
+                    try:
+                        last_ts = datetime.strptime(
+                            str(last[0]), "%Y-%m-%d %H:%M:%S").timestamp()
+                    except Exception:
+                        last_ts = 0.0
+                wait = self.XIUXIAN_SECRET_COOLDOWN - (time.time() - last_ts)
                 if wait > 0:
                     raise _BizError(
                         f"⏳ 秘境入口尚未重开，{int(wait // 60)} 分 {int(wait % 60)} 秒后再来")
@@ -13325,8 +13334,9 @@ class PointGamesPlugin(Star):
             await self._add_points(
                 session, user_id, -self.XIUXIAN_SECRET_COST, "xiuxian_secret")
             await session.execute(text(
-                "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'secret', :d)"
-            ), {"u": user_id, "d": f"{realm}{level+1}层"})
+                "INSERT INTO xiuxian_records(user_id, type, detail, create_time) "
+                "VALUES(:u, 'secret', :d, :t)"
+            ), {"u": user_id, "d": f"{realm}{level+1}层", "t": time.time()})
             now = time.time()
             buffed = p[12] and float(p[12]) > now
             scenes = ["上古剑冢", "仙人洞府", "幽冥鬼窟", "龙宫遗址", "星辰古塔", "万象秘林"]

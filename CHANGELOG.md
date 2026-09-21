@@ -1,5 +1,11 @@
 # 更新日志
 
+## [4.25.4] - 2026-09-21
+
+### 修复
+- 修复 /修仙 秘境报错 `could not convert string to float`：秘境冷却读取的 xiuxian_records.create_time 列默认存 CURRENT_TIMESTAMP 字符串，改为插入时存 epoch 时间戳，读取端兼容两种历史格式
+- 全量扫描其余时间解析点（幸运日/暴风雪/修炼冷却/宗门战冷却等），均存 epoch 无同类问题
+
 ## [4.25.3] - 2026-09-21
 
 ### 修复
