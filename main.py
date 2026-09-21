@@ -216,7 +216,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|修仙|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|种树|浇水|摇钱树|收获|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|修仙|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|种树|浇水|摇钱树|收获|开店|咖啡店|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -712,6 +712,8 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/浇水", "摇钱树：每天浇一次水，树成长+10（有随机事件）"),
     ("/摇钱树", "摇钱树：查看树的状态与预计收获"),
     ("/收获", "摇钱树：树成熟后收获积分（500+连续天数×50）"),
+    ("/开店 [饮品名]", "咖啡店：每天营业一次，选主推饮品赚积分"),
+    ("/咖啡店", "咖啡店：查看店铺等级与累计收入"),
 ]
 
 
@@ -737,7 +739,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.26.1",
+    version="4.27.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1107,6 +1109,7 @@ class PointGamesPlugin(Star):
         "enable_xiuxian": True,
         "enable_wallet": True,
         "enable_tree": True,
+        "enable_coffee": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -1185,6 +1188,8 @@ class PointGamesPlugin(Star):
         "浇水": ("enable_tree", "摇钱树"),
         "摇钱树": ("enable_tree", "摇钱树"),
         "收获": ("enable_tree", "摇钱树"),
+        "开店": ("enable_coffee", "咖啡店"),
+        "咖啡店": ("enable_coffee", "咖啡店"),
     }
 
     # ---------- 修仙系统 ----------
@@ -1745,6 +1750,16 @@ class PointGamesPlugin(Star):
             last_water TEXT,
             streak INTEGER DEFAULT 0,
             total_harvest INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        # ---------- 咖啡店（v4.27.0）----------
+        """CREATE TABLE IF NOT EXISTS coffee_shop (
+            user_id TEXT PRIMARY KEY,
+            level INTEGER DEFAULT 1,
+            total_income INTEGER DEFAULT 0,
+            total_profit INTEGER DEFAULT 0,
+            last_open TEXT,
+            total_open INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
     ]
@@ -14321,6 +14336,229 @@ class PointGamesPlugin(Star):
                         "已按比例发放喵~")
             msg += "\n🌱 树已重置，继续 /浇水 开启下一轮吧！"
             return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+    # ============================================================
+    #  咖啡店：每日选品营业小游戏（v4.27.0）
+    #  玩家每天选一款主推饮品营业一次，按销量随机事件赚积分。
+    #  成本由玩家支付（流入系统钱包）；收入从系统钱包支出，
+    #  余额不足时按比例发放。
+    # ============================================================
+    # 菜单：饮品名 -> (成本/杯, 售价/杯, 基准销量)
+    COFFEE_MENU = {
+        "美式咖啡": (5, 10, 15),
+        "拿铁": (8, 15, 12),
+        "卡布奇诺": (10, 20, 10),
+        "摩卡": (12, 25, 8),
+        "特调": (15, 35, 5),
+    }
+    # 店铺等级：累计收入达标升级，销量加成逐级递增
+    COFFEE_LEVEL_INCOME = [0, 1000, 3000, 6000, 10000]   # 各等级累计收入门槛
+    COFFEE_LEVEL_BONUS = [1.0, 1.1, 1.2, 1.3, 1.5]       # 各等级销量倍率
+    # 营业随机事件：(事件名, 权重%, 销量倍率, 收益倍率, 额外杯数, 成本倍率, 直接奖励)
+    # 权重合计 55+20+10+8+4+2+1 = 100
+    COFFEE_EVENTS = [
+        ("normal", 55, 1.0, 1.0, 0, 1.0, 0),      # 正常营业
+        ("hot", 20, 2.0, 1.0, 0, 1.0, 0),         # 网红打卡 销量翻倍
+        ("takeout", 10, 1.0, 1.0, 20, 1.0, 0),    # 外卖大单 额外售出20杯
+        ("badreview", 8, 0.5, 1.0, 0, 1.0, 0),    # 差评 销量减半
+        ("blogger", 4, 1.0, 5.0, 0, 1.0, 0),      # 美食博主推荐 收益×5
+        ("beanprice", 2, 1.0, 1.0, 0, 1.5, 0),    # 咖啡豆涨价 成本+50%
+        ("acquire", 1, 1.0, 1.0, 0, 1.0, 500),    # 连锁店收购 直接获得500积分
+    ]
+
+    @staticmethod
+    def _coffee_level(total_income: int) -> int:
+        """按累计收入计算店铺等级（1~5）。"""
+        level = 1
+        for i, threshold in enumerate([0, 1000, 3000, 6000, 10000], start=1):
+            if total_income >= threshold:
+                level = i
+        return level
+
+    def _coffee_weighted_event(self):
+        """按权重随机一个营业事件，返回事件名。"""
+        roll = random.uniform(0, 100)
+        acc = 0.0
+        for ev in self.COFFEE_EVENTS:
+            acc += ev[1]
+            if roll <= acc:
+                return ev[0]
+        return "normal"  # 兜底
+
+    @filter.command("开店")
+    async def coffee_open_cmd(self, event: AstrMessageEvent):
+        """/开店 [饮品名] —— 每天营业一次，选择今日主推饮品"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "开店")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+        args = self._strip_command(event, "开店").strip().split()
+        drink = args[0] if args else ""
+        if not drink:
+            menu_text = "、".join(
+                f"{name}(成本{c}/卖{p}/基准{n}杯)"
+                for name, (c, p, n) in self.COFFEE_MENU.items()
+            )
+            yield event.plain_result(
+                f"☕ 请指定今日主推饮品：/开店 [饮品名]\n菜单：{menu_text}")
+            return
+
+        async def fn(session):
+            return await self._coffee_open(session, user_id, drink)
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _coffee_open(self, session, user_id: str, drink: str):
+        """营业核心逻辑（必须在 _tx 事务内调用）。返回 (ok, msg, None)。"""
+        # 匹配饮品：支持全名或唯一子串（如"拿铁"/"美式"）
+        menu = self.COFFEE_MENU
+        if drink not in menu:
+            hits = [name for name in menu if drink in name]
+            if len(hits) == 1:
+                drink = hits[0]
+            elif len(hits) > 1:
+                raise _BizError(f"「{drink}」匹配到多款饮品（{'、'.join(hits)}），请说全名喵~")
+            else:
+                raise _BizError(
+                    f"菜单上没有「{drink}」哦~ 可选：{'、'.join(menu.keys())}")
+        cost_per, price_per, base_cups = menu[drink]
+        row = (await session.execute(text(
+            "SELECT level, total_income, total_profit, last_open, total_open "
+            "FROM coffee_shop WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        today = datetime.now(TZ).date().isoformat()
+        if row and row[3] == today:
+            raise _BizError("今天已经营业过啦~ 明天再来吧，店也要休息的喵~")
+        # 随机事件
+        ev = self._coffee_weighted_event()
+        ev_cfg = next(e for e in self.COFFEE_EVENTS if e[0] == ev)
+        _, _, sales_mult, income_mult, extra_cups, cost_mult, bonus = ev_cfg
+        # 实际销量 = 基准 × 随机浮动(0.8~1.2) × 等级加成 × 事件倍率 + 额外杯数
+        old_level = int(row[0] or 1) if row else 1
+        level_bonus = self.COFFEE_LEVEL_BONUS[old_level - 1] \
+            if 0 < old_level <= len(self.COFFEE_LEVEL_BONUS) else 1.0
+        cups = int(round(
+            base_cups * random.uniform(0.8, 1.2) * level_bonus * sales_mult
+            + extra_cups))
+        cups = max(cups, 0)
+        income_gross = int(round(price_per * cups * income_mult))
+        cost_total = int(round(cost_per * cups * cost_mult))
+        # 成本由玩家支付（operation=coffee_cost，自动流入系统钱包）
+        try:
+            await self._add_points(session, user_id, -cost_total, "coffee_cost")
+        except _BizError:
+            raise _BizError(
+                f"积分不够付成本喵~ 今日需成本 {cost_total} 积分"
+                f"（{drink}×{cups}杯），先去赚点积分吧")
+        # 收入从系统钱包支出，余额不足按比例发放
+        paid, _ = await self._wallet_payout_s(
+            session, income_gross, "coffee_income", f"{user_id} 咖啡店收入")
+        if paid > 0:
+            await self._add_points(
+                session, user_id, paid, "coffee_income_reward", earned=paid)
+        # 连锁店收购：额外直接奖励（同样走钱包）
+        bonus_line = ""
+        if bonus > 0:
+            paid_bonus, _ = await self._wallet_payout_s(
+                session, bonus, "coffee_acquire", f"{user_id} 咖啡店被收购")
+            if paid_bonus > 0:
+                await self._add_points(
+                    session, user_id, paid_bonus, "coffee_acquire_reward",
+                    earned=paid_bonus)
+                bonus_line = f"\n🏆 连锁店看中了你的店！直接获得 {paid_bonus} 积分！"
+        profit = paid + (paid_bonus if bonus > 0 else 0) - cost_total
+        # 更新店铺数据：累计收入/净赚/营业次数，并按新累计收入升级
+        new_income = int(row[1] or 0) + paid if row else paid
+        new_profit = int(row[2] or 0) + profit if row else profit
+        new_opens = int(row[4] or 0) + 1 if row else 1
+        new_level = self._coffee_level(new_income)
+        if row:
+            await session.execute(text(
+                "UPDATE coffee_shop SET level=:l, total_income=:i, total_profit=:p, "
+                "last_open=:d, total_open=:o WHERE user_id=:u"
+            ), {"l": new_level, "i": new_income, "p": new_profit,
+                "d": today, "o": new_opens, "u": user_id})
+        else:
+            await session.execute(text(
+                "INSERT INTO coffee_shop(user_id, level, total_income, total_profit, "
+                "last_open, total_open) VALUES(:u, :l, :i, :p, :d, :o)"
+            ), {"u": user_id, "l": new_level, "i": new_income, "p": new_profit,
+                "d": today, "o": new_opens})
+        # 组装播报
+        ev_text = {
+            "normal": "正常营业",
+            "hot": "🔥 网红打卡，门口排起长队！销量翻倍",
+            "takeout": "🛵 外卖大单！额外卖出 20 杯",
+            "badreview": "👎 收到差评…销量减半",
+            "blogger": "⭐ 美食博主强烈推荐！收益×5",
+            "beanprice": "📈 咖啡豆涨价，成本+50%",
+            "acquire": "🏆 连锁店上门收购！",
+        }[ev]
+        level_up_line = ""
+        if new_level > old_level:
+            level_up_line = (
+                f"\n🎊 店铺升级！{old_level}级 → {new_level}级"
+                f"（销量加成 +{int((self.COFFEE_LEVEL_BONUS[new_level - 1] - 1) * 100)}%）")
+        partial = ""
+        if paid < income_gross:
+            partial = (f"\n⚠️ 系统钱包余额不足，应得 {income_gross} 实得 {paid}，"
+                       "已按比例发放喵~")
+        msg = (
+            f"☕ 【咖啡店营业中】{ev_text}\n"
+            f"今日主推：{drink}\n"
+            f"卖出 {cups} 杯{drink}\n"
+            f"收入：{paid} 积分\n"
+            f"成本：{cost_total} 积分\n"
+            f"净赚：{profit} 积分"
+            f"{bonus_line}{level_up_line}{partial}")
+        if profit < 0:
+            msg += "\n（今天亏本了…明天换个便宜点的菜单试试？）"
+        return True, msg, None
+
+    @filter.command("咖啡店")
+    async def coffee_status_cmd(self, event: AstrMessageEvent):
+        """/咖啡店 —— 查看咖啡店状态"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "咖啡店")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT level, total_income, total_profit, last_open, total_open "
+                "FROM coffee_shop WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            today = datetime.now(TZ).date().isoformat()
+            if not row:
+                menu_text = "、".join(self.COFFEE_MENU.keys())
+                return True, (
+                    "☕ 你还没有开过店哦~\n"
+                    f"发送 /开店 [饮品名] 开始第一天营业！\n"
+                    f"菜单：{menu_text}"), None
+            level, total_income, total_profit, last_open, total_open = row
+            level = int(level or 1)
+            bonus_pct = int((self.COFFEE_LEVEL_BONUS[level - 1] - 1) * 100) \
+                if 0 < level <= len(self.COFFEE_LEVEL_BONUS) else 0
+            opened = "✅" if last_open == today else "❌（/开店 走起）"
+            # 升级进度
+            if level >= len(self.COFFEE_LEVEL_INCOME):
+                progress = "已达最高等级 🎉"
+            else:
+                nxt = self.COFFEE_LEVEL_INCOME[level]
+                progress = f"{int(total_income or 0)}/{nxt}"
+            return True, (
+                f"☕ 【我的咖啡店】\n"
+                f"等级：{level}级（销量+{bonus_pct}%）\n"
+                f"累计收入：{int(total_income or 0)}积分\n"
+                f"累计净赚：{int(total_profit or 0)}积分\n"
+                f"累计营业：{int(total_open or 0)}天\n"
+                f"今日已营业 {opened}\n"
+                f"升级进度：{progress}"), None
 
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
