@@ -733,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.6",
+    version="4.25.7",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -2867,7 +2867,10 @@ class PointGamesPlugin(Star):
     # ============================================================
     # 支出流水不进入系统钱包的操作前缀：税收(单独入账)、银行存取、贷款、
     # 管理员调整、转账本金(手续费单独入账)
-    WALLET_SPEND_EXCLUDE_PREFIX = ("tax", "bank", "loan", "admin", "transfer", "fee")
+    # 群友发红包的钱不过系统钱包：发出时直接扣发送者，超时退回直接加回发送者
+    WALLET_SPEND_EXCLUDE_PREFIX = ("tax", "bank", "loan", "admin", "transfer", "fee",
+                                   "send_user_redpacket", "grab_user_redpacket",
+                                   "redpacket_refund")
 
     async def _wallet_ensure(self, session):
         """确保 system_wallet 至少有一行，返回该行 (balance, total_inflow, total_outflow)。"""
