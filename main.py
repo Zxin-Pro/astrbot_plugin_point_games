@@ -733,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.5",
+    version="4.25.6",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -9073,10 +9073,16 @@ class PointGamesPlugin(Star):
         # 事件播报：按群聚合所有人的播报，合并渲染成一张图发送
         # 渲染优先级：平台 t2i 服务（text_to_image，网络失败自动落 Playwright）
         #           → 本地 PIL 汇总海报（fishing_poster）→ 纯文字兜底
-        per_group: dict[tuple, list] = {}
+        # 只按群号聚合（同群跨平台实例的播报合并为一条消息，避免拆成多张图）
+        per_group: dict[str, dict] = {}
         for platform_id, group_id, text_line in notices:
-            per_group.setdefault((str(platform_id), str(group_id)), []).append(str(text_line))
-        for (platform_id, group_id), lines in per_group.items():
+            g = str(group_id)
+            if g not in per_group:
+                per_group[g] = {"platform": str(platform_id), "lines": []}
+            per_group[g]["lines"].append(str(text_line))
+        for group_id, info in per_group.items():
+            platform_id = info["platform"]
+            lines = info["lines"]
             aggregate = "\n".join(lines)
             img_chain = None
             # 首选：自定义「烛之播报」模板走 t2i 服务（成员分卡、每条动态一行）
@@ -11086,10 +11092,16 @@ class PointGamesPlugin(Star):
         for platform_id, group_id, chain in broadcasts:
             await self._send_with_fallback(platform_id, group_id, chain, "挖矿高价广播")
         # 事件播报：按群聚合所有人的播报，合并为一条文字消息
-        per_group: dict[tuple, list] = {}
+        # 只按群号聚合（同群跨平台实例的播报合并为一条消息，避免拆成多张图）
+        per_group: dict[str, dict] = {}
         for platform_id, group_id, text_line in notices:
-            per_group.setdefault((str(platform_id), str(group_id)), []).append(str(text_line))
-        for (platform_id, group_id), lines in per_group.items():
+            g = str(group_id)
+            if g not in per_group:
+                per_group[g] = {"platform": str(platform_id), "lines": []}
+            per_group[g]["lines"].append(str(text_line))
+        for group_id, info in per_group.items():
+            platform_id = info["platform"]
+            lines = info["lines"]
             img_chain = None
             if ZHUXI_T2I_TEMPLATE:
                 members_d: dict[str, list] = {}
