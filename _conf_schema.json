@@ -53,6 +53,7 @@
   "tax_min_balance": {"description": "【📁 税收系统】收税门槛（余额≥此值才扣税）", "type": "int", "default": 1000},
 
   "enable_wallet": {"description": "【📁 系统钱包】启用系统钱包（中央资金池）", "type": "bool", "default": true, "hint": "关闭后 /系统 指令不可用；资金池入账（玩家支出/税收/利息）仍正常记录"},
+  "enable_tree": {"description": "【🌳 功能开关】启用摇钱树（种树/浇水/收获）", "type": "bool", "default": true, "hint": "关闭后摇钱树相关指令全部停用"},
   "fishing_reward_chance": {"description": "【📁 系统钱包】钓鱼奖池抽成触发概率（%）", "type": "float", "default": 20, "hint": "每次钓鱼判定上钩时，有此概率从系统钱包抽积分奖励玩家；0=关闭"},
   "fishing_reward_min": {"description": "【📁 系统钱包】奖池抽取比例下限（%）", "type": "float", "default": 0.01, "hint": "抽取金额 = 当前钱包余额 × 随机比例，0.01=万分之一"},
   "fishing_reward_max": {"description": "【📁 系统钱包】奖池抽取比例上限（%）", "type": "float", "default": 10, "hint": "抽取金额 = 当前钱包余额 × 随机比例"},

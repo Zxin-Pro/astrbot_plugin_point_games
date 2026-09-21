@@ -216,7 +216,7 @@ DAILY_CAR_DEFAULT_POOL = [
 DAILY_CAR_DEFAULT_TEMPLATE = "🚗 {user_name}\n您今天的专属座驾是：\n{car}"
 DAILY_CAR_ADD_PATTERN = re.compile(r"(?i)^添加车辆(?:\s+)(?P<car>.+?)\s*$")
 DAILY_CAR_DELETE_PATTERN = re.compile(r"^删除车辆(?:\s+)(?P<car>.+?)\s*$")
-USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|修仙|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
+USER_COMMAND_PATTERN = re.compile(r"(?i)^/?(?:积分(?:\s|$)|签到|jrzj|今日座驾|掷骰(?:\s|$)|转盘|闯关|攻击|BOSS状态|BOSS排行|买彩票|彩票奖池|卧底开始|加入卧底|投票|卧底结束|炸弹开始|猜|炸弹结束|速算|抽卡|图鉴|水果机(?:\s|$)|刮刮乐(?:\s|$)|猜数字(?:\s|$)|十连(?:\s|$)|查询|查积分|排行|富豪榜|加积分|减积分|清除数据|初始化|买鱼竿|买鱼饵|挂机钓鱼|一键钓鱼|收鱼|卖鱼|鱼图鉴|钓鱼天气|鱼竿列表|修鱼竿|钓鱼排行|钓鱼统计|鱼塘|升级鱼塘|买矿镐|买体力|挂机挖矿|收矿|矿仓|卖矿|矿图鉴|矿镐列表|修矿镐|矿洞|升级矿洞|挖矿任务|领取挖矿奖励|挖矿天气|挖矿排行|挖矿统计|偷矿|修仙|钓鱼任务|领取任务奖励|转账(?:\s|$)|开户(?:\s|$)|存钱(?:\s|$)|取钱(?:\s|$)|我的银行(?:\s|$)|银行信息(?:\s|$)|银行加款(?:\s|$)|银行扣款(?:\s|$)|银行清空(?:\s|$)|贷款信息(?:\s|$)|贷款清账(?:\s|$)|信用加分(?:\s|$)|额度重置(?:\s|$)|冷却重置(?:\s|$)|贷款(?:\s|$)|还款(?:\s|$)|我的贷款(?:\s|$)|发红包(?:\s|$)|抢(?:\s|$)|系统(?:\s|$)|本群玩法|玩法模式|本群状态|种树|浇水|摇钱树|收获|帮助|添加车辆(?:\s|$)|查看车池|删除车辆(?:\s|$))")
 
 WORD_PAIRS: list[tuple[str, str]] = [
     ("钢笔", "铅笔"), ("西瓜", "哈密瓜"), ("猫", "狗"), ("苹果", "香蕉"),
@@ -708,6 +708,10 @@ COMMAND_HELP: list[tuple[str, str]] = [
     ("/本群玩法 开|关", "群管理员开关本群玩法"),
     ("/玩法模式 白名单|黑名单", "全局模式切换"),
     ("/本群状态", "查看本群与全局状态"),
+    ("/种树", "摇钱树：花费100积分种一棵摇钱树"),
+    ("/浇水", "摇钱树：每天浇一次水，树成长+10（有随机事件）"),
+    ("/摇钱树", "摇钱树：查看树的状态与预计收获"),
+    ("/收获", "摇钱树：树成熟后收获积分（500+连续天数×50）"),
 ]
 
 
@@ -733,7 +737,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.7",
+    version="4.26.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1102,6 +1106,7 @@ class PointGamesPlugin(Star):
         "enable_mining": True,
         "enable_xiuxian": True,
         "enable_wallet": True,
+        "enable_tree": True,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -1176,6 +1181,10 @@ class PointGamesPlugin(Star):
         "十连": ("enable_card_draw", "十连抽卡"),
         "发红包": ("enable_user_red_packet", "群友发红包"),
         "系统": ("enable_wallet", "系统钱包"),
+        "种树": ("enable_tree", "摇钱树"),
+        "浇水": ("enable_tree", "摇钱树"),
+        "摇钱树": ("enable_tree", "摇钱树"),
+        "收获": ("enable_tree", "摇钱树"),
     }
 
     # ---------- 修仙系统 ----------
@@ -1728,6 +1737,16 @@ class PointGamesPlugin(Star):
             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )""",
         "CREATE INDEX IF NOT EXISTS idx_xiuxian_rec_user ON xiuxian_records(user_id)",
+        # ---------- 摇钱树（v4.26.0）----------
+        """CREATE TABLE IF NOT EXISTS yaoqianshu (
+            user_id TEXT PRIMARY KEY,
+            level INTEGER DEFAULT 1,
+            growth INTEGER DEFAULT 0,
+            last_water TEXT,
+            streak INTEGER DEFAULT 0,
+            total_harvest INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
     ]
 
     def __init__(self, context: Context, config: dict | None = None):
@@ -14037,6 +14056,262 @@ class PointGamesPlugin(Star):
         for platform, group, chain in (data or []):
             await self._send_with_fallback(platform, group, chain, "修仙飞升播报")
 
+    # ============================================================
+    #  摇钱树：每日浇水养成小游戏（v4.26.0）
+    #  玩家花 100 积分种树，每天浇水一次，成长满 100 收获积分。
+    #  支出（种树/施肥）走 _add_points 自动流入系统钱包；
+    #  收益（结果/收获）从系统钱包支出，余额不足时按比例发放。
+    # ============================================================
+    TREE_PLANT_COST = 100        # 种树花费（积分）
+    TREE_TARGET = 100            # 成长满值，满 100 可收获
+    TREE_BASE_REWARD = 500       # 收获基础奖励
+    TREE_STREAK_BONUS = 50       # 收获加成：每连续浇水 1 天 +50
+    TREE_STREAK_CAP = 7          # 收获加成的连续天数上限（最高 +350）
+    TREE_STREAK_EXTRA = 20       # 连续浇水每满 7 天额外成长 +20
+    TREE_FERT_COST = 50          # 施肥事件额外消耗（积分）
+    TREE_FRUIT_REWARD = 100      # 结果事件直接奖励（积分）
+    # 浇水随机事件：(事件名, 权重%, 成长, 是否成长翻倍, 是否结果)
+    # 权重合计 60+20+10+5+3+2 = 100
+    TREE_EVENTS = [
+        ("normal", 60, 10, False, False),   # 正常浇水 +10
+        ("rain", 20, 15, False, False),     # 春雨 +15
+        ("pest", 10, 5, False, False),      # 虫害 +5
+        ("fert", 5, 25, False, False),      # 施肥（额外消耗 50 积分）+25
+        ("upgrade", 3, 0, True, False),     # 树苗升级 成长值翻倍
+        ("fruit", 2, 10, False, True),      # 结果 +正常成长，并直接得 100 积分
+    ]
+
+    @staticmethod
+    def _tree_reward(streak: int) -> int:
+        """预计/结算收获奖励：基础 500 + min(连续天数, 7)×50。"""
+        return 500 + min(max(int(streak or 0), 0), 7) * 50
+
+    def _tree_weighted_event(self):
+        """按权重随机一个浇水事件，返回 (事件名, 成长, 是否翻倍, 是否结果)。"""
+        roll = random.uniform(0, 100)
+        acc = 0.0
+        for name, weight, growth, double, fruit in self.TREE_EVENTS:
+            acc += weight
+            if roll <= acc:
+                return name, growth, double, fruit
+        return "normal", 10, False, False  # 兜底：正常浇水
+
+    async def _wallet_payout_s(self, session, amount: int, source: str, remark: str = ""):
+        """事务内从系统钱包给玩家发钱。
+
+        余额充足时足额发放；余额不足时按比例发放（钱包有多少发多少）。
+        返回 (实发, 应发)。必须在 _tx 事务内调用。
+        """
+        amount = int(amount)
+        if amount <= 0:
+            return 0, amount
+        row = (await session.execute(text(
+            "SELECT balance FROM system_wallet LIMIT 1"
+        ))).first()
+        balance = int(row[0]) if row else 0
+        paid = min(balance, amount)
+        if paid <= 0:
+            return 0, amount
+        await self._wallet_outflow_s(session, paid, source, remark)
+        return paid, amount
+
+    @filter.command("种树")
+    async def tree_plant_cmd(self, event: AstrMessageEvent):
+        """/种树 —— 花费 100 积分种一棵摇钱树"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "种树")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            await self._enforce_cooldown(session, user_id)
+            row = (await session.execute(text(
+                "SELECT user_id FROM yaoqianshu WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if row:
+                raise _BizError("你已经有一棵摇钱树啦~ 每天 /浇水 呵护它吧")
+            # 扣种树费用（流水 operation=tree_plant，自动流入系统钱包）
+            await self._add_points(
+                session, user_id, -self.TREE_PLANT_COST, "tree_plant")
+            await session.execute(text(
+                "INSERT INTO yaoqianshu(user_id, level, growth, last_water, streak, "
+                "total_harvest) VALUES(:u, 1, 0, NULL, 0, 0)"
+            ), {"u": user_id})
+            return True, (
+                "🌱 种树成功！花费 100 积分，种下一棵摇钱树~\n"
+                "每天 /浇水 一次，成长满 100 就能 /收获 积分啦！"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("浇水")
+    async def tree_water_cmd(self, event: AstrMessageEvent):
+        """/浇水 —— 每天浇一次水，树成长并触发随机事件"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "浇水")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            return await self._tree_water(session, user_id)
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    async def _tree_water(self, session, user_id: str):
+        """浇水核心逻辑（必须在 _tx 事务内调用）。返回 (ok, msg, None)。"""
+        row = (await session.execute(text(
+            "SELECT growth, last_water, streak FROM yaoqianshu WHERE user_id=:u"
+        ), {"u": user_id})).first()
+        if not row:
+            raise _BizError("你还没有种树哦~ 先 /种树 花费 100 积分种一棵吧")
+        growth, last_water, streak = int(row[0] or 0), row[1], int(row[2] or 0)
+        today = datetime.now(TZ).date().isoformat()
+        if last_water == today:
+            raise _BizError("今天已经浇过水啦~ 浇太多树会淹死的喵~")
+        yesterday = (datetime.now(TZ).date() - timedelta(days=1)).isoformat()
+        # 连续天数：昨天浇过则 +1，断了则重新从 1 计
+        streak = streak + 1 if last_water == yesterday else 1
+        # 随机事件
+        name, ev_growth, ev_double, ev_fruit = self._tree_weighted_event()
+        extra_msg = ""
+        # 施肥事件：额外消耗 50 积分（流入系统钱包），扣不起则退化为正常浇水
+        if name == "fert":
+            try:
+                await self._add_points(
+                    session, user_id, -self.TREE_FERT_COST, "tree_fertilize")
+            except _BizError:
+                name, ev_growth, ev_double, ev_fruit = "normal", 10, False, False
+                extra_msg = "\n（想施肥但积分不足，只能普通浇水啦）"
+        if ev_double:
+            # 树苗升级：成长值翻倍（封顶 100）
+            new_growth = min(self.TREE_TARGET, growth * 2)
+            ev_desc = f"成长值翻倍 → {new_growth}"
+        else:
+            new_growth = min(self.TREE_TARGET, growth + ev_growth)
+            ev_desc = f"成长+{ev_growth}"
+        # 连续浇水每满 7 天额外 +20
+        streak_extra = 0
+        if streak % 7 == 0:
+            streak_extra = self.TREE_STREAK_EXTRA
+            new_growth = min(self.TREE_TARGET, new_growth + streak_extra)
+            ev_desc += f"，连续浇水 {streak} 天额外 +{streak_extra}"
+        # 结果事件：直接获得 100 积分（从系统钱包支出，余额不足按比例）
+        fruit_line = ""
+        if ev_fruit:
+            paid, _ = await self._wallet_payout_s(
+                session, self.TREE_FRUIT_REWARD, "tree_fruit",
+                f"{user_id} 摇钱树结果")
+            if paid > 0:
+                await self._add_points(
+                    session, user_id, paid, "tree_fruit_reward", earned=paid)
+                fruit_line = f"\n🪙 摇钱树结果！获得 {paid} 积分！"
+                if paid < self.TREE_FRUIT_REWARD:
+                    fruit_line += "（系统钱包余额不足，按比例发放）"
+            else:
+                fruit_line = "\n🪙 摇钱树结果了！可惜系统钱包空空如也，一分都发不出…"
+        await session.execute(text(
+            "UPDATE yaoqianshu SET growth=:g, last_water=:d, streak=:s "
+            "WHERE user_id=:u"
+        ), {"g": new_growth, "d": today, "s": streak, "u": user_id})
+        titles = {
+            "normal": "💧 浇水成功！",
+            "rain": "🌧️ 春雨滋润！",
+            "pest": "🐛 遭遇虫害…",
+            "fert": "🌾 施肥成功！",
+            "upgrade": "✨ 树苗突然升级！",
+            "fruit": "🪙 摇钱树结果了！",
+        }
+        msg = (f"{titles.get(name, '💧 浇水成功！')}{ev_desc}\n"
+               f"💧 当前成长：{new_growth}/{self.TREE_TARGET}"
+               f"（连续浇水 {streak} 天）{fruit_line}{extra_msg}")
+        if new_growth >= self.TREE_TARGET:
+            msg += (f"\n🌳 树已经成熟啦！发送 /收获 领取奖励"
+                    f"（预计 {self._tree_reward(streak)} 积分）")
+        return True, msg, None
+
+    @filter.command("摇钱树")
+    async def tree_status_cmd(self, event: AstrMessageEvent):
+        """/摇钱树 —— 查看树的状态"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "摇钱树")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT level, growth, last_water, streak, total_harvest "
+                "FROM yaoqianshu WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if not row:
+                return True, (
+                    "🌳 你还没有摇钱树哦~\n"
+                    "发送 /种树 花费 100 积分种一棵吧！"), None
+            level, growth, last_water, streak, total_harvest = row
+            today = datetime.now(TZ).date().isoformat()
+            watered = "✅" if last_water == today else "❌（/浇水 走起）"
+            reward = self._tree_reward(int(streak or 0))
+            if int(growth or 0) >= self.TREE_TARGET:
+                ready = f"\n🌟 已成熟！/收获 可得 {reward} 积分"
+            else:
+                need = self.TREE_TARGET - int(growth or 0)
+                days = -(-need // 10)  # 按每天 +10 估算还需天数
+                ready = f"\n⏳ 预计还需约 {days} 天成熟"
+            return True, (
+                f"🌳 【摇钱树】\n"
+                f"等级：{int(level or 1)}级\n"
+                f"成长：{int(growth or 0)}/{self.TREE_TARGET}\n"
+                f"连续浇水：{int(streak or 0)}天\n"
+                f"预计收获：{reward}积分\n"
+                f"累计收获：{int(total_harvest or 0)}次\n"
+                f"今日已浇水 {watered}{ready}"), None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
+
+    @filter.command("收获")
+    async def tree_harvest_cmd(self, event: AstrMessageEvent):
+        """/收获 —— 树成熟后收获积分"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "收获")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
+        user_id = event.get_sender_id()
+
+        async def fn(session):
+            row = (await session.execute(text(
+                "SELECT growth, streak FROM yaoqianshu WHERE user_id=:u"
+            ), {"u": user_id})).first()
+            if not row:
+                raise _BizError("你还没有种树哦~ 先 /种树 种一棵吧")
+            growth, streak = int(row[0] or 0), int(row[1] or 0)
+            if growth < self.TREE_TARGET:
+                raise _BizError(
+                    f"树还没成熟喵~ 当前成长 {growth}/{self.TREE_TARGET}，继续 /浇水 吧")
+            reward = self._tree_reward(streak)
+            # 收益从系统钱包支出，余额不足按比例发放
+            paid, _ = await self._wallet_payout_s(
+                session, reward, "tree_harvest", f"{user_id} 摇钱树收获")
+            if paid > 0:
+                await self._add_points(
+                    session, user_id, paid, "tree_harvest_reward", earned=paid)
+            # 收获后树重置：成长归零，连续浇水天数保留
+            await session.execute(text(
+                "UPDATE yaoqianshu SET growth=0, total_harvest=total_harvest+1 "
+                "WHERE user_id=:u"
+            ), {"u": user_id})
+            msg = f"🎉 收获成功！获得 {paid} 积分！（连续浇水 {streak} 天加成）"
+            if paid < reward:
+                msg += (f"\n⚠️ 系统钱包余额不足，应发 {reward} 实发 {paid}，"
+                        "已按比例发放喵~")
+            msg += "\n🌱 树已重置，继续 /浇水 开启下一轮吧！"
+            return True, msg, None
+
+        ok, msg, _ = await self._tx(fn)
+        yield event.plain_result(msg)
 
 # 依赖声明（AstrBot 插件规范：文件末尾声明额外依赖）
 __requirements__ = ["apscheduler"]
