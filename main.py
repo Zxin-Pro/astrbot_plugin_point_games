@@ -56,6 +56,12 @@ try:
 except Exception:
     FISHING_T2I_TEMPLATE = None
 
+# ---------- 通用「烛之游」播报 t2i 模板（钓鱼/挖矿/修仙共用） ----------
+try:
+    from .zhuxi_t2i_template import ZHUXI_T2I_TEMPLATE
+except Exception:
+    ZHUXI_T2I_TEMPLATE = None
+
 _T2I_NET_RENDERER = None
 
 
@@ -727,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.0",
+    version="4.25.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -10674,6 +10680,34 @@ class PointGamesPlugin(Star):
         ok, msg, _ = await self._tx(fn)
         yield event.plain_result(msg)
 
+    async def _zhuxi_render_image(self, title: str, cards: list):
+        """用「烛之游」通用模板渲染播报卡片图，返回 [Image] 消息链或 None。
+
+        cards: [{"name": 标题, "count": 附加计数(可空), "events": [一行条目]}]
+        渲染失败返回 None（调用方回退纯文字），绝不抛异常中断播报。
+        """
+        if not ZHUXI_T2I_TEMPLATE:
+            return None
+        try:
+            import html as _html
+            safe_cards = []
+            for c in cards:
+                safe_cards.append({
+                    "name": _html.escape(str(c.get("name", ""))),
+                    "count": _html.escape(str(c.get("count", ""))),
+                    "events": [_html.escape(str(e)) for e in c.get("events", [])],
+                })
+            tmpl_data = {
+                "title": str(title),
+                "date": datetime.now(TZ).strftime("%m月%d日 %H:%M"),
+                "cards": safe_cards,
+            }
+            raw = await _t2i_render_direct(ZHUXI_T2I_TEMPLATE, tmpl_data)
+            return [Image.fromBase64(base64.b64encode(raw).decode())]
+        except Exception:
+            self.logger.exception("烛之游播报渲染失败，回退文字播报")
+            return None
+
     # ============================================================
     #  挖矿系统（v4.24.0）：矿镐挂机 + 矿洞养成 + 连击 + 任务 + 天气 + 组队 + 偷矿
     # ============================================================
@@ -11021,8 +11055,28 @@ class PointGamesPlugin(Star):
         for platform_id, group_id, text_line in notices:
             per_group.setdefault((str(platform_id), str(group_id)), []).append(str(text_line))
         for (platform_id, group_id), lines in per_group.items():
-            aggregate = "\n".join(lines)
-            await self._send_with_fallback(platform_id, group_id, [Plain(aggregate)], "挖矿播报")
+            img_chain = None
+            if ZHUXI_T2I_TEMPLATE:
+                members_d: dict[str, list] = {}
+                m_order: list[str] = []
+                for line in lines:
+                    parts = line.split(" ", 2)
+                    who = parts[1] if len(parts) >= 2 and parts[0] == "⛏️" else "未知"
+                    ev = parts[2] if len(parts) >= 3 else line
+                    if who not in members_d:
+                        members_d[who] = []
+                        m_order.append(who)
+                    members_d[who].append(ev)
+                img_chain = await self._zhuxi_render_image(
+                    "挖矿实况",
+                    [{"name": w, "count": f"{len(members_d[w])} 条", "events": members_d[w]}
+                     for w in m_order],
+                )
+            if img_chain:
+                await self._send_with_fallback(platform_id, group_id, img_chain, "挖矿播报图")
+            else:
+                await self._send_with_fallback(
+                    platform_id, group_id, [Plain("\n".join(lines))], "挖矿播报")
 
     async def _mining_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
@@ -12615,9 +12669,24 @@ class PointGamesPlugin(Star):
                        f"💰 所有积分玩法收益 +{(XIUXIAN_REALM_INDEX[new_realm]) * 5}%！")
                 broadcasts = None
                 if new_realm in self.XIUXIAN_REALM_BROADCAST:
-                    chain = [At(qq=str(user_id)), Plain(
-                        f" ⚡⚡⚡ 渡劫成功，晋入【{new_realm}】！"
-                        f"雷云散去，天地异象，众人皆惊！")]
+                    uname = await self._user_name(session, user_id)
+                    img_chain = await self._zhuxi_render_image(
+                        "修仙界异象 · 渡劫",
+                        [{"name": f"{uname} 渡劫成功",
+                          "count": new_realm,
+                          "events": [
+                              f"晋入【{new_realm}】！雷云散去，天地异象",
+                              f"修为上限提升至 {new_max}",
+                              f"所有积分玩法收益 +{XIUXIAN_REALM_INDEX[new_realm] * 5}%",
+                          ]}],
+                    )
+                    chain = [At(qq=str(user_id))]
+                    if img_chain:
+                        chain.extend(img_chain)
+                    else:
+                        chain.append(Plain(
+                            f" ⚡⚡⚡ 渡劫成功，晋入【{new_realm}】！"
+                            f"雷云散去，天地异象，众人皆惊！"))
                     broadcasts = [(platform_id, group_id, chain)]
                 return True, msg, (broadcasts or [])
             lost = int(cult * 0.6)
@@ -13847,9 +13916,25 @@ class PointGamesPlugin(Star):
                 await session.execute(text(
                     "INSERT INTO xiuxian_records(user_id, type, detail) VALUES(:u, 'ascend', :d)"
                 ), {"u": user_id, "d": f"渡劫 → {new_realm} 飞升"})
-                chain = [At(qq=str(user_id)), Plain(
-                    f" 🌟🌟🌟 九霄雷云散尽，霞光万道！{user_id} 渡劫飞升，"
-                    f"位列仙班【{new_realm}】！此乃天地异象，万古流芳！！！")]
+                uname = await self._user_name(session, user_id)
+                img_chain = await self._zhuxi_render_image(
+                    "修仙界异象 · 飞升",
+                    [{"name": f"{uname} 飞升成仙",
+                      "count": new_realm,
+                      "events": [
+                          "九霄雷云散尽，霞光万道，天门洞开！",
+                          f"褪去凡躯，位列仙班【{new_realm}】",
+                          f"所有积分玩法收益 +{XIUXIAN_REALM_INDEX[new_realm] * 5}%",
+                          "此乃天地异象，万古流芳！！！",
+                      ]}],
+                )
+                chain = [At(qq=str(user_id))]
+                if img_chain:
+                    chain.extend(img_chain)
+                else:
+                    chain.append(Plain(
+                        f" 🌟🌟🌟 九霄雷云散尽，霞光万道！{uname} 渡劫飞升，"
+                        f"位列仙班【{new_realm}】！此乃天地异象，万古流芳！！！"))
                 return True, (
                     "🌟🌟🌟 天门洞开，金光垂落！\n"
                     f"🎉 飞升成功！你已褪去凡躯，位列仙班【{new_realm}】！\n"
