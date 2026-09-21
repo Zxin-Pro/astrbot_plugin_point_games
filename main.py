@@ -739,7 +739,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.27.1",
+    version="4.27.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -6616,7 +6616,7 @@ class PointGamesPlugin(Star):
             
             result = MessageChain([
                 Plain(f"💥 BOOM！"),
-                At(user_id),
+                At(qq=str(user_id)),
                 Plain(f" 踩到炸弹了！\n"),
                 Plain(f"扣除 {self.BOMB_PENALTY} 积分，当前余额：{loser_balance}\n"),
             ])
@@ -6626,7 +6626,7 @@ class PointGamesPlugin(Star):
                 for i, pid in enumerate(participants):
                     if i > 0:
                         result.append(Plain("、"))
-                    result.append(At(pid))
+                    result.append(At(qq=str(pid)))
             
             yield event.message_result(result)
             
