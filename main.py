@@ -733,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.4",
+    version="4.25.5",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1156,6 +1156,11 @@ class PointGamesPlugin(Star):
         "挖矿排行": ("enable_mining", "挖矿系统"),
         "挖矿统计": ("enable_mining", "挖矿系统"),
         "偷矿": ("enable_mining", "挖矿系统"),
+        "创建矿队": ("enable_mining", "挖矿系统"),
+        "加入矿队": ("enable_mining", "挖矿系统"),
+        "矿队状态": ("enable_mining", "挖矿系统"),
+        "退出矿队": ("enable_mining", "挖矿系统"),
+        "解散矿队": ("enable_mining", "挖矿系统"),
         "修仙": ("enable_xiuxian", "修仙系统"),
         "转账": ("enable_transfer", "积分转账"),
         "开户": ("enable_bank", "银行系统"),
@@ -10859,12 +10864,17 @@ class PointGamesPlugin(Star):
     async def _mining_check(self):
         """定时任务：每 30 分钟判定一次所有挂机中的矿镐。
 
+        enable_mining 关闭时整体跳过（不判定、不播报、不耗体力），恢复开启后继续正常判定。
+
+
         每把矿镐消耗 1 个体力后随机判定事件：
         挖到的矿石先进 mining_pending，等玩家 /收矿 进矿仓；
         高价值矿直接全群广播（真实 At 组件）。
 
         休息时间：北京时间 0:00-7:00 不进行判定（矿工也要休息喵~）
         """
+        if not self.feature_flags.get("enable_mining", True):
+            return  # _mining_switch_patch
         bj_hour = datetime.now(self._beijing_tz).hour
         if 0 <= bj_hour < 7:
             return
@@ -12209,6 +12219,10 @@ class PointGamesPlugin(Star):
     @filter.command("创建矿队")
     async def mteam_create(self, event: AstrMessageEvent):
         """/创建矿队 —— 组成挖矿小队（2-4人共享收益）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "创建矿队")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
         user_id = str(event.get_sender_id() or "").strip()
         group_id = str(event.get_group_id() or "").strip() or "PM"
 
@@ -12228,6 +12242,10 @@ class PointGamesPlugin(Star):
     @filter.command("加入矿队")
     async def mteam_join(self, event: AstrMessageEvent):
         """/加入矿队 —— 加入本群已有挖矿小队"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "加入矿队")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
         user_id = str(event.get_sender_id() or "").strip()
         group_id = str(event.get_group_id() or "").strip() or "PM"
 
@@ -12263,6 +12281,10 @@ class PointGamesPlugin(Star):
     @filter.command("矿队状态")
     async def mteam_status(self, event: AstrMessageEvent):
         """/矿队状态 —— 查看矿队成员与加成"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "矿队状态")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
         user_id = str(event.get_sender_id() or "").strip()
 
         async def fn(session):
@@ -12287,6 +12309,10 @@ class PointGamesPlugin(Star):
     @filter.command("退出矿队")
     async def mteam_leave(self, event: AstrMessageEvent):
         """/退出矿队 —— 主动离开小队（队长退出即解散）"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "退出矿队")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
         user_id = str(event.get_sender_id() or "").strip()
 
         async def fn(session):
@@ -12316,6 +12342,10 @@ class PointGamesPlugin(Star):
     @filter.command("解散矿队")
     async def mteam_disband(self, event: AstrMessageEvent):
         """/解散矿队 —— 队长解散"""
+        ok_gate, msg_gate = await self._check_group_gate(event, "解散矿队")
+        if not ok_gate:
+            yield event.plain_result(msg_gate)
+            return
         user_id = str(event.get_sender_id() or "").strip()
 
         async def fn(session):
