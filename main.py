@@ -733,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.2",
+    version="4.25.3",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1198,6 +1198,7 @@ class PointGamesPlugin(Star):
     XIUXIAN_SPIRIT_WORK_CAP = 8       # 灵兽打工结算上限（小时）
     XIUXIAN_SECRET_COST = 50          # 秘境探险消耗积分
     XIUXIAN_SECRET_COOLDOWN = 600     # 秘境冷却（秒）
+    XIUXIAN_ALCHEMY_RATE = 70         # 炼丹成功率 %
     XIUXIAN_ASCEND_COST = 10000       # 飞升消耗积分
     XIUXIAN_BONUS_PER_REALM = 0.05    # 每大境界积分收益加成 5%
     XIUXIAN_BONUS_CAP = 2.0           # 加成上限 ×2（+100%）
