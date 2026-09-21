@@ -737,7 +737,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.26.0",
+    version="4.26.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -8544,12 +8544,17 @@ class PointGamesPlugin(Star):
         return ids
 
     async def _send_with_fallback(
-        self, platform_id: str, group_id: str, chain: list, tag: str
+        self, platform_id: str, group_id: str, chain: list, tag: str,
+        cross_group_fallback: bool = True,
     ) -> bool:
         """多重路径发送播报。
 
         配置了 fishing_broadcast_groups 时只发配置的群（所有平台实例都试）；
-        否则按「竿里存的平台ID → 当前所有平台实例 → 已开启玩法的群」重试。
+        否则按「竿里存的平台ID → 当前所有平台实例」重试；
+        cross_group_fallback=True 时最后还会尝试所有已开启玩法的群（跨群兜底）。
+
+        聚合播报图必须传 cross_group_fallback=False：目标群发送失败时宁可丢弃，
+        也不能把 A 群的播报漏发到 B 群（否则 B 群一周期收到两张播报图）。
         """
         targets: list[tuple[str, str]] = []
         if self.FISHING_BROADCAST_GROUPS:
@@ -8571,9 +8576,10 @@ class PointGamesPlugin(Star):
             for pid in await self._get_platform_ids():
                 if pid and (pid, str(group_id)) not in targets:
                     targets.append((pid, str(group_id)))
-        for fb_platform, fb_group in await self._get_broadcast_groups():
-            if (fb_platform, fb_group) not in targets:
-                targets.append((fb_platform, fb_group))
+        if cross_group_fallback:
+            for fb_platform, fb_group in await self._get_broadcast_groups():
+                if (fb_platform, fb_group) not in targets:
+                    targets.append((fb_platform, fb_group))
         for t_platform, t_group in targets:
             try:
                 await self._send_group_chain(t_platform, t_group, chain)
@@ -9162,6 +9168,7 @@ class PointGamesPlugin(Star):
                 try:
                     await self._send_with_fallback(
                         platform_id, group_id, img_chain, "钓鱼播报汇总图",
+                        cross_group_fallback=False,
                     )
                 finally:
                     # 清理本地临时文件（仅本地渲染路径产生的 mkstemp 文件）
@@ -9174,7 +9181,8 @@ class PointGamesPlugin(Star):
                             pass
             else:
                 await self._send_with_fallback(
-                    platform_id, group_id, [Plain(aggregate)], "钓鱼播报"
+                    platform_id, group_id, [Plain(aggregate)], "钓鱼播报",
+                    cross_group_fallback=False,
                 )
 
     async def _fishing_daily_reset(self):
@@ -11142,10 +11150,12 @@ class PointGamesPlugin(Star):
                      for w in m_order],
                 )
             if img_chain:
-                await self._send_with_fallback(platform_id, group_id, img_chain, "挖矿播报图")
+                await self._send_with_fallback(platform_id, group_id, img_chain,
+                                               "挖矿播报图", cross_group_fallback=False)
             else:
                 await self._send_with_fallback(
-                    platform_id, group_id, [Plain("\n".join(lines))], "挖矿播报")
+                    platform_id, group_id, [Plain("\n".join(lines))], "挖矿播报",
+                    cross_group_fallback=False)
 
     async def _mining_daily_reset(self):
         """定时任务：每天凌晨 0 点重置今日统计（today_count / today_date）"""
@@ -12793,7 +12803,8 @@ class PointGamesPlugin(Star):
         ok, msg, data = await self._tx(fn)
         yield event.plain_result(msg)
         for platform, group, chain in (data or []):
-            await self._send_with_fallback(platform, group, chain, "修仙渡劫播报")
+            await self._send_with_fallback(platform, group, chain, "修仙渡劫播报",
+                                               cross_group_fallback=False)
 
     async def _xiuxian_cmd_awaken(self, event: AstrMessageEvent, params: list):
         """/修仙 灵根 —— 觉醒灵根：首次免费，重新觉醒 500 积分"""
@@ -14054,7 +14065,8 @@ class PointGamesPlugin(Star):
         ok, msg, data = await self._tx(fn)
         yield event.plain_result(msg)
         for platform, group, chain in (data or []):
-            await self._send_with_fallback(platform, group, chain, "修仙飞升播报")
+            await self._send_with_fallback(platform, group, chain, "修仙飞升播报",
+                                               cross_group_fallback=False)
 
     # ============================================================
     #  摇钱树：每日浇水养成小游戏（v4.26.0）
