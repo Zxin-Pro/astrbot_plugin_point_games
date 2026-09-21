@@ -739,7 +739,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.27.0",
+    version="4.27.1",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -9118,11 +9118,20 @@ class PointGamesPlugin(Star):
         #           → 本地 PIL 汇总海报（fishing_poster）→ 纯文字兜底
         # 只按群号聚合（同群跨平台实例的播报合并为一条消息，避免拆成多张图）
         per_group: dict[str, dict] = {}
-        for platform_id, group_id, text_line in notices:
-            g = str(group_id)
-            if g not in per_group:
-                per_group[g] = {"platform": str(platform_id), "lines": []}
-            per_group[g]["lines"].append(str(text_line))
+        if self.FISHING_BROADCAST_GROUPS:
+            # 配置了播报群：所有源群的事件合并成一张图统一推送。
+            # 播报群本身就是"全服实况频道"，若按源群逐张推送，
+            # 玩家跨多个群挂机时播报群一个周期会收到多张图。
+            per_group["__broadcast__"] = {
+                "platform": "", "lines": [str(t[2]) for t in notices]}
+        else:
+            # 未配置播报群：只按群号聚合（同群跨平台实例合并为一条消息），
+            # 且只发目标群（cross_group_fallback=False，别群的图不漏进来）
+            for platform_id, group_id, text_line in notices:
+                g = str(group_id)
+                if g not in per_group:
+                    per_group[g] = {"platform": str(platform_id), "lines": []}
+                per_group[g]["lines"].append(str(text_line))
         for group_id, info in per_group.items():
             platform_id = info["platform"]
             lines = info["lines"]
@@ -11139,11 +11148,20 @@ class PointGamesPlugin(Star):
         # 事件播报：按群聚合所有人的播报，合并为一条文字消息
         # 只按群号聚合（同群跨平台实例的播报合并为一条消息，避免拆成多张图）
         per_group: dict[str, dict] = {}
-        for platform_id, group_id, text_line in notices:
-            g = str(group_id)
-            if g not in per_group:
-                per_group[g] = {"platform": str(platform_id), "lines": []}
-            per_group[g]["lines"].append(str(text_line))
+        if self.FISHING_BROADCAST_GROUPS:
+            # 配置了播报群：所有源群的事件合并成一张图统一推送。
+            # 播报群本身就是"全服实况频道"，若按源群逐张推送，
+            # 玩家跨多个群挂机时播报群一个周期会收到多张图。
+            per_group["__broadcast__"] = {
+                "platform": "", "lines": [str(t[2]) for t in notices]}
+        else:
+            # 未配置播报群：只按群号聚合（同群跨平台实例合并为一条消息），
+            # 且只发目标群（cross_group_fallback=False，别群的图不漏进来）
+            for platform_id, group_id, text_line in notices:
+                g = str(group_id)
+                if g not in per_group:
+                    per_group[g] = {"platform": str(platform_id), "lines": []}
+                per_group[g]["lines"].append(str(text_line))
         for group_id, info in per_group.items():
             platform_id = info["platform"]
             lines = info["lines"]
