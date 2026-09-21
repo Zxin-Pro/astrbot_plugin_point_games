@@ -733,7 +733,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.25.1",
+    version="4.25.2",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1823,6 +1823,9 @@ class PointGamesPlugin(Star):
         self.FISHING_BROADCAST_GROUPS = [
             str(x).strip() for x in (raw_fbg or []) if str(x).strip()
         ]
+
+        # /帮助 自定义图片路径（留空 = 内置 help.jpg；支持绝对路径或插件目录相对路径）
+        self.HELP_IMAGE = str(config.get("help_image", "") or "").strip()
 
         # 富豪榜每日播报白名单群列表（支持逗号分隔字符串或列表；空 = 播报所有已开启玩法的群）
         raw_rbg = config.get("richest_broadcast_groups", [])
@@ -3208,12 +3211,33 @@ class PointGamesPlugin(Star):
     # ============================================================
     #  指令入口：积分游戏介绍
     # ============================================================
+    def _resolve_help_image(self) -> str:
+        """/帮助 图片解析：配置页 help_image 优先（绝对路径或插件目录相对路径），回退内置 help.jpg"""
+        import os
+        default_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "help.jpg")
+        custom = str(getattr(self, "HELP_IMAGE", "") or "").strip()
+        if not custom:
+            return default_path
+        cands = []
+        if custom.startswith("~"):
+            cands.append(os.path.expanduser(custom))
+        if os.path.isabs(custom):
+            cands.append(custom)
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+            cands.append(os.path.join(base, custom))
+            cands.append(os.path.join(base, "custom", custom))
+            cands.append(os.path.join(base, os.path.basename(custom)))
+        for p in cands:
+            if os.path.isfile(p):
+                return p
+        self.logger.warning(f"/帮助 自定义图片不存在：{custom}，回退内置 help.jpg")
+        return default_path
+
     @filter.command("帮助")
     async def intro(self, event: AstrMessageEvent):
-        """/帮助 —— 玩法介绍与指令列表（图片版）"""
-        import os
-        help_image_path = os.path.join(os.path.dirname(__file__), "help.jpg")
-        yield event.image_result(help_image_path)
+        """/帮助 —— 玩法介绍与指令列表（图片版，图片可在配置页自定义）"""
+        yield event.image_result(self._resolve_help_image())
 
     def _help_text(self) -> str:
         """构建精简的帮助说明（v2.15.0 起指令不再需要 /积分 前缀）。"""
