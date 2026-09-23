@@ -5,7 +5,7 @@ AstrBot 积分游戏插件
 功能：幸运转盘 / 闯关答题 / BOSS 战 / 大乐透 / 谁是卧底 / 钓鱼系统 / 签到排行
 特性：全群积分数据互通、全局排行榜、WebUI 管理面板、群黑白名单（默认全部关闭）
 
-作者：Zxin_Pro    版本：4.22.38
+作者：Zxin_Pro    版本：4.27.3
 仓库：https://github.com/Zxin-Pro/astrbot_plugin_point_games
 """
 
@@ -9540,9 +9540,9 @@ class PointGamesPlugin(Star):
                 "UPDATE fishing_stats SET total_income=total_income+:t, "
                 "total_fish_count=total_fish_count+:c WHERE user_id=:u"
             ), {"u": user_id, "t": eff_total, "c": fish_cnt})
-            # 兼容旧数据：从本次售出的鱼中维护最高价值鱼
+            # 兼容旧数据：从本次售出的鱼中维护最高价值鱼（rows 为 4 列，解包要按列数来）
             best_name, best_value = max(
-                ((str(name), int(FISH_POOL.get(str(name), (0,))[0])) for name, _ in rows),
+                ((str(row[0]), int(FISH_POOL.get(str(row[0]), (0,))[0])) for row in rows),
                 key=lambda item: item[1], default=(None, 0)
             )
             current_best = (await session.execute(text(
