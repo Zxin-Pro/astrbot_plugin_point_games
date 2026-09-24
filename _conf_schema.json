@@ -55,6 +55,7 @@
   "enable_wallet": {"description": "【📁 系统钱包】启用系统钱包（中央资金池）", "type": "bool", "default": true, "hint": "关闭后 /系统 指令不可用；资金池入账（玩家支出/税收/利息）仍正常记录"},
   "enable_tree": {"description": "【🌳 功能开关】启用摇钱树（种树/浇水/收获）", "type": "bool", "default": true, "hint": "关闭后摇钱树相关指令全部停用"},
   "enable_coffee": {"description": "【☕ 功能开关】启用咖啡店（开店/咖啡店）", "type": "bool", "default": true, "hint": "关闭后咖啡店相关指令全部停用"},
+  "browser_only_mode": {"description": "【🌐 功能开关】浏览器限定游玩模式（开启后聊天指令全部失效，仅可到网页端游玩）", "type": "bool", "default": false, "hint": "开启后，任何积分游戏指令在群里都会失效，统一回复引导文案与网站地址；网页端玩法不受影响"},
   "fishing_reward_chance": {"description": "【📁 系统钱包】钓鱼奖池抽成触发概率（%）", "type": "float", "default": 20, "hint": "每次钓鱼判定上钩时，有此概率从系统钱包抽积分奖励玩家；0=关闭"},
   "fishing_reward_min": {"description": "【📁 系统钱包】奖池抽取比例下限（%）", "type": "float", "default": 0.01, "hint": "抽取金额 = 当前钱包余额 × 随机比例，0.01=万分之一"},
   "fishing_reward_max": {"description": "【📁 系统钱包】奖池抽取比例上限（%）", "type": "float", "default": 10, "hint": "抽取金额 = 当前钱包余额 × 随机比例"},

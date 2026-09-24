@@ -725,6 +725,50 @@ class _BizError(Exception):
         self.msg = msg
 
 
+# ============================================================
+#  浏览器限定游玩模式（browser_only_mode）
+#  开关打开后，插件在聊天平台的所有指令一律失效，
+#  统一引导玩家前往网页端完成玩法。
+# ============================================================
+BROWSER_ONLY_SITE = "https://xn--15t839a.xyz"
+BROWSER_ONLY_TIP = (
+    "🌐 本群积分游戏已切换为「仅限浏览器游玩」模式喵~\n"
+    "请到浏览器上完成相应的玩法：\n"
+    f"{BROWSER_ONLY_SITE}"
+)
+
+
+class _BrowserOnlyFilter(CustomFilter):
+    """浏览器限定模式的统一拦截器。
+
+    开关打开时，任何命中本插件指令的聊天消息都会被拦下，
+    并回复引导文案；开关关闭时一律放行（返回 True）。
+
+    注意：该过滤器直接注入到本插件所有 handler 的 event_filters 中，
+    因此无论指令是 command / regex / ALL 型，都会被拦到。
+    """
+
+    def __init__(self, plugin, raise_error: bool = True, **kwargs) -> None:
+        super().__init__(raise_error, **kwargs)
+        self._plugin = plugin
+
+    def _flag(self) -> bool:
+        try:
+            flags = getattr(self._plugin, "feature_flags", None) or {}
+            return bool(flags.get("browser_only_mode", False))
+        except Exception:
+            return False
+
+    def filter(self, event: AstrMessageEvent, cfg) -> bool:
+        if not self._flag():
+            return True          # 未开启，放行
+        # 已开启：拦截（返回 False → 该 handler 不激活）+ 由提示 handler 统一回复
+        return False
+
+    def __call__(self, event):   # AstrBot 某些版本按可调用对象处理
+        return self.filter(event, None)
+
+
 class _ExactPointsCommandFilter(CustomFilter):
     """只匹配单独的 /积分，避免抢占 /子指令。"""
 
@@ -739,7 +783,7 @@ class _ExactPointsCommandFilter(CustomFilter):
     name="积分游戏",
     author="Zxin_Pro",
     desc="幸运转盘/闯关答题/BOSS战/大乐透/谁是卧底/签到排行，全群数据互通，支持WebUI面板与群黑白名单",
-    version="4.27.2",
+    version="4.28.0",
     repo="https://github.com/Zxin-Pro/astrbot_plugin_point_games",
 )
 class PointGamesPlugin(Star):
@@ -1110,6 +1154,8 @@ class PointGamesPlugin(Star):
         "enable_wallet": True,
         "enable_tree": True,
         "enable_coffee": True,
+        # 浏览器限定游玩模式：开启后聊天指令全部失效，仅网页端可玩
+        "browser_only_mode": False,
     }
     FEATURE_COMMANDS = {
         "转盘": ("enable_spin", "幸运转盘"),
@@ -1795,6 +1841,65 @@ class PointGamesPlugin(Star):
             self._db = ctx.get_db()
         elif hasattr(ctx, "db"):
             self._db = ctx.db
+        # 浏览器限定模式：把统一拦截器注入本插件全部 handler
+        self._install_browser_only_filter()
+
+    # ---------- 浏览器限定游玩模式：全局拦截注入 ----------
+    def _install_browser_only_filter(self) -> None:
+        """给本插件的所有 handler 挂上「浏览器限定」过滤器。
+
+        这样无需逐个改动 100+ 个指令处理器，即可实现「一键全局失效」。
+        注入是幂等的：重复加载/重载不会叠加多个过滤器。
+        """
+        try:
+            from astrbot.core.star.star_handler import star_handlers_registry
+        except Exception:  # 兼容旧版本路径
+            try:
+                from astrbot.core.star.star_handler import (
+                    star_handlers_registry,  # type: ignore
+                )
+            except Exception:
+                self.logger.warning("无法导入 star_handlers_registry，浏览器限定模式不可用")
+                return
+        module_name = self.__class__.__module__
+        try:
+            handlers = star_handlers_registry.get_handlers_by_module_name(module_name)
+        except Exception:
+            handlers = [
+                h for h in star_handlers_registry
+                if getattr(h, "handler_module_path", "") == module_name
+            ]
+        installed = 0
+        for handler in handlers:
+            filters = getattr(handler, "event_filters", None)
+            if filters is None:
+                continue
+            # 提示 handler 自身不能被拦截，否则无法发出引导文案
+            if getattr(handler, "handler_name", "") == "browser_only_notice":
+                continue
+            # 幂等：已经挂过就跳过
+            if any(isinstance(f, _BrowserOnlyFilter) for f in filters):
+                continue
+            filters.append(_BrowserOnlyFilter(self))
+            installed += 1
+        self.logger.info(f"浏览器限定模式：已为 {installed} 个指令处理器挂载拦截器")
+
+    @filter.event_message_type(EventMessageType.ALL, priority=9999)
+    async def browser_only_notice(self, event: AstrMessageEvent):
+        """浏览器限定模式提示：开启时，命中指令的消息统一回引导文案。
+
+        优先级设为最高，确保在所有玩法 handler 之前执行；
+        event.stop_event() 之后其余 handler 不再触发。
+        """
+        if not bool((self.feature_flags or {}).get("browser_only_mode", False)):
+            return
+        raw = str(event.get_message_str() or "").strip()
+        if not raw:
+            return
+        if not USER_COMMAND_PATTERN.search(raw):
+            return  # 不是本插件指令，放行给其他插件/LLM
+        yield event.plain_result(BROWSER_ONLY_TIP)
+        event.stop_event()
 
     def _apply_runtime_config(self, config: dict):
         """把配置页中的值应用到玩法常量，异常值回退到安全默认值。"""
