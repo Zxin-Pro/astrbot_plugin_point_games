@@ -730,7 +730,7 @@ class _BizError(Exception):
 #  开关打开后，插件在聊天平台的所有指令一律失效，
 #  统一引导玩家前往网页端完成玩法。
 # ============================================================
-BROWSER_ONLY_SITE = "https://xn--15t839a.xyz"
+BROWSER_ONLY_SITE = "https://烛心.xyz"
 BROWSER_ONLY_TIP = (
     "🌐 本群积分游戏已切换为「仅限浏览器游玩」模式喵~\n"
     "请到浏览器上完成相应的玩法：\n"
